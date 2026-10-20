@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { isMap, isSeq, parseDocument, YAMLSeq } from "yaml";
 import { aiSync } from "./sync.js";
@@ -191,7 +191,7 @@ function addEntry(root: string, svc: Service): void {
   writeFileSync(manifestPath(root), doc.toString());
 }
 
-/** Replaces {{name}} in the content of the copied template files. */
+/** Replaces {{name}} in the content of the copied template files and restores `_gitignore` → `.gitignore`. */
 function renderTemplate(dir: string, name: string): void {
   for (const entry of readdirSync(dir)) {
     const abs = join(dir, entry);
@@ -199,8 +199,10 @@ function renderTemplate(dir: string, name: string): void {
       renderTemplate(abs, name);
       continue;
     }
-    const text = readFileSync(abs, "utf8");
-    if (text.includes("{{name}}")) writeFileSync(abs, text.replaceAll("{{name}}", name));
+    const target = entry === "_gitignore" ? join(dir, ".gitignore") : abs;
+    if (target !== abs) renameSync(abs, target);
+    const text = readFileSync(target, "utf8");
+    if (text.includes("{{name}}")) writeFileSync(target, text.replaceAll("{{name}}", name));
   }
 }
 

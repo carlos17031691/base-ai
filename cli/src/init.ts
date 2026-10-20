@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { aiSync } from "./sync.js";
@@ -95,6 +95,8 @@ export function init(rawDir: string | undefined, ci: string = "none"): string {
 
   mkdirSync(dir, { recursive: true });
   cpSync(tpl, dir, { recursive: true, filter: (s) => shouldCopy(s, tpl) });
+  const packedGitignore = join(dir, "templates", "service", "_gitignore");
+  if (existsSync(packedGitignore)) renameSync(packedGitignore, join(dir, "templates", "service", ".gitignore"));
   mkdirSync(join(dir, "src"), { recursive: true });
   writeFileSync(join(dir, "src/.gitkeep"), "");
   if (ci !== "none") {
