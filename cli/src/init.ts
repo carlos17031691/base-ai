@@ -57,7 +57,7 @@ jobs:
         with:
           node-version: 20
       - name: AI artefacts in sync with .ai/
-        run: npx --yes base-ai doctor
+        run: npx --yes @carlos17031691/base-ai doctor
 `,
   },
   gitlab: {
@@ -65,7 +65,7 @@ jobs:
     content: `ai-doctor:
   image: node:20
   script:
-    - npx --yes base-ai doctor
+    - npx --yes @carlos17031691/base-ai doctor
 `,
   },
 };
@@ -78,11 +78,11 @@ Project initialised with base-ai.
 - Each **service** lives in \`src/<name>\` as an independent repository with its own architecture, infrastructure and CI/CD.
 
 \`\`\`bash
-npx base-ai service new api <repo>  # scaffold a service from templates/service (requires its own repo)
-npx base-ai service add web <repo>  # register and clone an existing repo
-npx base-ai sync                    # clone/update all services and install git hooks
-npx base-ai ai sync                 # regenerate AI artefacts after editing .ai/
-npx base-ai doctor                  # validate services.yaml and fail if AI artefacts are out of date
+npx @carlos17031691/base-ai service new api <repo>  # scaffold a service from templates/service (requires its own repo)
+npx @carlos17031691/base-ai service add web <repo>  # register and clone an existing repo
+npx @carlos17031691/base-ai sync                    # clone/update all services and install git hooks
+npx @carlos17031691/base-ai ai sync                 # regenerate AI artefacts after editing .ai/
+npx @carlos17031691/base-ai doctor                  # validate services.yaml and fail if AI artefacts are out of date
 \`\`\`
 `;
 
