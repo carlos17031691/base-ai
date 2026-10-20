@@ -41,6 +41,7 @@ flowchart TD
 | `sdlc` | End-to-end engineering workflow & quality gates (ticket → branch → design → code → test → PR → operate) |
 | `architecture` | Stack-agnostic service design (domain isolation, dependency inversion, contracts, resilience) |
 | `integrations` | External APIs, third-party providers (payments, auth, messaging), webhooks & AI/LLM integrations |
+| `rag` | Retrieval-Augmented Generation (chunking, embeddings, hybrid search, pre-retrieval ACLs, grounded citations & evaluation) |
 | `database` | SQL/NoSQL/cache modeling, indexing, concurrency & zero-downtime migrations (Expand & Contract) |
 | `observability` | Structured logs, RED/USE metrics, SLIs/SLOs, distributed tracing, health probes & alerting |
 | `infrastructure` | 12-Factor config, hardened containers, modular IaC, CI/CD pipelines & safe rollbacks |
@@ -59,7 +60,7 @@ flowchart TD
 base-ai/
 ├── AGENTS.md              # Global rules for AI agents (generated)
 ├── .ai/                   # Single AI source of truth (rules, config, skills)
-├── .agents/skills/        # Exported skills (sdlc, architecture, integrations, database, observability, infrastructure, security, review, docs, adr, rfc, runbook)
+├── .agents/skills/        # Exported skills (sdlc, architecture, integrations, rag, database, observability, infrastructure, security, review, docs, adr, rfc, runbook)
 ├── docs/
 │   ├── architecture/{adrs,rfcs}/        # Cross-cutting decisions
 │   └── operations/{runbooks,postmortems}/
@@ -78,7 +79,8 @@ base-ai service new api <repo> [--template service]       # scaffold templates/s
 base-ai service add web <repo> [--branch main]            # register in services.yaml, clone & install git hooks
 base-ai service remove web [--purge]                      # remove from manifest (and optionally delete src/web)
 base-ai sync                                              # clone/fast-forward all services, install hooks & ai sync
-base-ai ai sync                                           # export .ai/ to every agent (root and services)
+base-ai ai sync                                           # export .ai/ to every agent & refresh context index
+base-ai context search "<query>" [--scope root|service:x] # retrieve ranked ADRs, RFCs, runbooks & contracts across repos
 base-ai doctor                                            # validate services.yaml & fail if AI artefacts drift (CI)
 ```
 

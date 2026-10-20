@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { parse } from "yaml";
+import { buildContextIndex } from "./context.js";
 import { isGenerated, render } from "./exporters.js";
 import { loadSource, mergeSource, type AiSource } from "./source.js";
 
@@ -81,5 +82,6 @@ export function aiSync(root: string, check = false): SyncResult[] {
     const local = existsSync(join(dir, ".ai")) ? loadSource(dir) : null;
     results.push(syncDir(dir, mergeSource(base, local), check));
   }
+  if (!check) buildContextIndex(root);
   return results;
 }
