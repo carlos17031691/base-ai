@@ -1,53 +1,49 @@
 # base-ai
 
-> Plantilla base, distribuida como **CLI generador**, para inicializar proyectos de software **escalables, impulsados e integrados por IA**.
+> Generic CLI scaffolding for **scalable, AI-driven software projects**.
 
-`base-ai` no es un framework ni contiene código de aplicación. Define la **raíz** de un proyecto: la capa de IA (reglas, skills, prompts), la gobernanza (ADR/RFC) y un registro de servicios. Cada servicio o módulo vive en `src/<nombre>` como un **repositorio totalmente independiente**, con su propia arquitectura, infraestructura y pipelines.
+`base-ai` is not a framework and contains no application code. It defines the **root** of a project: the AI layer (rules, skills), cross-cutting governance (ADRs/RFCs) and a service registry. Each service or module lives in `src/<name>` as a **fully independent repository**, with its own stack, architecture, infrastructure and CI/CD.
 
 ---
 
-## 🧭 Modelo
+## 🧭 Model
 
 ```mermaid
 flowchart TD
-    root["base-ai (repo raíz)"] --> ai[".ai/ + AGENTS.md: capa IA"]
-    root --> docs["docs/: decisiones globales"]
-    root --> manifest["services.yaml: registro"]
+    root["base-ai (root repo)"] --> ai[".ai/ + AGENTS.md: AI layer"]
+    root --> docs["docs/: cross-cutting decisions"]
+    root --> manifest["services.yaml: registry"]
     root --> tpl["templates/service/"]
-    manifest -->|clona| s1["src/servicio-a (repo propio)"]
-    manifest -->|clona| s2["src/servicio-b (repo propio)"]
-    tpl -->|scaffold| s3["src/servicio-nuevo"]
+    manifest -->|clone| s1["src/service-a (own repo)"]
+    manifest -->|clone| s2["src/service-b (own repo)"]
+    tpl -->|scaffold| s3["src/new-service"]
 ```
 
-| Nivel | Responsabilidad | Repositorio |
-|-------|-----------------|-------------|
-| **Raíz** (`base-ai`) | Capa IA, convenciones, decisiones transversales, registro de servicios | Propio |
-| **Servicio** (`src/<nombre>`) | Código, arquitectura, infraestructura, tests, CI/CD | Propio e independiente |
+| Level | Responsibility | Repository |
+|-------|----------------|------------|
+| **Root** (`base-ai`) | AI layer, conventions, cross-cutting decisions, service registry | Own |
+| **Service** (`src/<name>`) | Code, architecture, infrastructure, tests, CI/CD | Own and independent |
 
-**Principios:**
-- **Aislamiento total:** un servicio no depende del repo raíz para construirse ni para desplegarse. `src/` está en `.gitignore`.
-- **Stack libre:** cada servicio elige su lenguaje, su arquitectura y su nube.
-- **Una sola fuente de IA:** las reglas y skills se escriben una vez en `.ai/` y se exportan a cada agente.
+**Principles:**
+- **Full isolation:** a service never depends on the root repo to build, test or deploy. `src/` is git-ignored.
+- **Stack- and platform-agnostic:** each service chooses its language, architecture, cloud and CI provider.
+- **Single AI source of truth:** rules and skills are written once in `.ai/` and exported to every agent.
 
 ---
 
-## 📁 Estructura
+## 📁 Layout
 
 ```
 base-ai/
-├── AGENTS.md              # Reglas globales para agentes IA
-├── .ai/prompts/           # Fuente única de prompts/skills
-├── .agents/skills/        # Skills exportados (adr, rfc, runbook, review)
+├── AGENTS.md              # Global rules for AI agents (generated)
+├── .ai/                   # Single AI source of truth (rules, config, skills)
+├── .agents/skills/        # Exported skills (adr, rfc, runbook, review)
 ├── docs/
-│   ├── architecture/{adrs,rfcs}/        # Decisiones transversales
+│   ├── architecture/{adrs,rfcs}/        # Cross-cutting decisions
 │   └── operations/{runbooks,postmortems}/
-├── services.yaml          # Registro de servicios (repo, rama)
-├── templates/service/     # Plantilla para nuevos servicios
-│   ├── .github/workflows/
-│   ├── docs/…
-│   ├── infrastructure/{modules,staging,production}/
-│   └── tests/
-└── src/                   # Servicios clonados (ignorado por git)
+├── services.yaml          # Service registry (repo, optional branch)
+├── templates/service/     # Minimal, stack-neutral service template
+└── src/                   # Cloned services (git-ignored)
 ```
 
 ---
@@ -55,40 +51,39 @@ base-ai/
 ## 🚀 CLI
 
 ```bash
-npx create-base-ai mi-proyecto            # inicializa la raíz (o: base-ai init mi-proyecto)
-base-ai service new api                   # scaffold desde templates/service → src/api (git init)
-base-ai service add web git@…/web.git     # registra en services.yaml y clona
-base-ai service remove web [--purge]      # lo quita del manifiesto (y opcionalmente de src/)
-base-ai sync                              # clona/actualiza (ff-only) todos los servicios
-base-ai ai sync                           # exporta .ai/ a cada agente (raíz y servicios)
-base-ai doctor                            # falla si los artefactos IA están desactualizados (CI)
+npx create-base-ai my-project [--ci none|github|gitlab]   # initialise the root (or: base-ai init my-project)
+base-ai service new api [--template service] [--repo url] # scaffold templates/service → src/api (git init)
+base-ai service add web <repo> [--branch main]            # register in services.yaml and clone
+base-ai service remove web [--purge]                      # remove from manifest (and optionally delete src/web)
+base-ai sync                                              # clone/fast-forward all services
+base-ai ai sync                                           # export .ai/ to every agent (root and services)
+base-ai doctor                                            # fail if AI artefacts are out of date (for CI)
 ```
 
-Desarrollo del CLI: `cd cli && npm install && npm test`.
+CLI development: `cd cli && npm install && npm test`.
 
 ---
 
-## 🤖 Agentes soportados
+## 🤖 Supported agents
 
-| Agente | Archivo(s) |
-|--------|------------|
+| Agent | Generated file(s) |
+|-------|-------------------|
 | Antigravity / Gemini | `AGENTS.md`, `.agents/skills/` |
 | Claude Code | `CLAUDE.md`, `.claude/commands/` |
 | Cursor | `.cursor/rules/*.mdc` |
-| GitHub Copilot | `.github/copilot-instructions.md` |
+| GitHub Copilot | `.github/copilot-instructions.md`, `.github/prompts/` |
 | OpenAI Codex | `AGENTS.md` |
 
 ---
 
 ## 🗺️ Roadmap
 
-- [x] Estructura raíz + plantilla de servicio
-- [x] ADR-0001: arquitectura del CLI, manifiesto y fuente única de IA
-- [x] `.ai/rules.md` y skills genéricos (adr, rfc, runbook, review)
-- [x] CLI: `init`, `service new|add|remove`, `sync`, `ai sync`, `doctor` + CI
-- [ ] Contenido adicional de `templates/service/` (p. ej. plantillas por stack)
-- [ ] Publicación en npm (`base-ai` y paquete `create-base-ai`)
+- [x] Root layout + minimal service template
+- [x] ADR-0001: CLI architecture, manifest and single AI source
+- [x] English `.ai/rules.md` and generic skills (`adr`, `rfc`, `runbook`, `review`)
+- [x] CLI: `init`, `service new|add|remove`, `sync`, `ai sync`, `doctor`
+- [ ] Publish to npm (`base-ai` and `create-base-ai`)
 
-## 📄 Licencia
+## 📄 License
 
-Por definir.
+TBD.

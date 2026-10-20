@@ -1,22 +1,22 @@
 ---
 id: runbook
 description: >-
-  Genera un runbook operativo para on-call de un servicio o componente. Úsalo
-  cuando se despliegue algo nuevo, se cree una alerta o se pida documentar cómo
-  operar o mitigar un incidente.
+  Generate an on-call operational runbook for a service or component. Use when
+  deploying something new, creating an alert, or when asked to document how to
+  operate or mitigate an incident.
 targets: all
 ---
 
-# Runbook operativo
+# Operational runbook
 
-Crea `docs/operations/runbooks/<componente>.md` dentro del repo del servicio con:
+Create `docs/operations/runbooks/<component>.md` in the service repo with:
 
-- **Descripción:** qué hace el componente, quién es el responsable y sus dependencias upstream y downstream.
-- **Accesos:** dashboards, logs, trazas y consolas (enlaces, nunca credenciales).
-- **Alertas:** por cada alerta, qué significa, su severidad y su impacto en el usuario.
-- **Diagnóstico:** pasos ordenados y comandos concretos para confirmar la causa.
-- **Mitigación:** acciones seguras e idempotentes (rollback, escalar, desactivar un feature flag, drenar tráfico), con cómo verificar cada una.
-- **Escalamiento:** a quién avisar y cuándo.
-- **Postmortem:** enlace a la plantilla en `docs/operations/postmortems/`.
+- **Overview:** what the component does, its owner, and its upstream and downstream dependencies.
+- **Access:** dashboards, logs, traces and consoles (links only, never credentials).
+- **Alerts:** for each alert, what it means, its severity and its user impact.
+- **Diagnosis:** ordered steps and concrete commands to confirm the cause.
+- **Mitigation:** safe, idempotent actions (rollback, scale, disable a feature flag, drain traffic), each with how to verify it.
+- **Escalation:** who to contact and when.
+- **Postmortem:** link to the template in `docs/operations/postmortems/`.
 
-Los comandos deben poder copiarse y pegarse tal cual, y deben indicar si son de solo lectura o modifican el estado.
+Commands must be copy-pasteable and state whether they are read-only or mutate state.

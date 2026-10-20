@@ -1,24 +1,24 @@
 ---
 id: rfc
 description: >-
-  Redacta un Request for Comments (RFC) para cambios de alto impacto antes de
-  implementarlos. Úsalo para nuevas funcionalidades relevantes, cambios de
-  contrato entre servicios, migraciones o cambios de infraestructura.
+  Draft a Request for Comments (RFC) for high-impact changes before
+  implementing them. Use for significant features, cross-service contract
+  changes, migrations or infrastructure changes.
 targets: all
 ---
 
 # RFC (Request for Comments)
 
-1. Determina el alcance (raíz si afecta a varios servicios, o el servicio concreto) y crea `docs/architecture/rfcs/RFC-XXXX-titulo-corto.md`.
-2. Usa esta estructura:
-   - **Metadatos:** fecha, estado (`Borrador`, `En revisión`, `Aprobado`, `Rechazado`, `Implementado`), autores y revisores.
-   - **Resumen:** un párrafo con el cambio propuesto.
-   - **Motivación:** el problema que resuelve y cómo se mide el éxito.
-   - **Diseño propuesto:** componentes, contratos (APIs/eventos), datos y diagramas.
-   - **Servicios afectados:** qué repos cambian y el orden de despliegue.
-   - **Seguridad y privacidad:** amenazas, datos sensibles y controles.
-   - **Resiliencia:** modos de fallo, timeouts, reintentos e idempotencia.
-   - **Observabilidad:** métricas, logs, trazas y alertas.
-   - **Plan de rollout y rollback:** feature flags, migraciones y cómo revertir.
-   - **Alternativas y preguntas abiertas.**
-3. Si el RFC se aprueba y fija una decisión duradera, deriva de él un ADR.
+1. Determine scope (root if it affects several services, otherwise the service) and create `docs/architecture/rfcs/RFC-XXXX-short-title.md`.
+2. Use this structure:
+   - **Metadata:** date, status (`Draft`, `In review`, `Approved`, `Rejected`, `Implemented`), authors, reviewers.
+   - **Summary:** one paragraph describing the change.
+   - **Motivation:** the problem it solves and how success is measured.
+   - **Proposed design:** components, contracts (APIs/events), data and diagrams.
+   - **Affected services:** which repos change and the deployment order.
+   - **Security and privacy:** threats, sensitive data and controls.
+   - **Resilience:** failure modes, timeouts, retries and idempotency.
+   - **Observability:** metrics, logs, traces and alerts.
+   - **Rollout and rollback plan:** feature flags, migrations and how to revert.
+   - **Alternatives and open questions.**
+3. If the RFC is approved and sets a lasting decision, derive an ADR from it.

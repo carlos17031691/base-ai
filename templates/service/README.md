@@ -1,22 +1,19 @@
 # {{name}}
 
-Servicio independiente creado con `base-ai service new {{name}}`.
+Independent service created with `base-ai service new {{name}}`.
 
-> Este repositorio es autónomo: su arquitectura, infraestructura y CI/CD no dependen del repo raíz.
+> This repository is self-contained: its architecture, infrastructure and CI/CD do not depend on the root repo.
 
-## Estructura
+## Layout
 
-| Ruta | Uso |
-|------|-----|
-| `.ai/` | Reglas y skills propios (extienden los de la raíz; los locales tienen prioridad) |
-| `docs/architecture/{adrs,rfcs}` | Decisiones del servicio |
-| `docs/operations/{runbooks,postmortems}` | Operación |
-| `infrastructure/{modules,staging,production}` | IaC del servicio |
-| `tests/` | Tests |
-| `.github/workflows/` | Pipelines del servicio |
+| Path | Purpose |
+|------|---------|
+| `.ai/` | Service-specific rules and skills (extend the root ones; local wins) |
+| `docs/architecture/{adrs,rfcs}` | Service decisions |
+| `docs/operations/{runbooks,postmortems}` | Operations |
 
-## Primeros pasos
+## Getting started
 
-1. Elige el stack y documéntalo en `docs/architecture/adrs/ADR-0001-stack.md`.
-2. Añade las reglas propias en `.ai/rules.md` y ejecuta `base-ai ai sync` desde la raíz.
-3. Configura el pipeline en `.github/workflows/`.
+1. Choose your stack and record it in `docs/architecture/adrs/ADR-0001-stack.md`.
+2. Add your infrastructure, tests and CI/CD in whatever layout your stack requires.
+3. Add service rules in `.ai/rules.md` and run `base-ai ai sync` from the root.

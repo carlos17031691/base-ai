@@ -7,12 +7,14 @@ import { aiSync } from "./sync.js";
 export interface Service {
   name: string;
   repo?: string;
+  /** Omitted = the remote's default branch. */
   branch?: string;
   template?: string;
   ai?: "inherit" | "none";
 }
 
 const NAME_RE = /^[a-z0-9-]+$/;
+const BRANCH_RE = /^[A-Za-z0-9._/-]+$/;
 const manifestPath = (root: string) => join(root, "services.yaml");
 
 function git(args: string[], cwd?: string): string {
@@ -20,16 +22,21 @@ function git(args: string[], cwd?: string): string {
 }
 
 function validateName(name: string | undefined): string {
-  if (!name || !NAME_RE.test(name)) throw new Error(`Nombre de servicio inválido "${name ?? ""}" (usa ^[a-z0-9-]+$)`);
+  if (!name || !NAME_RE.test(name)) throw new Error(`Invalid service name "${name ?? ""}" (must match ^[a-z0-9-]+$)`);
   return name;
 }
 
 function validateRepo(repo: string | undefined): string {
-  if (!repo || repo.startsWith("-")) throw new Error(`URL de repositorio inválida "${repo ?? ""}"`);
+  if (!repo || repo.startsWith("-")) throw new Error(`Invalid repository URL "${repo ?? ""}"`);
   return repo;
 }
 
-/** Lee services.yaml conservando comentarios. */
+function validateBranch(branch: string | undefined): string | undefined {
+  if (branch !== undefined && (branch.startsWith("-") || !BRANCH_RE.test(branch))) throw new Error(`Invalid branch "${branch}"`);
+  return branch;
+}
+
+/** Reads services.yaml preserving comments. */
 function loadDoc(root: string) {
   const p = manifestPath(root);
   const doc = parseDocument(existsSync(p) ? readFileSync(p, "utf8") : "version: 1\nservices: []\n");
@@ -47,13 +54,13 @@ export function listServices(root: string): Service[] {
 
 function addEntry(root: string, svc: Service): void {
   const { doc, seq } = loadDoc(root);
-  if (seq.items.some((i) => isMap(i) && i.get("name") === svc.name)) throw new Error(`El servicio "${svc.name}" ya existe en services.yaml`);
+  if (seq.items.some((i) => isMap(i) && i.get("name") === svc.name)) throw new Error(`Service "${svc.name}" already exists in services.yaml`);
   seq.flow = false;
   seq.add(doc.createNode(Object.fromEntries(Object.entries(svc).filter(([, v]) => v !== undefined))));
   writeFileSync(manifestPath(root), doc.toString());
 }
 
-/** Copia la plantilla reemplazando {{name}} en nombres y contenido de archivos de texto. */
+/** Replaces {{name}} in the content of the copied template files. */
 function renderTemplate(dir: string, name: string): void {
   for (const entry of readdirSync(dir)) {
     const abs = join(dir, entry);
@@ -66,42 +73,42 @@ function renderTemplate(dir: string, name: string): void {
   }
 }
 
-/** service new: crea src/<name> desde templates/<template>, inicializa git y lo registra. */
+/** service new: creates src/<name> from templates/<template>, runs git init and registers it. */
 export function serviceNew(root: string, rawName: string | undefined, template = "service", repo?: string): string {
   const name = validateName(rawName);
   const tpl = join(root, "templates", validateName(template));
   const dest = join(root, "src", name);
-  if (!existsSync(tpl)) throw new Error(`No existe la plantilla ${tpl}`);
-  if (existsSync(dest)) throw new Error(`${dest} ya existe`);
+  if (!existsSync(tpl)) throw new Error(`Template not found: ${tpl}`);
+  if (existsSync(dest)) throw new Error(`${dest} already exists`);
   if (repo) validateRepo(repo);
 
-  addEntry(root, { name, repo, branch: "main", template, ai: "inherit" });
+  addEntry(root, { name, repo, template, ai: "inherit" });
   cpSync(tpl, dest, { recursive: true });
   renderTemplate(dest, name);
-  git(["init", "-q", "-b", "main"], dest);
+  git(["init", "-q"], dest);
   if (repo) git(["remote", "add", "origin", repo], dest);
   aiSync(root);
   return dest;
 }
 
-/** service add: registra un repo existente y lo clona. */
-export function serviceAdd(root: string, rawName: string | undefined, rawRepo: string | undefined, branch = "main"): string {
+/** service add: registers an existing repo and clones it. */
+export function serviceAdd(root: string, rawName: string | undefined, rawRepo: string | undefined, branch?: string): string {
   const name = validateName(rawName);
   const repo = validateRepo(rawRepo);
-  addEntry(root, { name, repo, branch, ai: "inherit" });
+  addEntry(root, { name, repo, branch: validateBranch(branch), ai: "inherit" });
   syncServices(root);
   return join(root, "src", name);
 }
 
-/** service remove: lo quita del manifiesto; con purge borra src/<name> solo si no hay cambios sin commitear. */
+/** service remove: drops it from the manifest; with purge, deletes src/<name> only if it has no uncommitted changes. */
 export function serviceRemove(root: string, rawName: string | undefined, purge = false): void {
   const name = validateName(rawName);
   const { doc, seq } = loadDoc(root);
   const idx = seq.items.findIndex((i) => isMap(i) && i.get("name") === name);
-  if (idx < 0) throw new Error(`El servicio "${name}" no está en services.yaml`);
+  if (idx < 0) throw new Error(`Service "${name}" is not in services.yaml`);
   const dest = join(root, "src", name);
   if (purge && existsSync(dest)) {
-    if (git(["status", "--porcelain"], dest)) throw new Error(`${dest} tiene cambios sin commitear; no se borra`);
+    if (git(["status", "--porcelain"], dest)) throw new Error(`${dest} has uncommitted changes; not deleting`);
     rmSync(dest, { recursive: true, force: true });
   }
   seq.items.splice(idx, 1);
@@ -114,32 +121,33 @@ export interface ServiceSyncResult {
   reason?: string;
 }
 
-/** sync: clona lo que falta y actualiza (ff-only) lo existente. Nunca pisa cambios locales. Idempotente. */
+/** sync: clones what is missing and fast-forwards what exists. Never overwrites local changes. Idempotent. */
 export function syncServices(root: string): ServiceSyncResult[] {
   const results: ServiceSyncResult[] = [];
   for (const s of listServices(root)) {
     const name = validateName(s.name);
     const dest = join(root, "src", name);
     if (!s.repo) {
-      results.push({ name, action: "skipped", reason: existsSync(dest) ? "sin repo remoto" : "sin repo y no existe localmente" });
+      results.push({ name, action: "skipped", reason: existsSync(dest) ? "no remote repo" : "no repo and not present locally" });
       continue;
     }
     const repo = validateRepo(s.repo);
-    const branch = s.branch ?? "main";
+    const branch = validateBranch(s.branch);
     if (!existsSync(dest)) {
-      git(["clone", "-q", "-b", branch, "--", repo, dest]);
+      git(["clone", "-q", ...(branch ? ["-b", branch] : []), "--", repo, dest]);
       results.push({ name, action: "cloned" });
       continue;
     }
+    // Only tracked files count: untracked AI artefacts written by `ai sync` must not block updates.
     if (git(["status", "--porcelain", "--untracked-files=no"], dest)) {
-      results.push({ name, action: "skipped", reason: "cambios locales sin commitear" });
+      results.push({ name, action: "skipped", reason: "uncommitted local changes" });
       continue;
     }
     try {
-      git(["pull", "-q", "--ff-only", "origin", branch], dest);
+      git(["pull", "-q", "--ff-only", ...(branch ? ["origin", branch] : [])], dest);
       results.push({ name, action: "updated" });
     } catch (e) {
-      results.push({ name, action: "skipped", reason: `pull falló: ${(e as Error).message.split("\n")[0]}` });
+      results.push({ name, action: "skipped", reason: `pull failed: ${(e as Error).message.split("\n")[0]}` });
     }
   }
   aiSync(root);

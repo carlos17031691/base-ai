@@ -1,4 +1,4 @@
-// Copia la plantilla raíz (.ai, templates, docs) a cli/template para publicarla en npm.
+// Copies the root template (.ai, templates, docs) into cli/template for npm publishing.
 import { cpSync, rmSync } from "node:fs";
 const out = new URL("../template/", import.meta.url);
 rmSync(out, { recursive: true, force: true });

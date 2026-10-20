@@ -1,7 +1,7 @@
 {
   "name": "base-ai",
   "version": "0.1.0",
-  "description": "CLI de base-ai: scaffolding para proyectos impulsados e integrados por IA",
+  "description": "base-ai CLI: generic scaffolding for AI-driven software projects",
   "type": "module",
   "bin": {
     "base-ai": "dist/index.js",

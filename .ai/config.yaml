@@ -1,6 +1,6 @@
-# Configuración de la fuente única de IA (ver ADR-0001)
+# Single AI source configuration (see ADR-0001)
 version: 1
-lang: es
+lang: en
 agents:
   - antigravity
   - claude
