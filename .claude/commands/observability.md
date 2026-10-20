@@ -14,7 +14,8 @@ Make every service observable, debuggable and production-ready:
 2. **Metrics & SLIs/SLOs:**
    - **RED metrics** for request-driven paths: **R**ate (requests/s), **E**rrors (error rate by type/status), **D**uration (p50, p95, p99 latency histograms).
    - **USE metrics** for resources (DB pool, queues, CPU, memory): **U**tilization, **S**aturation (queue depth), **E**rrors.
-   - Track business and integration metrics (external provider latency/failures, AI token usage/cost, queue lag).
+   - **AI / LLM & token telemetry (`ai-ops` skill):** track `input_tokens`, `cached_input_tokens` (prefix cache hit ratio), `output_tokens`, `estimated_cost_usd`, `ttft_ms`, model fallback rate and quota consumption broken down by `model`, `feature` and `tenant_id`.
+   - Track business and integration metrics (external provider latency/failures, queue lag).
 
 3. **Distributed tracing:**
    - Propagate W3C trace context (`traceparent` / `x-correlation-id`) across HTTP, message queues and external API calls using OpenTelemetry or equivalent standards.

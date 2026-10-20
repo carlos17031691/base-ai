@@ -5,6 +5,7 @@ import { runDoctor } from "./doctor.js";
 import { init } from "./init.js";
 import { memoryAdd, memoryList } from "./memory.js";
 import { listServices, serviceAdd, serviceNew, serviceRemove, syncServices } from "./services.js";
+import { computeAiStats } from "./stats.js";
 import { aiSync } from "./sync.js";
 
 const USAGE = `base-ai <command> [--root <dir>]
@@ -12,6 +13,7 @@ const USAGE = `base-ai <command> [--root <dir>]
 Commands:
   init <dir> [--ci none|github|gitlab]              Create a new project from the base-ai template
   ai sync                                           Export .ai/ to every agent's format and refresh context index
+  ai stats                                          Report token footprint of always-on rules/memory and on-demand skills
   doctor                                            Validate services.yaml and fail if AI artefacts are out of date
   context index                                     Build/refresh .ai/context-index.json across root and src/<name>
   context search <query> [--scope s] [--top k]      Retrieve ranked chunks (ADRs, RFCs, runbooks, contracts, memory)
@@ -54,6 +56,17 @@ function main(argv: string[]): number {
       r.written.forEach((f) => console.log(`  written: ${f}`));
       r.removed.forEach((f) => console.log(`  removed: ${f}`));
       console.log(`✔ ${r.target}: ${r.written.length} changed, ${r.removed.length} removed, ${r.unchanged.length} unchanged`);
+    }
+    return 0;
+  }
+
+  if (cmd === "ai" && sub === "stats") {
+    const st = computeAiStats(root);
+    const status = st.withinBudget ? "✔ within budget" : "⚠ exceeds recommended budget";
+    console.log(`Always-on context (rules + memory + skill index): ~${st.alwaysOnTokens} tokens (budget: ${st.alwaysOnBudget}) [${status}]`);
+    console.log(`On-demand skills (${st.skills.length} skills, loaded only when invoked): ~${st.skillsTotalTokens} tokens total\n`);
+    for (const s of st.skills) {
+      console.log(`  - ${s.name.padEnd(16)} ~${String(s.estimatedTokens).padStart(4)} tokens (${s.chars} chars)`);
     }
     return 0;
   }
