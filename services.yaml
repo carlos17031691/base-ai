@@ -1,0 +1,8 @@
+# Service registry (see ADR-0001). Each service is an independent repo cloned into src/<name>.
+version: 1
+services: []
+#  - name: api
+#    repo: git@example.com:org/api.git
+#    branch: main        # optional, defaults to the remote's default branch
+#    template: service   # optional, template used by `service new`
+#    ai: inherit         # inherit | none

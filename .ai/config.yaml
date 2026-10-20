@@ -1,0 +1,9 @@
+# Single AI source configuration (see ADR-0001)
+version: 1
+lang: en
+agents:
+  - antigravity
+  - claude
+  - cursor
+  - copilot
+  - codex
