@@ -59,6 +59,22 @@ export function runDoctor(root: string): DoctorReport {
 
   checkRepoHygiene(root, "root", issues);
 
+  if (existsSync(join(root, ".githooks")) && existsSync(join(root, ".git"))) {
+    for (const h of ["pre-commit", "commit-msg", "pre-push"]) {
+      if (!existsSync(join(root, ".githooks", h))) {
+        issues.push(`root: missing git hook .githooks/${h}`);
+      }
+    }
+    try {
+      const hooksPath = git(["config", "--get", "core.hooksPath"], root);
+      if (hooksPath !== ".githooks") {
+        issues.push(`root: core.hooksPath is "${hooksPath}" instead of ".githooks"`);
+      }
+    } catch {
+      issues.push("root: core.hooksPath is not configured");
+    }
+  }
+
   for (const s of services) {
     const dest = join(root, "src", s.name);
     if (!existsSync(dest)) continue;
