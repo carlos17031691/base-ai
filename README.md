@@ -28,6 +28,21 @@ flowchart TD
 - **Full isolation:** a service never depends on the root repo to build, test or deploy. `src/` is git-ignored.
 - **Stack- and platform-agnostic:** each service chooses its language, architecture, cloud and CI provider.
 - **Single AI source of truth:** rules and skills are written once in `.ai/` and exported to every agent.
+- **Built-in engineering standards:** SDLC gates, Clean Code (SOLID, KISS, YAGNI), decoupled architecture (Dependency Inversion, explicit contracts, resilience) and Security by Design (OWASP, STRIDE, zero secrets).
+
+---
+
+## 🧩 Core skills
+
+| Skill | Purpose |
+|-------|---------|
+| `sdlc` | End-to-end engineering workflow & quality gates (requirements → design → code → test → review → operate) |
+| `architecture` | Stack-agnostic service design (domain isolation, dependency inversion, contracts, resilience) |
+| `security` | Threat modeling (STRIDE) and OWASP security audit |
+| `review` | Code/PR review across correctness, clean code, architecture, security and SDLC |
+| `adr` | Immutable Architecture Decision Records |
+| `rfc` | Request for Comments for high-impact or cross-service changes |
+| `runbook` | On-call operational runbooks |
 
 ---
 
@@ -37,7 +52,7 @@ flowchart TD
 base-ai/
 ├── AGENTS.md              # Global rules for AI agents (generated)
 ├── .ai/                   # Single AI source of truth (rules, config, skills)
-├── .agents/skills/        # Exported skills (adr, rfc, runbook, review)
+├── .agents/skills/        # Exported skills (adr, rfc, runbook, review, architecture, security, sdlc)
 ├── docs/
 │   ├── architecture/{adrs,rfcs}/        # Cross-cutting decisions
 │   └── operations/{runbooks,postmortems}/
