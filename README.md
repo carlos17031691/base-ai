@@ -29,7 +29,8 @@ flowchart TD
 - **Mandatory ticket traceability & PR-only workflow:** every change inside `src/<name>` must be tied to a Story/Epic/Task (Jira, ClickUp, Trello, etc.), committed on a working branch (e.g. `feat/PROJ-123-slug`) with the ticket ID in the commit message, and merged via **Pull Request** — direct commits or pushes to `main`, `master` or `development` are blocked by `.githooks/`.
 - **Stack- and platform-agnostic:** each service chooses its language, architecture, cloud and CI provider.
 - **Single AI source of truth:** rules and skills are written once in `.ai/` and exported to every agent.
-- **Built-in engineering standards:** SDLC gates, Clean Code (SOLID, KISS, YAGNI), decoupled architecture (Dependency Inversion, explicit contracts, resilience) and Security by Design (OWASP, STRIDE, zero secrets).
+- **Built for any experience level:** AI agents proactively guide developers from idea and service breakdown to production deployment, explaining trade-offs clearly along the way.
+- **End-to-end engineering standards:** SDLC gates, Clean Code (SOLID, KISS, YAGNI), decoupled architecture, resilient external API/AI integrations, safe database design & migrations, observability, cloud infrastructure/CI/CD, living documentation and Security by Design (OWASP, STRIDE, zero secrets).
 
 ---
 
@@ -37,10 +38,15 @@ flowchart TD
 
 | Skill | Purpose |
 |-------|---------|
-| `sdlc` | End-to-end engineering workflow & quality gates (requirements → design → code → test → review → operate) |
+| `sdlc` | End-to-end engineering workflow & quality gates (ticket → branch → design → code → test → PR → operate) |
 | `architecture` | Stack-agnostic service design (domain isolation, dependency inversion, contracts, resilience) |
+| `integrations` | External APIs, third-party providers (payments, auth, messaging), webhooks & AI/LLM integrations |
+| `database` | SQL/NoSQL/cache modeling, indexing, concurrency & zero-downtime migrations (Expand & Contract) |
+| `observability` | Structured logs, RED/USE metrics, SLIs/SLOs, distributed tracing, health probes & alerting |
+| `infrastructure` | 12-Factor config, hardened containers, modular IaC, CI/CD pipelines & safe rollbacks |
 | `security` | Threat modeling (STRIDE) and OWASP security audit |
-| `review` | Code/PR review across correctness, clean code, architecture, security and SDLC |
+| `review` | Code/PR review across traceability, clean code, architecture, security and SDLC |
+| `docs` | Service READMEs, OpenAPI/AsyncAPI contracts, architecture diagrams & postmortems |
 | `adr` | Immutable Architecture Decision Records |
 | `rfc` | Request for Comments for high-impact or cross-service changes |
 | `runbook` | On-call operational runbooks |
@@ -53,7 +59,7 @@ flowchart TD
 base-ai/
 ├── AGENTS.md              # Global rules for AI agents (generated)
 ├── .ai/                   # Single AI source of truth (rules, config, skills)
-├── .agents/skills/        # Exported skills (adr, rfc, runbook, review, architecture, security, sdlc)
+├── .agents/skills/        # Exported skills (sdlc, architecture, integrations, database, observability, infrastructure, security, review, docs, adr, rfc, runbook)
 ├── docs/
 │   ├── architecture/{adrs,rfcs}/        # Cross-cutting decisions
 │   └── operations/{runbooks,postmortems}/

@@ -1,0 +1,29 @@
+---
+id: docs
+description: >-
+  Create and maintain clear project, service, API/event contract and onboarding
+  documentation. Use when documenting a service, API, onboarding guide,
+  architecture overview or postmortem.
+targets: all
+---
+
+# Technical documentation & contracts
+
+Write clear, maintainable documentation that helps both humans (of any experience level) and AI agents:
+
+1. **Service README (`src/<name>/README.md`):**
+   - What the service does and its domain boundaries.
+   - Quickstart: prerequisites, `.env.example` setup, how to install, run locally and execute tests in copy-pasteable commands.
+   - High-level architecture diagram (`mermaid`) and links to ADRs, RFCs and runbooks.
+
+2. **API & event contracts:**
+   - Document synchronous endpoints (OpenAPI/Swagger or gRPC proto) and asynchronous events (AsyncAPI/JSON Schema) including status codes, error payloads, rate limits and idempotency semantics.
+
+3. **Architecture & operational records:**
+   - Decisions: `docs/architecture/adrs/ADR-XXXX-title.md` (`adr` skill).
+   - Proposals: `docs/architecture/rfcs/RFC-XXXX-title.md` (`rfc` skill).
+   - On-call guides: `docs/operations/runbooks/<component>.md` (`runbook` skill).
+   - Incident reviews: `docs/operations/postmortems/PM-XXXX-title.md` (timeline, root cause, five whys, impact, what went well, and tracked action items with owners).
+
+4. **Quality bar:**
+   - Keep examples runnable, use `mermaid` diagrams for flows/dependencies, never include real secrets or PII, and update docs in the same PR as the code change.

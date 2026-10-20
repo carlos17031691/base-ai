@@ -1,0 +1,31 @@
+---
+id: observability
+description: >-
+  Design and implement monitoring, structured logging, metrics (RED/USE,
+  SLIs/SLOs), distributed tracing, health checks and actionable alerts. Use
+  when instrumenting a service or setting up monitoring.
+targets: all
+---
+
+# Monitoring & observability
+
+Make every service observable, debuggable and production-ready:
+
+1. **Structured logging:**
+   - Emit machine-parseable JSON logs with consistent fields: `timestamp` (ISO-8601 UTC), `level`, `service`, `env`, `message`, `correlation_id` / `trace_id`, `duration_ms` and error codes.
+   - Never log secrets, API keys, tokens, passwords or raw PII.
+
+2. **Metrics & SLIs/SLOs:**
+   - **RED metrics** for request-driven paths: **R**ate (requests/s), **E**rrors (error rate by type/status), **D**uration (p50, p95, p99 latency histograms).
+   - **USE metrics** for resources (DB pool, queues, CPU, memory): **U**tilization, **S**aturation (queue depth), **E**rrors.
+   - Track business and integration metrics (external provider latency/failures, AI token usage/cost, queue lag).
+
+3. **Distributed tracing:**
+   - Propagate W3C trace context (`traceparent` / `x-correlation-id`) across HTTP, message queues and external API calls using OpenTelemetry or equivalent standards.
+
+4. **Health & readiness probes:**
+   - Expose `/healthz` (liveness: process is up) and `/readyz` (readiness: critical dependencies reachable with bounded timeout) for orchestrators and load balancers.
+
+5. **Actionable alerting:**
+   - Alert on user-visible symptoms (SLO burn rate, elevated 5xx, queue stall) rather than noisy raw resource spikes.
+   - Link every alert to its diagnosis and mitigation steps in `docs/operations/runbooks/` (`runbook` skill).
