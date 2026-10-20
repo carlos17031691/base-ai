@@ -14,11 +14,11 @@ Guide a task through the full engineering lifecycle and verify each gate before 
 
 1. **Gate 1 — Problem, requirements & ticket traceability:**
    - Scope identified (root umbrella vs. specific service `src/<name>` with its own remote repository).
-   - For any change inside `src/<name>`, confirm the **Story, Epic or Task ID** (Jira, ClickUp, Trello, etc., e.g. `PROJ-123`, `CU-86a1b2`, `#45`). Ask for it if missing.
+   - Confirm the **Story, Epic or Task ID** (Jira, ClickUp, Trello, GitHub Issues, etc., e.g. `PROJ-123`, `CU-86a1b2`, `#45`) and obtain explicit user approval on the plan/acceptance criteria **before** modifying any repository files.
    - Functional requirements, non-functional constraints (latency, security, scale) and acceptance criteria are unambiguous.
 
 2. **Gate 2 — Working branch & architecture design:**
-   - Create and switch to a dedicated working branch referencing the ticket (e.g. `feat/PROJ-123-short-slug`). Never work directly on `main`, `master` or `development`.
+   - Create and switch to a dedicated working branch from `development` referencing the ticket (e.g. `git checkout -b feat/PROJ-123-short-slug development`). Never work directly on `main`, `master` or `development`.
    - Cross-service or high-impact change? Draft an RFC (`rfc` skill) first.
    - Durable technical decision? Record an ADR (`adr` skill).
    - Boundaries, contracts and failure modes validated (`architecture` and `security` skills).
@@ -34,8 +34,8 @@ Guide a task through the full engineering lifecycle and verify each gate before 
 
 5. **Gate 5 — Code review & Pull Request:**
    - Commit messages include the ticket ID (e.g. `feat(PROJ-123): ...`).
-   - Run `review` and `security` skills; resolve all Blocker/Critical/High findings.
-   - Push the working branch and open a **Pull Request** targeting `development`, `main` or `master` (never push directly to protected branches).
+   - Push the working branch and open a **Pull Request** targeting **`development`** (`staging`) — never open feature PRs directly against `main` or `master` (promote `development` → `main` via a dedicated release PR for `production`).
+   - Run `review` and `security` skills against the PR diff, publish the structured audit report on the PR, and resolve all Blocker/Major/Critical/High findings before merging.
 
 6. **Gate 6 — Release & operational readiness:**
    - Backward-compatible rollout and tested rollback plan (feature flags, safe migrations).

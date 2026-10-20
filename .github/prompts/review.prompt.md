@@ -8,7 +8,7 @@ description: "Review code or a pull request for ticket traceability, branch/PR h
 Review the diff and report findings ordered by severity (**Blocker**, **Major**, **Suggestion**), each with `file:line`, why it matters and a concrete fix.
 
 Checklist:
-1. **Traceability & Git hygiene (`src/<name>`):** the change is on a working branch (never `main`, `master` or `development`), both branch name and commit messages reference a Story/Epic/Task ID (Jira/ClickUp/Trello/etc.), and integration happens via Pull Request.
+1. **Traceability & Git hygiene (`root` & `src/<name>`):** the change is on a working branch (never `main`, `master` or `development`), both branch name and commit messages reference a Story/Epic/Task ID (Jira/ClickUp/Trello/GitHub Issue), and the Pull Request targets `development` (or is an explicit release promotion PR from `development` to `main`).
 2. **Correctness:** the code does what it claims; edge cases, boundary conditions and error paths are handled explicitly.
 3. **Clean code & SOLID:** intention-revealing names; small cohesive functions/modules; no premature abstraction or unnecessary complexity (KISS/YAGNI); strict types; no swallowed errors or dead code.
 4. **Architecture & isolation:** domain logic stays decoupled from infrastructure (Dependency Inversion); no filesystem dependencies on the root or other services; contracts remain backward-compatible or versioned.

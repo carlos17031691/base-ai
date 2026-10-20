@@ -3,6 +3,8 @@ import { cpSync, existsSync, mkdirSync, readdirSync, renameSync, writeFileSync }
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { aiSync } from "./sync.js";
+import { MEMORY_HEADER } from "./memory.js";
+import { bootstrapGitBaseline, writeServiceHooks } from "./services.js";
 
 export const CI_PROVIDERS = ["none", "github", "gitlab"] as const;
 export type CiProvider = (typeof CI_PROVIDERS)[number];
@@ -107,7 +109,9 @@ export function init(rawDir: string | undefined, ci: string = "none"): string {
   writeFileSync(join(dir, "services.yaml"), SERVICES);
   writeFileSync(join(dir, ".gitignore"), GITIGNORE);
   writeFileSync(join(dir, "README.md"), readme(basename(dir)));
+  writeFileSync(join(dir, ".ai", "memory.md"), MEMORY_HEADER);
+  writeServiceHooks(dir);
   aiSync(dir);
-  execFileSync("git", ["init", "-q"], { cwd: dir, stdio: "ignore" });
+  bootstrapGitBaseline(dir, "chore: initial base-ai scaffold");
   return dir;
 }
