@@ -25,7 +25,8 @@ flowchart TD
 | **Service** (`src/<name>`) | Code, architecture, infrastructure, tests, CI/CD | Own and independent |
 
 **Principles:**
-- **Full isolation:** a service never depends on the root repo to build, test or deploy. `src/` is git-ignored.
+- **Full isolation & own repository:** every service in `src/<name>` has its own remote Git repository (`repo` in `services.yaml`) and never depends on the root repo to build, test or deploy. `src/` is git-ignored.
+- **Mandatory ticket traceability & PR-only workflow:** every change inside `src/<name>` must be tied to a Story/Epic/Task (Jira, ClickUp, Trello, etc.), committed on a working branch (e.g. `feat/PROJ-123-slug`) with the ticket ID in the commit message, and merged via **Pull Request** — direct commits or pushes to `main`, `master` or `development` are blocked by `.githooks/`.
 - **Stack- and platform-agnostic:** each service chooses its language, architecture, cloud and CI provider.
 - **Single AI source of truth:** rules and skills are written once in `.ai/` and exported to every agent.
 - **Built-in engineering standards:** SDLC gates, Clean Code (SOLID, KISS, YAGNI), decoupled architecture (Dependency Inversion, explicit contracts, resilience) and Security by Design (OWASP, STRIDE, zero secrets).
@@ -67,12 +68,12 @@ base-ai/
 
 ```bash
 npx create-base-ai my-project [--ci none|github|gitlab]   # initialise the root (or: base-ai init my-project)
-base-ai service new api [--template service] [--repo url] # scaffold templates/service → src/api (git init)
-base-ai service add web <repo> [--branch main]            # register in services.yaml and clone
+base-ai service new api <repo> [--template service]       # scaffold templates/service → src/api (own repo + git hooks)
+base-ai service add web <repo> [--branch main]            # register in services.yaml, clone & install git hooks
 base-ai service remove web [--purge]                      # remove from manifest (and optionally delete src/web)
-base-ai sync                                              # clone/fast-forward all services
+base-ai sync                                              # clone/fast-forward all services, install hooks & ai sync
 base-ai ai sync                                           # export .ai/ to every agent (root and services)
-base-ai doctor                                            # fail if AI artefacts are out of date (for CI)
+base-ai doctor                                            # validate services.yaml & fail if AI artefacts drift (CI)
 ```
 
 CLI development: `cd cli && npm install && npm test`.

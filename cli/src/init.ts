@@ -76,11 +76,11 @@ Project initialised with base-ai.
 - Each **service** lives in \`src/<name>\` as an independent repository with its own architecture, infrastructure and CI/CD.
 
 \`\`\`bash
-npx base-ai service new api         # scaffold a service from templates/service
+npx base-ai service new api <repo>  # scaffold a service from templates/service (requires its own repo)
 npx base-ai service add web <repo>  # register and clone an existing repo
-npx base-ai sync                    # clone/update all services
+npx base-ai sync                    # clone/update all services and install git hooks
 npx base-ai ai sync                 # regenerate AI artefacts after editing .ai/
-npx base-ai doctor                  # fail if AI artefacts are out of date
+npx base-ai doctor                  # validate services.yaml and fail if AI artefacts are out of date
 \`\`\`
 `;
 

@@ -8,7 +8,7 @@ const dirArg = args.find((a, i) => !a.startsWith("--") && args[i - 1] !== "--ci"
 
 try {
   const dir = init(dirArg, ci);
-  console.log(`✔ Project created at ${dir}\n\n  cd ${dirArg}\n  npx base-ai service new <name>`);
+  console.log(`✔ Project created at ${dir}\n\n  cd ${dirArg}\n  npx base-ai service new <name> <repo>`);
 } catch (e) {
   console.error(`✖ ${(e as Error).message}\n\nUsage: create-base-ai <dir> [--ci none|github|gitlab]`);
   process.exitCode = 1;
