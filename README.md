@@ -77,7 +77,6 @@ Desarrollo del CLI: `cd cli && npm install && npm test`.
 | Cursor | `.cursor/rules/*.mdc` |
 | GitHub Copilot | `.github/copilot-instructions.md` |
 | OpenAI Codex | `AGENTS.md` |
-| Windsurf | `.windsurfrules` |
 
 ---
 

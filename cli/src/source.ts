@@ -2,7 +2,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
 
-export const AGENTS = ["antigravity", "claude", "cursor", "copilot", "codex", "windsurf"] as const;
+export const AGENTS = ["antigravity", "claude", "cursor", "copilot", "codex"] as const;
 export type Agent = (typeof AGENTS)[number];
 
 export interface Skill {

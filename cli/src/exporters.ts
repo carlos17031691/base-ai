@@ -53,15 +53,6 @@ export const exporters: Record<Agent, Exporter> = {
       md(`.github/prompts/${s.id}.prompt.md`, s.body, { description: s.description }),
     ),
   ],
-  windsurf: (src) => [
-    md(
-      ".windsurfrules",
-      src.rules +
-        forAgent(src, "windsurf")
-          .map((s) => `\n\n## Skill: ${s.id}\n\n${s.description}\n\n${s.body}`)
-          .join(""),
-    ),
-  ],
 };
 
 /** Ejecuta los exportadores habilitados; si dos producen la misma ruta, el contenido debe coincidir. */

@@ -2,7 +2,7 @@
 
 # Reglas globales para agentes de IA
 
-> Fuente única (ver ADR-0001). Se exporta a AGENTS.md, CLAUDE.md, .cursor/rules, Copilot y Windsurf. Los servicios pueden extender estas reglas con su propio `.ai/rules.md`; si hay conflicto, gana la regla local.
+> Fuente única (ver ADR-0001). Se exporta a AGENTS.md, CLAUDE.md, .cursor/rules y Copilot. Los servicios pueden extender estas reglas con su propio `.ai/rules.md`; si hay conflicto, gana la regla local.
 
 ## 1. Contexto del proyecto
 - El repo raíz es una **plantilla paraguas**: aquí no hay código de aplicación.

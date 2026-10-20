@@ -16,7 +16,7 @@ function fixture(): string {
 test("genera artefactos para todos los agentes", () => {
   const d = fixture();
   aiSync(d);
-  for (const f of ["AGENTS.md", "CLAUDE.md", ".windsurfrules", ".agents/skills/adr/SKILL.md", ".cursor/rules/adr.mdc", ".github/prompts/adr.prompt.md", ".claude/commands/adr.md"]) {
+  for (const f of ["AGENTS.md", "CLAUDE.md", ".agents/skills/adr/SKILL.md", ".cursor/rules/adr.mdc", ".github/prompts/adr.prompt.md", ".claude/commands/adr.md"]) {
     assert.ok(existsSync(join(d, f)), f);
   }
   assert.match(readFileSync(join(d, ".agents/skills/adr/SKILL.md"), "utf8"), /^---\nname: "adr"/);
