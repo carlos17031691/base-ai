@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { resolve } from "node:path";
+import { buildContextIndex, searchContext } from "./context.js";
 import { init } from "./init.js";
 import { listServices, serviceAdd, serviceNew, serviceRemove, syncServices } from "./services.js";
 import { aiSync } from "./sync.js";
@@ -8,8 +9,10 @@ const USAGE = `base-ai <command> [--root <dir>]
 
 Commands:
   init <dir> [--ci none|github|gitlab]              Create a new project from the base-ai template
-  ai sync                                           Export .ai/ to every agent's format (root and services)
+  ai sync                                           Export .ai/ to every agent's format and refresh context index
   doctor                                            Validate services.yaml and fail if AI artefacts are out of date
+  context index                                     Build/refresh .ai/context-index.json across root and src/<name>
+  context search <query> [--scope s] [--top k]      Retrieve ranked chunks (ADRs, RFCs, runbooks, contracts, docs)
   service new <name> <repo> [--template t]          Create src/<name> from templates/<t> with its own git repo & hooks
   service add <name> <repo> [--branch b]            Register an existing repo in services.yaml, clone it & install hooks
   service remove <name> [--purge]                   Remove it from services.yaml (--purge deletes src/<name> if clean)
@@ -55,6 +58,28 @@ function main(argv: string[]): number {
     if (check && drift) {
       console.error("✖ AI artefacts are out of date. Run: base-ai ai sync");
       return 1;
+    }
+    return 0;
+  }
+
+  if (cmd === "context" && sub === "index") {
+    const idx = buildContextIndex(root);
+    console.log(`✔ Indexed ${idx.chunks.length} chunks into .ai/context-index.json`);
+    return 0;
+  }
+
+  if (cmd === "context" && sub === "search") {
+    const query = rest.join(" ").trim();
+    if (!query) throw new Error("Missing query: base-ai context search <query>");
+    const topK = str(flags.top) ? Number(str(flags.top)) : 5;
+    const hits = searchContext(root, query, topK, str(flags.scope));
+    if (!hits.length) {
+      console.log("No matching context chunks found.");
+      return 0;
+    }
+    for (const h of hits) {
+      console.log(`[${h.id}] (${h.scope} | ${h.kind}${h.status ? ` | ${h.status}` : ""} | score=${h.score}) — ${h.title} › ${h.section}`);
+      console.log(`  ${h.snippet.replace(/\n+/g, " ").slice(0, 220)}\n`);
     }
     return 0;
   }

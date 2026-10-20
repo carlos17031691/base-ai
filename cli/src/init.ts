@@ -19,7 +19,7 @@ function shouldCopy(src: string, base: string): boolean {
   const rel = relative(base, src);
   if (rel === "") return true;
   const [top] = rel.split(sep);
-  if (top === ".ai") return !rel.endsWith("generated.json");
+  if (top === ".ai") return !rel.endsWith("generated.json") && !rel.endsWith("context-index.json");
   if (top === "templates") return true;
   if (top === "docs") return !rel.endsWith(".md");
   return false;
@@ -35,7 +35,7 @@ services: []
 #    ai: inherit         # inherit | none
 `;
 
-const GITIGNORE = "src/*\n!src/.gitkeep\n";
+const GITIGNORE = "src/*\n!src/.gitkeep\n.ai/context-index.json\n";
 
 const CI: Record<Exclude<CiProvider, "none">, { path: string; content: string }> = {
   github: {

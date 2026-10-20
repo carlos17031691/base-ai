@@ -1,0 +1,40 @@
+---
+id: rag
+description: >-
+  Design, implement, secure and evaluate Retrieval-Augmented Generation (RAG)
+  pipelines (ingestion, chunking, embeddings, vector/hybrid search, reranking,
+  access control and hallucination evaluation). Use when building search,
+  knowledge bases, document Q&A or context-aware AI features.
+targets: all
+---
+
+# Retrieval-Augmented Generation (RAG) & knowledge retrieval
+
+Guide the design and implementation of production-grade RAG pipelines step by step:
+
+1. **When to use RAG (vs. alternatives):**
+   - Use **RAG** when facts change frequently, require source citations, exceed context limits or must respect per-user/tenant permissions.
+   - Prefer **long-context prompting** for small static corpora, or **structured tool/SQL queries** when exact aggregations or transactional lookups are needed.
+
+2. **Ingestion & semantic chunking:**
+   - Make ingestion **idempotent**: hash document content (`content_hash`) and version sources so re-indexing updates only changed chunks without duplicates.
+   - Split by document structure first (headings, paragraphs, code blocks, tables) with a bounded token budget (e.g. 256–512 tokens) and small overlap (10–15%).
+   - Attach rich metadata to every chunk: `document_id`, `chunk_id`, `source_uri`, `title`, `section`, `updated_at`, `acl` / `tenant_id` and `version`.
+
+3. **Embeddings & vector store selection:**
+   - Wrap the embedding model and vector store behind a domain port (`integrations` skill) so models or stores can change without rewriting domain logic.
+   - Start simple when possible (e.g. PostgreSQL + `pgvector` inside the service's existing DB) and move to dedicated vector engines (Qdrant, Milvus, Weaviate, OpenSearch) only when scale or latency demands it (`adr` skill).
+   - Store the `embedding_model` version alongside vectors to plan zero-downtime re-embedding migrations.
+
+4. **Hybrid retrieval & reranking:**
+   - Combine **lexical search** (BM25 / full-text for exact IDs, SKUs, error codes and proper nouns) with **dense vector search** (semantic similarity) using Reciprocal Rank Fusion (RRF) or weighted scoring.
+   - Apply a **reranker** or similarity threshold to drop irrelevant chunks and keep the prompt context concise (typically top 3–8 chunks).
+
+5. **Security & access control (mandatory):**
+   - **Pre-retrieval ACL / tenant filtering:** enforce user, role or `tenant_id` filters directly in the vector/hybrid query `WHERE` clause — never fetch globally and filter in memory or in the prompt.
+   - **Indirect prompt injection defense:** treat retrieved chunks as untrusted data; wrap them in explicit delimiters, instruct the model to ignore instructions found inside retrieved documents, and validate tool calls/outputs.
+   - **PII & secret redaction:** scrub secrets and unauthorized PII before chunking and embedding.
+
+6. **Grounded generation & evaluation:**
+   - Require inline source citations (`[source_id]`) and instruct the model to answer *"I don't have enough information in the provided sources"* when context is insufficient.
+   - Track retrieval and generation quality with a golden evaluation set: **Recall@K / MRR** (retrieval), **Faithfulness / Groundedness** (no hallucinations) and **Answer Relevance**, alongside latency and token cost (`observability` skill).
