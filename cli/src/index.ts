@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { resolve } from "node:path";
 import { buildContextIndex, searchContext } from "./context.js";
+import { runDoctor } from "./doctor.js";
 import { init } from "./init.js";
 import { memoryAdd, memoryList } from "./memory.js";
 import { listServices, serviceAdd, serviceNew, serviceRemove, syncServices } from "./services.js";
@@ -48,18 +49,24 @@ function main(argv: string[]): number {
     return 0;
   }
 
-  if ((cmd === "ai" && sub === "sync") || cmd === "doctor") {
-    const check = cmd === "doctor";
-    if (check) listServices(root);
-    let drift = 0;
-    for (const r of aiSync(root, check)) {
-      r.written.forEach((f) => console.log(`  ${check ? "out of date" : "written"}: ${f}`));
-      r.removed.forEach((f) => console.log(`  ${check ? "stale" : "removed"}: ${f}`));
-      drift += r.written.length + r.removed.length;
+  if (cmd === "ai" && sub === "sync") {
+    for (const r of aiSync(root, false)) {
+      r.written.forEach((f) => console.log(`  written: ${f}`));
+      r.removed.forEach((f) => console.log(`  removed: ${f}`));
       console.log(`✔ ${r.target}: ${r.written.length} changed, ${r.removed.length} removed, ${r.unchanged.length} unchanged`);
     }
-    if (check && drift) {
-      console.error("✖ AI artefacts are out of date. Run: base-ai ai sync");
+    return 0;
+  }
+
+  if (cmd === "doctor") {
+    const { syncResults, issues } = runDoctor(root);
+    for (const r of syncResults) {
+      r.written.forEach((f) => console.log(`  out of date: ${f}`));
+      r.removed.forEach((f) => console.log(`  stale: ${f}`));
+      console.log(`✔ ${r.target}: ${r.written.length} changed, ${r.removed.length} removed, ${r.unchanged.length} unchanged`);
+    }
+    if (issues.length) {
+      issues.forEach((i) => console.error(`✖ ${i}`));
       return 1;
     }
     return 0;

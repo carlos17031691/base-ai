@@ -1,0 +1,29 @@
+# Environment & secrets (never commit real secrets)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*credentials*.json
+
+# Dependencies & build outputs
+node_modules/
+dist/
+build/
+out/
+coverage/
+.venv/
+venv/
+__pycache__/
+*.pyc
+target/
+bin/
+obj/
+
+# Local AI index & OS files
+.ai/context-index.json
+.DS_Store
+Thumbs.db
+*.log

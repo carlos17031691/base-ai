@@ -6,7 +6,7 @@
 
 ## 1. Mission & adaptive guidance (for any developer experience level)
 - Your goal is to help **any developer — from beginner to senior architect —** design, build, integrate, secure, deploy and operate production-grade software.
-- **Guide proactively:** if the user starts from a high-level idea or is unsure where to begin, walk them step by step through discovery, service breakdown, stack selection, ticket/branch creation and incremental implementation (`sdlc` skill).
+- **Guide proactively:** if the user starts from a high-level idea or is unsure where to begin, walk them step by step through discovery, service breakdown, Epics/User Stories (`discovery` skill), stack selection, ticket/branch creation and incremental implementation (`sdlc` skill).
 - **Explain trade-offs clearly:** briefly explain *why* a pattern, database, integration strategy or security control is recommended before writing code, avoiding unexplained jargon.
 - **Never assume on ambiguity:** ask concise clarifying questions when requirements, external provider contracts or business rules are unclear.
 
@@ -29,7 +29,7 @@ Every change inside `src/<name>` must follow these non-negotiable rules (enforce
 Follow a disciplined lifecycle for every change (`sdlc` skill):
 1. **Understand & trace:** confirm the Story/Epic/Task ID, read the relevant code, contracts and docs before proposing changes.
 2. **Branch & design:** create the ticket working branch; record architectural decisions in an ADR (`adr` skill); draft an RFC (`rfc` skill) before implementing high-impact or cross-service changes.
-3. **Implement & test:** make small, atomic, verifiable changes. Every behavior change comes with automated tests (unit, integration or contract) covering happy paths, edge cases and failure modes.
+3. **Implement & test:** make small, atomic, verifiable changes. Every behavior change comes with automated tests (`testing` skill: unit, integration, contract or AI evals) covering happy paths, edge cases and failure modes.
 4. **Review & PR:** run the `review` and `security` skills before opening or merging a Pull Request into `development`, `main` or `master`.
 5. **Operate:** ship with monitoring (`observability` skill), safe infrastructure (`infrastructure` skill), up-to-date documentation (`docs` skill) and an operational runbook (`runbook` skill). Follow up incidents with a blameless postmortem.
 
@@ -44,6 +44,7 @@ Follow a disciplined lifecycle for every change (`sdlc` skill):
 ## 6. Architecture, integrations, data, observability & infrastructure
 - **Clean boundaries (`architecture` skill):** isolate pure domain/business logic from delivery mechanisms (HTTP, CLI, queues) and infrastructure (databases, external SDKs). Dependencies point inward toward the domain.
 - **External APIs, AI gateways & LLM integrations (`integrations` skill):** wrap every third-party API, AI gateway (e.g. OpenRouter, LiteLLM) or LLM provider behind a domain port/adapter (Anti-Corruption Layer). Enforce explicit timeouts, bounded retries with exponential backoff + jitter, model fallbacks, idempotency keys, webhook signature verification, rate-limit handling and cost/token guardrails.
+- **Tool-using AI agents & MCP (`agents` skill):** keep agent tools atomic, schema-validated, idempotent and scoped to the caller's permissions; require Human-in-the-Loop approval for destructive/sensitive actions and enforce hard step/token/time limits.
 - **Workflow automation & orchestration (`workflows` skill):** when using orchestration or automation engines (e.g. n8n, Temporal, queues), isolate them in their own `src/<name>` service, version workflow definitions (`.json`/code) in Git via PRs, keep secrets out of workflow files, authenticate webhooks and make every step idempotent.
 - **AI memory (`memory` skill):** persist cross-session project learnings in `.ai/memory.md` (`base-ai memory add/list`, never storing secrets/PII). In AI applications, separate short-term session memory (TTL + rolling summary) from long-term memory with strict per-user/tenant isolation.
 - **RAG & knowledge retrieval (`rag` skill):** for document Q&A, semantic search or context-aware AI features, use idempotent ingestion, structure-aware chunking with metadata, hybrid search (lexical + vector), pre-retrieval ACL/tenant filtering, indirect prompt-injection defenses and source citations. For cross-project discovery, use `base-ai context search "<query>"` (backed by `.ai/context-index.json`) to locate ADRs, RFCs, runbooks, memories and contracts across the root and `src/<name>`.
@@ -69,8 +70,10 @@ Keep documentation current as part of every change (`docs` skill):
 ## Available skills
 
 - **adr**: Create an immutable Architecture Decision Record (ADR) documenting the what, why and how of a technical decision. Use when asked to record an architecture decision or create an ADR.
+- **agents**: Design and secure tool-using AI agents, Model Context Protocol (MCP) servers and multi-step agentic loops with Human-in-the-Loop and execution guardrails. Use when building autonomous or tool-calling AI features.
 - **architecture**: Design or evaluate the architecture of a service or module using clean boundaries, dependency inversion, explicit contracts and resilience patterns. Use when designing a new service, refactoring boundaries or assessing coupling.
 - **database**: Design schemas, queries, transactions and zero-downtime migrations for SQL, NoSQL and cache stores. Use when modeling data, writing migrations, tuning queries or handling concurrency.
+- **discovery**: Turn a raw product idea or feature request into domain boundaries, candidate services for services.yaml, Epics and actionable User Stories with Gherkin acceptance criteria (Jira/ClickUp/Trello). Use at the start of a project or epic.
 - **docs**: Create and maintain clear project, service, API/event contract and onboarding documentation. Use when documenting a service, API, onboarding guide, architecture overview or postmortem.
 - **infrastructure**: Design and review cloud infrastructure (IaC), containers, environment configuration, CI/CD pipelines and safe deployment strategies. Use when containerizing a service, writing Terraform/Pulumi/Dockerfiles or setting up CI/CD.
 - **integrations**: Design and implement resilient integrations with external APIs, third-party providers (payments, auth, messaging, storage), webhooks, AI gateways (e.g. OpenRouter, LiteLLM) and LLM models. Use when connecting to any external service or AI provider.
@@ -82,4 +85,5 @@ Keep documentation current as part of every change (`docs` skill):
 - **runbook**: Generate an on-call operational runbook for a service or component. Use when deploying something new, creating an alert, or when asked to document how to operate or mitigate an incident.
 - **sdlc**: Guide and verify a change across the full Software Development Life Cycle (ticket traceability, working branch, ADR/RFC design, clean implementation, testing, review, PR workflow and operational readiness). Use when planning or gating a feature or release.
 - **security**: Perform threat modeling (STRIDE) and security auditing (OWASP, secrets, input validation, authz, supply chain, safe logging). Use when designing features, auditing code or reviewing sensitive changes.
+- **testing**: Design and implement automated test suites across the test pyramid (unit, integration, contract testing across services, resilience/chaos and AI Evals). Use when writing tests, setting up test harnesses or evaluating AI/RAG outputs.
 - **workflows**: Design, govern and operate workflow automation and agent orchestration engines (e.g. n8n, Temporal, Inngest, event queues). Use when automating multi-step processes, SaaS integrations, webhooks or AI agent workflows.

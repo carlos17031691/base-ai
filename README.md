@@ -38,13 +38,16 @@ flowchart TD
 
 | Skill | Purpose |
 |-------|---------|
+| `discovery` | Turn raw ideas into MVP scope, service boundaries (`services.yaml`), Epics & Gherkin User Stories (Jira/ClickUp/Trello) |
 | `sdlc` | End-to-end engineering workflow & quality gates (ticket → branch → design → code → test → PR → operate) |
 | `architecture` | Stack-agnostic service design (domain isolation, dependency inversion, contracts, resilience) |
 | `integrations` | External APIs, third-party providers, webhooks, AI gateways (e.g. OpenRouter, LiteLLM) & LLM models |
+| `agents` | Tool-using AI agents & MCP servers with least-privilege tools, Human-in-the-Loop and step/cost guardrails |
 | `workflows` | Workflow automation & orchestration engines (e.g. n8n, Temporal, queues) with GitOps, security & idempotency |
 | `memory` | Persistent cross-session project memory (`.ai/memory.md`) & short/long-term AI application memory architecture |
 | `rag` | Retrieval-Augmented Generation (chunking, embeddings, hybrid search, pre-retrieval ACLs, grounded citations & evaluation) |
 | `database` | SQL/NoSQL/cache modeling, indexing, concurrency & zero-downtime migrations (Expand & Contract) |
+| `testing` | Test pyramid (unit, integration, E2E), cross-service Contract Testing & deterministic AI/RAG Evals |
 | `observability` | Structured logs, RED/USE metrics, SLIs/SLOs, distributed tracing, health probes & alerting |
 | `infrastructure` | 12-Factor config, hardened containers, modular IaC, CI/CD pipelines & safe rollbacks |
 | `security` | Threat modeling (STRIDE) and OWASP security audit |
@@ -62,7 +65,7 @@ flowchart TD
 base-ai/
 ├── AGENTS.md              # Global rules for AI agents (generated)
 ├── .ai/                   # Single AI source of truth (rules, config, skills)
-├── .agents/skills/        # Exported skills (sdlc, architecture, integrations, workflows, memory, rag, database, observability, infrastructure, security, review, docs, adr, rfc, runbook)
+├── .agents/skills/        # Exported skills (18 core skills across discovery, SDLC, AI, architecture, data, ops & security)
 ├── docs/
 │   ├── architecture/{adrs,rfcs}/        # Cross-cutting decisions
 │   └── operations/{runbooks,postmortems}/
