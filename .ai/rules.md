@@ -4,7 +4,7 @@
 
 ## 1. Mission & adaptive guidance (for any developer experience level)
 - Your goal is to help **any developer — from beginner to senior architect —** design, build, integrate, secure, deploy and operate production-grade software.
-- **Guide proactively:** if the user starts from a high-level idea or is unsure where to begin, walk them step by step through discovery, service breakdown, stack selection, ticket/branch creation and incremental implementation (`sdlc` skill).
+- **Guide proactively:** if the user starts from a high-level idea or is unsure where to begin, walk them step by step through discovery, service breakdown, Epics/User Stories (`discovery` skill), stack selection, ticket/branch creation and incremental implementation (`sdlc` skill).
 - **Explain trade-offs clearly:** briefly explain *why* a pattern, database, integration strategy or security control is recommended before writing code, avoiding unexplained jargon.
 - **Never assume on ambiguity:** ask concise clarifying questions when requirements, external provider contracts or business rules are unclear.
 
@@ -27,7 +27,7 @@ Every change inside `src/<name>` must follow these non-negotiable rules (enforce
 Follow a disciplined lifecycle for every change (`sdlc` skill):
 1. **Understand & trace:** confirm the Story/Epic/Task ID, read the relevant code, contracts and docs before proposing changes.
 2. **Branch & design:** create the ticket working branch; record architectural decisions in an ADR (`adr` skill); draft an RFC (`rfc` skill) before implementing high-impact or cross-service changes.
-3. **Implement & test:** make small, atomic, verifiable changes. Every behavior change comes with automated tests (unit, integration or contract) covering happy paths, edge cases and failure modes.
+3. **Implement & test:** make small, atomic, verifiable changes. Every behavior change comes with automated tests (`testing` skill: unit, integration, contract or AI evals) covering happy paths, edge cases and failure modes.
 4. **Review & PR:** run the `review` and `security` skills before opening or merging a Pull Request into `development`, `main` or `master`.
 5. **Operate:** ship with monitoring (`observability` skill), safe infrastructure (`infrastructure` skill), up-to-date documentation (`docs` skill) and an operational runbook (`runbook` skill). Follow up incidents with a blameless postmortem.
 
@@ -42,6 +42,7 @@ Follow a disciplined lifecycle for every change (`sdlc` skill):
 ## 6. Architecture, integrations, data, observability & infrastructure
 - **Clean boundaries (`architecture` skill):** isolate pure domain/business logic from delivery mechanisms (HTTP, CLI, queues) and infrastructure (databases, external SDKs). Dependencies point inward toward the domain.
 - **External APIs, AI gateways & LLM integrations (`integrations` skill):** wrap every third-party API, AI gateway (e.g. OpenRouter, LiteLLM) or LLM provider behind a domain port/adapter (Anti-Corruption Layer). Enforce explicit timeouts, bounded retries with exponential backoff + jitter, model fallbacks, idempotency keys, webhook signature verification, rate-limit handling and cost/token guardrails.
+- **Tool-using AI agents & MCP (`agents` skill):** keep agent tools atomic, schema-validated, idempotent and scoped to the caller's permissions; require Human-in-the-Loop approval for destructive/sensitive actions and enforce hard step/token/time limits.
 - **Workflow automation & orchestration (`workflows` skill):** when using orchestration or automation engines (e.g. n8n, Temporal, queues), isolate them in their own `src/<name>` service, version workflow definitions (`.json`/code) in Git via PRs, keep secrets out of workflow files, authenticate webhooks and make every step idempotent.
 - **AI memory (`memory` skill):** persist cross-session project learnings in `.ai/memory.md` (`base-ai memory add/list`, never storing secrets/PII). In AI applications, separate short-term session memory (TTL + rolling summary) from long-term memory with strict per-user/tenant isolation.
 - **RAG & knowledge retrieval (`rag` skill):** for document Q&A, semantic search or context-aware AI features, use idempotent ingestion, structure-aware chunking with metadata, hybrid search (lexical + vector), pre-retrieval ACL/tenant filtering, indirect prompt-injection defenses and source citations. For cross-project discovery, use `base-ai context search "<query>"` (backed by `.ai/context-index.json`) to locate ADRs, RFCs, runbooks, memories and contracts across the root and `src/<name>`.

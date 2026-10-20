@@ -8,8 +8,11 @@ Independent service created with `base-ai service new {{name}} <repo>`.
 
 | Path | Purpose |
 |------|---------|
-| `.ai/` | Service-specific rules and skills (extend the root ones; local wins) |
+| `.ai/` | Service-specific rules, memory and skills (extend the root ones; local wins) |
 | `.githooks/` | Git hooks enforcing branch naming, ticket traceability and PR-only merges |
+| `.env.example` | 12-Factor environment variable template (copy to `.env` locally; never commit `.env`) |
+| `.gitignore` | Defensive ignore rules for secrets, `.env*`, keys and build artefacts |
+| `PULL_REQUEST_TEMPLATE.md` | PR checklist covering Ticket ID, clean architecture, tests, security and rollback |
 | `docs/architecture/{adrs,rfcs}` | Service decisions |
 | `docs/operations/{runbooks,postmortems}` | Operations |
 
