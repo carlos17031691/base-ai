@@ -32,9 +32,10 @@ jobs:
       - name: Check if version in package.json is already published
         id: check
         run: |
+          PKG_NAME=$(node -p "require('./package.json').name")
           LOCAL_VER=$(node -p "require('./package.json').version")
-          REMOTE_VER=$(npm view base-ai version 2>/dev/null || echo "none")
-          echo "Local version: $LOCAL_VER | Published version: $REMOTE_VER"
+          REMOTE_VER=$(npm view "$PKG_NAME" version 2>/dev/null || echo "none")
+          echo "Package: $PKG_NAME | Local version: $LOCAL_VER | Published version: $REMOTE_VER"
           if [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
             echo "should_publish=true" >> "$GITHUB_OUTPUT"
             echo "version=$LOCAL_VER" >> "$GITHUB_OUTPUT"

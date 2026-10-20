@@ -80,7 +80,7 @@ base-ai/
 ## 🚀 CLI
 
 ```bash
-npx base-ai init my-project [--ci none|github|gitlab]     # initialise the root project
+npx @carlos17031691/base-ai init my-project [--ci none|github|gitlab]     # initialise the root project (or: npm i -g @carlos17031691/base-ai)
 base-ai service new api <repo> [--cloud aws|gcp|...] [--iac opentofu|terraform|pulumi|...] # scaffold service + optional IaC
 base-ai service add web <repo> [--branch main]            # register in services.yaml, clone & install git hooks
 base-ai service remove web [--purge]                      # remove from manifest (and optionally delete src/web)
