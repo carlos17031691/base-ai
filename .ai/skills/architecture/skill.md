@@ -1,0 +1,35 @@
+---
+id: architecture
+description: >-
+  Design or evaluate the architecture of a service or module using clean
+  boundaries, dependency inversion, explicit contracts and resilience patterns.
+  Use when designing a new service, refactoring boundaries or assessing coupling.
+targets: all
+---
+
+# Architecture design & evaluation
+
+Design or review a service/module architecture without locking it into a framework:
+
+1. **Boundaries & responsibilities:**
+   - **Domain / Core:** pure business rules, entities, value objects and domain ports (interfaces). Zero dependency on frameworks, databases, transport or external SDKs.
+   - **Application / Use cases:** orchestrates domain logic, transactions, authorization and events through ports.
+   - **Adapters / Infrastructure:** implements ports (HTTP/gRPC controllers, message consumers, DB repositories, third-party clients).
+   - Verify the **Dependency Rule**: source code dependencies point inward toward the domain.
+
+2. **Contracts & integration:**
+   - Define explicit, machine-readable schemas for synchronous APIs and asynchronous events.
+   - Ensure backward compatibility (additive changes, tolerant readers) or explicit versioning.
+   - Never share databases or filesystem paths across services.
+
+3. **Data & consistency:**
+   - Define ownership: each dataset has a single owning service.
+   - Choose the right consistency model: ACID transactions within a service boundary; Saga / Outbox / idempotent consumers across services.
+
+4. **Resilience & scalability:**
+   - Stateless compute, explicit timeouts on all I/O, bounded retries with backoff + jitter, idempotency keys on mutating operations, backpressure/rate limiting.
+
+5. **Observability & operability:**
+   - Health/readiness probes, structured logs with correlation IDs, key SLIs (latency, error rate, saturation) and graceful shutdown.
+
+6. **Output:** produce a clear component diagram (`mermaid`), module boundary map, contract summary, failure-mode table, and record durable choices via the `adr` skill.
