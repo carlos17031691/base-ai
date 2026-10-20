@@ -24,12 +24,14 @@ test("runDoctor passes on clean project + service and catches hook/remote/env is
   const svc = serviceNew(d, "api", "git@example.com:org/api.git");
   assert.deepEqual(runDoctor(d).issues, []);
 
-  // Misconfigure remote and track a forbidden .env file
+  // Misconfigure remote and track a forbidden .env and .tfstate file
   git(["remote", "set-url", "origin", "git@example.com:org/wrong.git"], svc);
   writeFileSync(join(svc, ".env"), "SECRET=1");
-  git(["add", "-f", ".env"], svc);
+  writeFileSync(join(svc, "terraform.tfstate"), "{}");
+  git(["add", "-f", ".env", "terraform.tfstate"], svc);
 
   const report = runDoctor(d);
   assert.ok(report.issues.some((i) => i.includes("does not match services.yaml")));
   assert.ok(report.issues.some((i) => i.includes("forbidden secret/env file tracked in Git: .env")));
+  assert.ok(report.issues.some((i) => i.includes("forbidden secret/env file tracked in Git: terraform.tfstate")));
 });

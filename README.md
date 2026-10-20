@@ -49,8 +49,8 @@ flowchart TD
 | `rag` | Retrieval-Augmented Generation (chunking, embeddings, hybrid search, pre-retrieval ACLs, grounded citations & evaluation) |
 | `database` | SQL/NoSQL/cache modeling, indexing, concurrency & zero-downtime migrations (Expand & Contract) |
 | `testing` | Test pyramid (unit, integration, E2E), cross-service Contract Testing & deterministic AI/RAG Evals |
-| `observability` | Structured logs, RED/USE metrics, SLIs/SLOs, distributed tracing, health probes & alerting |
-| `infrastructure` | 12-Factor config, hardened containers, modular IaC, CI/CD pipelines & safe rollbacks |
+| `observability` | Structured logs, RED/USE metrics, SLIs/SLOs, distributed tracing, health probes, cloud alarms & alerting |
+| `infrastructure` | Cloud providers (AWS/GCP/Azure/Cloudflare/PaaS), keyless OIDC auth, IaC GitOps (`plan`→`apply`), Monitoring as Code & Cloud FinOps |
 | `security` | Threat modeling (STRIDE) and OWASP security audit |
 | `review` | Code/PR review across traceability, clean code, architecture, security and SDLC |
 | `docs` | Service READMEs, OpenAPI/AsyncAPI contracts, architecture diagrams & postmortems |
@@ -81,7 +81,7 @@ base-ai/
 
 ```bash
 npx create-base-ai my-project [--ci none|github|gitlab]   # initialise the root (or: base-ai init my-project)
-base-ai service new api <repo> [--template service]       # scaffold templates/service → src/api (own repo + git hooks)
+base-ai service new api <repo> [--cloud aws|gcp|...] [--iac opentofu|terraform|pulumi|...] # scaffold service + optional IaC
 base-ai service add web <repo> [--branch main]            # register in services.yaml, clone & install git hooks
 base-ai service remove web [--purge]                      # remove from manifest (and optionally delete src/web)
 base-ai sync                                              # clone/fast-forward all services, install hooks & ai sync

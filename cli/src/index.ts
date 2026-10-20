@@ -19,7 +19,7 @@ Commands:
   context search <query> [--scope s] [--top k]      Retrieve ranked chunks (ADRs, RFCs, runbooks, contracts, memory)
   memory add "<note>" [--ticket id] [--tag t] [--service s]  Persist a cross-session memory note and sync agents
   memory list [--service s]                         List persisted project memory notes
-  service new <name> <repo> [--template t]          Create src/<name> from templates/<t> with its own git repo & hooks
+  service new <name> <repo> [--cloud c] [--iac i] [--template t]  Create src/<name> with its own git repo, hooks & optional IaC layout
   service add <name> <repo> [--branch b]            Register an existing repo in services.yaml, clone it & install hooks
   service remove <name> [--purge]                   Remove it from services.yaml (--purge deletes src/<name> if clean)
   sync                                              Clone/fast-forward all services, install hooks and run ai sync
@@ -129,7 +129,13 @@ function main(argv: string[]): number {
 
   if (cmd === "service" && sub === "new") {
     const repo = rest[1] ?? str(flags.repo);
-    console.log(`✔ Service created at ${serviceNew(root, rest[0], repo, str(flags.template))}`);
+    console.log(
+      `✔ Service created at ${serviceNew(root, rest[0], repo, {
+        template: str(flags.template),
+        cloud: str(flags.cloud),
+        iac: str(flags.iac),
+      })}`,
+    );
     return 0;
   }
   if (cmd === "service" && sub === "add") {

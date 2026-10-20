@@ -4,11 +4,19 @@ import { join } from "node:path";
 import { isMap, isSeq, parseDocument, YAMLSeq } from "yaml";
 import { aiSync } from "./sync.js";
 
+export const CLOUD_PROVIDERS = ["aws", "gcp", "azure", "cloudflare", "fly", "k8s", "custom"] as const;
+export type CloudProvider = (typeof CLOUD_PROVIDERS)[number];
+
+export const IAC_TOOLS = ["terraform", "opentofu", "pulumi", "cdk", "docker", "none"] as const;
+export type IacTool = (typeof IAC_TOOLS)[number];
+
 export interface Service {
   name: string;
   repo: string;
   /** Omitted = the remote's default branch. */
   branch?: string;
+  cloud?: CloudProvider;
+  iac?: IacTool;
   template?: string;
   ai?: "inherit" | "none";
 }
@@ -88,6 +96,50 @@ function validateBranch(branch: string | undefined): string | undefined {
   return branch;
 }
 
+function validateCloud(cloud: string | undefined): CloudProvider | undefined {
+  if (cloud !== undefined && !CLOUD_PROVIDERS.includes(cloud as CloudProvider)) {
+    throw new Error(`Invalid cloud provider "${cloud}" (${CLOUD_PROVIDERS.join(" | ")})`);
+  }
+  return cloud as CloudProvider | undefined;
+}
+
+function validateIac(iac: string | undefined): IacTool | undefined {
+  if (iac !== undefined && !IAC_TOOLS.includes(iac as IacTool)) {
+    throw new Error(`Invalid IaC tool "${iac}" (${IAC_TOOLS.join(" | ")})`);
+  }
+  return iac as IacTool | undefined;
+}
+
+function scaffoldCloudInfra(dest: string, name: string, cloud?: CloudProvider, iac?: IacTool): void {
+  if (!cloud && (!iac || iac === "none")) return;
+  for (const sub of ["modules", "staging", "production"]) {
+    const d = join(dest, "infrastructure", sub);
+    mkdirSync(d, { recursive: true });
+    writeFileSync(join(d, ".gitkeep"), "");
+  }
+  const provider = cloud ?? "cloud provider";
+  const tool = iac && iac !== "none" ? iac : "IaC";
+  const readme = `# Infrastructure — ${name} (${provider} / ${tool})
+
+Provisioned and monitored as code (see \`infrastructure\` and \`observability\` skills).
+
+## Layout
+
+- \`modules/\` — reusable compute, data, messaging and monitoring modules
+- \`staging/\` — pre-production environment composition & remote state
+- \`production/\` — production environment composition & remote state
+
+## Security & GitOps Checklist
+
+- [ ] **Keyless OIDC auth:** CI authenticates to \`${provider}\` via OIDC federation (zero static cloud keys in Git/CI).
+- [ ] **Remote state with locking:** encrypted remote backend configured; \`*.tfstate\` / \`*.tfplan\` are git-ignored.
+- [ ] **Mandatory resource tags:** \`service=${name}\`, \`env=staging|production\`, \`managed_by=${tool}\`.
+- [ ] **PR Plan → Merge Apply:** every PR runs \`fmt\`, \`validate\`, IaC security scan and posts the execution \`plan\`.
+- [ ] **Monitoring as Code:** alarms provisioned alongside resources (compute saturation/restarts, DB connections/storage/replication, queue age & \`DLQ > 0\`, 5xx rate, and monthly Cloud FinOps budget alerts at 50/80/100%).
+`;
+  writeFileSync(join(dest, "infrastructure", "README.md"), readme);
+}
+
 /** Installs and activates .githooks (branch, ticket and PR-only rules) in a service repository. */
 export function installServiceHooks(dest: string): void {
   const hooksDir = join(dest, ".githooks");
@@ -125,6 +177,8 @@ export function listServices(root: string): Service[] {
     validateName(s.name);
     validateRepo(s.repo);
     validateBranch(s.branch);
+    validateCloud(s.cloud);
+    validateIac(s.iac);
   }
   return list;
 }
@@ -150,8 +204,23 @@ function renderTemplate(dir: string, name: string): void {
   }
 }
 
+export interface ServiceNewOptions {
+  template?: string;
+  cloud?: string;
+  iac?: string;
+}
+
 /** service new: creates src/<name> from templates/<template>, sets origin <repo>, activates git hooks and registers it. */
-export function serviceNew(root: string, rawName: string | undefined, rawRepo: string | undefined, template = "service"): string {
+export function serviceNew(
+  root: string,
+  rawName: string | undefined,
+  rawRepo: string | undefined,
+  templateOrOpts: string | ServiceNewOptions = "service",
+): string {
+  const opts: ServiceNewOptions = typeof templateOrOpts === "string" ? { template: templateOrOpts } : templateOrOpts;
+  const template = opts.template ?? "service";
+  const cloud = validateCloud(opts.cloud);
+  const iac = validateIac(opts.iac);
   const name = validateName(rawName);
   const repo = validateRepo(rawRepo);
   const tpl = join(root, "templates", validateName(template));
@@ -159,9 +228,10 @@ export function serviceNew(root: string, rawName: string | undefined, rawRepo: s
   if (!existsSync(tpl)) throw new Error(`Template not found: ${tpl}`);
   if (existsSync(dest)) throw new Error(`${dest} already exists`);
 
-  addEntry(root, { name, repo, template, ai: "inherit" });
+  addEntry(root, { name, repo, cloud, iac, template, ai: "inherit" });
   cpSync(tpl, dest, { recursive: true });
   renderTemplate(dest, name);
+  scaffoldCloudInfra(dest, name, cloud, iac);
   git(["init", "-q"], dest);
   git(["remote", "add", "origin", repo], dest);
   installServiceHooks(dest);

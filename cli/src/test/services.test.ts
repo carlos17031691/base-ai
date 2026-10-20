@@ -51,6 +51,20 @@ test("validates names, repos and branches", () => {
   assert.throws(() => serviceNew(d, "../evil", "git@example.com:org/x.git"), /Invalid service name/);
   assert.throws(() => serviceAdd(d, "x", "--upload-pack=evil"), /Invalid repository URL/);
   assert.throws(() => serviceAdd(d, "x", "https://example.com/x.git", "--evil"), /Invalid branch/);
+  assert.throws(() => serviceNew(d, "api", "git@example.com:org/api.git", { cloud: "invalid" }), /Invalid cloud provider/);
+  assert.throws(() => serviceNew(d, "api", "git@example.com:org/api.git", { iac: "invalid" }), /Invalid IaC tool/);
+});
+
+test("service new with --cloud and --iac scaffolds infrastructure layout and records metadata", () => {
+  const d = root();
+  const dest = serviceNew(d, "billing", "git@example.com:org/billing.git", { cloud: "aws", iac: "opentofu" });
+  assert.ok(existsSync(join(dest, "infrastructure/modules/.gitkeep")));
+  assert.ok(existsSync(join(dest, "infrastructure/staging/.gitkeep")));
+  assert.ok(existsSync(join(dest, "infrastructure/production/.gitkeep")));
+  assert.match(readFileSync(join(dest, "infrastructure/README.md"), "utf8"), /aws \/ opentofu/);
+  const [svc] = listServices(d);
+  assert.equal(svc.cloud, "aws");
+  assert.equal(svc.iac, "opentofu");
 });
 
 test("service add clones default remote branch and sync is idempotent", () => {

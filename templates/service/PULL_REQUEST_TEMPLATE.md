@@ -16,7 +16,9 @@
 - [ ] Security checked: zero hardcoded secrets/PII, external inputs validated, authn/authz enforced (`security` skill).
 - [ ] Observability & operations updated: structured logs, metrics/alerts and `docs/operations/runbooks/` if needed (`observability` & `runbook` skills).
 
-## Rollout & Rollback Plan
+## Rollout, Infrastructure & Rollback Plan
 
+- **Cloud / IaC changes (`infrastructure` skill):** None / `plan` output attached (OIDC auth, remote state, no hardcoded keys)
+- **Cloud monitoring (`observability` skill):** Alarms & dashboards updated as code (compute, DB, DLQ, budget thresholds)
 - **Database migrations:** None / Expand-and-Contract (backward-compatible)
-- **Rollback steps:** `git revert` / feature flag toggle / previous image tag
+- **Rollback steps:** `git revert` / feature flag toggle / previous image tag or IaC state
