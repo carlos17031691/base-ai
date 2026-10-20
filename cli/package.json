@@ -8,12 +8,26 @@
     "create-base-ai": "dist/create.js"
   },
   "files": [
-    "dist",
-    "template"
+    "dist/*.js",
+    "template",
+    "README.md"
   ],
   "engines": {
     "node": ">=18"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/carlos17031691/base-ai.git"
+  },
+  "keywords": [
+    "ai",
+    "scaffolding",
+    "agents",
+    "architecture",
+    "sdlc",
+    "rag",
+    "mcp"
+  ],
   "scripts": {
     "build": "tsc",
     "test": "npm run build && node --test dist/test/",
@@ -27,5 +41,5 @@
     "@types/node": "^18.19.0",
     "typescript": "^5.6.0"
   },
-  "license": "UNLICENSED"
+  "license": "MIT"
 }
