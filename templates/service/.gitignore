@@ -1,4 +1,4 @@
-# Environment & secrets (never commit real secrets)
+# Environment, secrets & cloud/IaC state (never commit real secrets or state)
 .env
 .env.*
 !.env.example
@@ -7,6 +7,14 @@
 *.p12
 *.pfx
 *credentials*.json
+*service-account*.json
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!*.tfvars.example
+.pulumi/
 
 # Dependencies & build outputs
 node_modules/

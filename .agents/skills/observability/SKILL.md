@@ -24,6 +24,10 @@ Make every service observable, debuggable and production-ready:
 4. **Health & readiness probes:**
    - Expose `/healthz` (liveness: process is up) and `/readyz` (readiness: critical dependencies reachable with bounded timeout) for orchestrators and load balancers.
 
-5. **Actionable alerting:**
-   - Alert on user-visible symptoms (SLO burn rate, elevated 5xx, queue stall) rather than noisy raw resource spikes.
+5. **Cloud provider infrastructure monitoring & FinOps (`infrastructure` skill):**
+   - Define cloud alarms, dashboards and log sinks **as code (Monitoring as Code)** alongside the service's IaC (CloudWatch, GCP Cloud Monitoring, Azure Monitor, OpenTelemetry/Prometheus).
+   - Cover the four infrastructure layers: **Compute** (restarts/OOM, autoscaling ceiling), **Data stores** (connection pool saturation, disk space, replication lag, backup status), **Messaging** (queue consumer lag and non-empty DLQs) and **Edge/Cost** (LB/WAF 5xx spikes and cloud budget/anomaly alerts at 50/80/100%).
+
+6. **Actionable alerting:**
+   - Alert on user-visible symptoms (SLO burn rate, elevated 5xx, queue stall, DLQ > 0) rather than noisy raw resource spikes.
    - Link every alert to its diagnosis and mitigation steps in `docs/operations/runbooks/` (`runbook` skill).

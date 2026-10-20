@@ -9,7 +9,7 @@ export interface DoctorReport {
   issues: string[];
 }
 
-const TRACKED_FORBIDDEN_RE = /(^|\/)\.env(\..+)?$|(^|\/)[^/]+\.(pem|key|p12|pfx)$/i;
+const TRACKED_FORBIDDEN_RE = /(^|\/)\.env(\..+)?$|(^|\/)[^/]+\.(pem|key|p12|pfx|tfstate|tfplan)$|\.tfstate\.|service-account.*\.json$/i;
 const TRACKED_ALLOWED_RE = /(^|\/)\.env\.example$/i;
 const SECRET_CONTENT_RE = /\b(sk-or-v1-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{25,}|AKIA[0-9A-Z]{16})\b|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/;
 
