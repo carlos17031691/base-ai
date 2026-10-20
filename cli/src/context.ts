@@ -160,6 +160,7 @@ export function buildContextIndex(root: string): ContextIndex {
     walkDocsAndContracts(join(svcDir, "docs"), svcFiles);
     walkDocsAndContracts(join(svcDir, "contracts"), svcFiles);
     walkDocsAndContracts(join(svcDir, "api"), svcFiles);
+    walkDocsAndContracts(join(svcDir, "infrastructure"), svcFiles);
     for (const f of svcFiles.sort()) chunks.push(...chunkFile(root, f, scope));
   }
 
