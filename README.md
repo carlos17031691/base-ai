@@ -42,6 +42,7 @@ flowchart TD
 | `sdlc` | End-to-end engineering workflow & quality gates (ticket → branch → design → code → test → PR → operate) |
 | `architecture` | Stack-agnostic service design (domain isolation, dependency inversion, contracts, resilience) |
 | `integrations` | External APIs, third-party providers, webhooks, AI gateways (e.g. OpenRouter, LiteLLM) & LLM models |
+| `ai-ops` | Model tiering/routing, prompt prefix caching, input/output token optimization & LLM cost/token telemetry (AI FinOps) |
 | `agents` | Tool-using AI agents & MCP servers with least-privilege tools, Human-in-the-Loop and step/cost guardrails |
 | `workflows` | Workflow automation & orchestration engines (e.g. n8n, Temporal, queues) with GitOps, security & idempotency |
 | `memory` | Persistent cross-session project memory (`.ai/memory.md`) & short/long-term AI application memory architecture |
@@ -65,7 +66,7 @@ flowchart TD
 base-ai/
 ├── AGENTS.md              # Global rules for AI agents (generated)
 ├── .ai/                   # Single AI source of truth (rules, config, skills)
-├── .agents/skills/        # Exported skills (18 core skills across discovery, SDLC, AI, architecture, data, ops & security)
+├── .agents/skills/        # Exported skills (19 core skills across discovery, SDLC, AI/FinOps, architecture, data, ops & security)
 ├── docs/
 │   ├── architecture/{adrs,rfcs}/        # Cross-cutting decisions
 │   └── operations/{runbooks,postmortems}/
@@ -85,6 +86,7 @@ base-ai service add web <repo> [--branch main]            # register in services
 base-ai service remove web [--purge]                      # remove from manifest (and optionally delete src/web)
 base-ai sync                                              # clone/fast-forward all services, install hooks & ai sync
 base-ai ai sync                                           # export .ai/ to every agent & refresh context index
+base-ai ai stats                                          # inspect token footprint of always-on rules vs on-demand skills
 base-ai memory add "<note>" [--ticket ID] [--tag tag]     # persist cross-session project memory & sync agents
 base-ai memory list [--service <name>]                    # list persisted project memory notes
 base-ai context search "<query>" [--scope root|service:x] # retrieve ranked ADRs, RFCs, runbooks, memory & contracts
