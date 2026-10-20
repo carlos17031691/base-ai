@@ -45,7 +45,15 @@ export function loadSource(dir: string): AiSource {
   const agents = parseTargets(cfg.agents ?? "all", cfgPath);
 
   const rulesPath = join(ai, "rules.md");
-  const rules = existsSync(rulesPath) ? readFileSync(rulesPath, "utf8").trim() : "";
+  const baseRules = existsSync(rulesPath) ? readFileSync(rulesPath, "utf8").trim() : "";
+  const memoryPath = join(ai, "memory.md");
+  const memEntries = existsSync(memoryPath)
+    ? readFileSync(memoryPath, "utf8")
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter((l) => l.startsWith("- "))
+    : [];
+  const rules = [baseRules, memEntries.length ? `## Project memory\n\n${memEntries.join("\n")}` : ""].filter(Boolean).join("\n\n");
 
   const skills: Skill[] = [];
   const skillsDir = join(ai, "skills");

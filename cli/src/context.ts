@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSy
 import { basename, join, relative, sep } from "node:path";
 import { parse } from "yaml";
 
-export type DocKind = "adr" | "rfc" | "runbook" | "postmortem" | "contract" | "service" | "doc";
+export type DocKind = "adr" | "rfc" | "runbook" | "postmortem" | "contract" | "service" | "memory" | "doc";
 
 export interface ContextChunk {
   id: string;
@@ -27,6 +27,7 @@ const CONTRACT_RE = /^(openapi|asyncapi|swagger|schema)\.(ya?ml|json)$|\.(proto|
 
 function classify(relPath: string): DocKind {
   const norm = relPath.split(sep).join("/");
+  if (norm.endsWith(".ai/memory.md")) return "memory";
   if (norm.includes("/adrs/")) return "adr";
   if (norm.includes("/rfcs/")) return "rfc";
   if (norm.includes("/runbooks/")) return "runbook";
@@ -127,6 +128,8 @@ export function buildContextIndex(root: string): ContextIndex {
 
   const rootReadme = join(root, "README.md");
   if (existsSync(rootReadme)) chunks.push(...chunkFile(root, rootReadme, "root"));
+  const rootMemory = join(root, ".ai", "memory.md");
+  if (existsSync(rootMemory)) chunks.push(...chunkFile(root, rootMemory, "root"));
 
   const rootFiles: string[] = [];
   walkDocsAndContracts(join(root, "docs"), rootFiles);
@@ -151,6 +154,8 @@ export function buildContextIndex(root: string): ContextIndex {
     const scope = `service:${name}`;
     const svcReadme = join(svcDir, "README.md");
     if (existsSync(svcReadme)) chunks.push(...chunkFile(root, svcReadme, scope));
+    const svcMemory = join(svcDir, ".ai", "memory.md");
+    if (existsSync(svcMemory)) chunks.push(...chunkFile(root, svcMemory, scope));
     const svcFiles: string[] = [];
     walkDocsAndContracts(join(svcDir, "docs"), svcFiles);
     walkDocsAndContracts(join(svcDir, "contracts"), svcFiles);

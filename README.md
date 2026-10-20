@@ -40,7 +40,9 @@ flowchart TD
 |-------|---------|
 | `sdlc` | End-to-end engineering workflow & quality gates (ticket → branch → design → code → test → PR → operate) |
 | `architecture` | Stack-agnostic service design (domain isolation, dependency inversion, contracts, resilience) |
-| `integrations` | External APIs, third-party providers (payments, auth, messaging), webhooks & AI/LLM integrations |
+| `integrations` | External APIs, third-party providers, webhooks, AI gateways (e.g. OpenRouter, LiteLLM) & LLM models |
+| `workflows` | Workflow automation & orchestration engines (e.g. n8n, Temporal, queues) with GitOps, security & idempotency |
+| `memory` | Persistent cross-session project memory (`.ai/memory.md`) & short/long-term AI application memory architecture |
 | `rag` | Retrieval-Augmented Generation (chunking, embeddings, hybrid search, pre-retrieval ACLs, grounded citations & evaluation) |
 | `database` | SQL/NoSQL/cache modeling, indexing, concurrency & zero-downtime migrations (Expand & Contract) |
 | `observability` | Structured logs, RED/USE metrics, SLIs/SLOs, distributed tracing, health probes & alerting |
@@ -60,7 +62,7 @@ flowchart TD
 base-ai/
 ├── AGENTS.md              # Global rules for AI agents (generated)
 ├── .ai/                   # Single AI source of truth (rules, config, skills)
-├── .agents/skills/        # Exported skills (sdlc, architecture, integrations, rag, database, observability, infrastructure, security, review, docs, adr, rfc, runbook)
+├── .agents/skills/        # Exported skills (sdlc, architecture, integrations, workflows, memory, rag, database, observability, infrastructure, security, review, docs, adr, rfc, runbook)
 ├── docs/
 │   ├── architecture/{adrs,rfcs}/        # Cross-cutting decisions
 │   └── operations/{runbooks,postmortems}/
@@ -80,7 +82,9 @@ base-ai service add web <repo> [--branch main]            # register in services
 base-ai service remove web [--purge]                      # remove from manifest (and optionally delete src/web)
 base-ai sync                                              # clone/fast-forward all services, install hooks & ai sync
 base-ai ai sync                                           # export .ai/ to every agent & refresh context index
-base-ai context search "<query>" [--scope root|service:x] # retrieve ranked ADRs, RFCs, runbooks & contracts across repos
+base-ai memory add "<note>" [--ticket ID] [--tag tag]     # persist cross-session project memory & sync agents
+base-ai memory list [--service <name>]                    # list persisted project memory notes
+base-ai context search "<query>" [--scope root|service:x] # retrieve ranked ADRs, RFCs, runbooks, memory & contracts
 base-ai doctor                                            # validate services.yaml & fail if AI artefacts drift (CI)
 ```
 
