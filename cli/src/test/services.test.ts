@@ -41,6 +41,8 @@ test("service new requires a remote repo, scaffolds template, configures origin 
   assert.ok(existsSync(join(dest, "AGENTS.md")));
   assert.equal(git(["remote", "get-url", "origin"], dest).trim(), "git@example.com:org/api.git");
   assert.equal(git(["config", "core.hooksPath"], dest).trim(), ".githooks");
+  assert.equal(git(["rev-parse", "--abbrev-ref", "HEAD"], dest).trim(), "development");
+  assert.equal(git(["status", "--porcelain"], dest).trim(), "");
   assert.deepEqual(listServices(d).map((s) => s.name), ["api"]);
   assert.match(readFileSync(join(d, "services.yaml"), "utf8"), /# comment/);
   assert.throws(() => serviceNew(d, "api", "git@example.com:org/api.git"), /already exists/);

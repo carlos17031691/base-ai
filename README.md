@@ -80,7 +80,7 @@ base-ai/
 ## 🚀 CLI
 
 ```bash
-npx create-base-ai my-project [--ci none|github|gitlab]   # initialise the root (or: base-ai init my-project)
+npx base-ai init my-project [--ci none|github|gitlab]     # initialise the root project
 base-ai service new api <repo> [--cloud aws|gcp|...] [--iac opentofu|terraform|pulumi|...] # scaffold service + optional IaC
 base-ai service add web <repo> [--branch main]            # register in services.yaml, clone & install git hooks
 base-ai service remove web [--purge]                      # remove from manifest (and optionally delete src/web)
@@ -115,8 +115,8 @@ CLI development: `cd cli && npm install && npm test`.
 - [x] ADR-0001: CLI architecture, manifest and single AI source
 - [x] English `.ai/rules.md` and generic skills (`adr`, `rfc`, `runbook`, `review`)
 - [x] CLI: `init`, `service new|add|remove`, `sync`, `ai sync`, `doctor`
-- [ ] Publish to npm (`base-ai` and `create-base-ai`)
+- [x] Publish to npm (`base-ai`)
 
 ## 📄 License
 
-TBD.
+MIT.

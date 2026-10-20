@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { aiSync } from "./sync.js";
 
-const MEMORY_HEADER = `# Project Memory
+export const MEMORY_HEADER = `# Project Memory
 
 <!-- Persistent cross-session memory for AI agents (see \`memory\` skill).
      Add entries with \`base-ai memory add "<note>" [--ticket ID] [--tag tag]\` or edit this file directly, then run \`base-ai ai sync\`.
