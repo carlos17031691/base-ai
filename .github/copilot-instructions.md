@@ -15,12 +15,12 @@
 - Never import across services or from the root via filesystem paths; communicate **only through versioned contracts** (APIs, events, schemas).
 - Scope every change to a single repository (root or one `src/<name>`).
 
-## 3. Git workflow, ticket traceability & PR policy (`src/<name>`)
+## 3. Git workflow, ticket traceability & PR policy (root & `src/<name>`)
 Enforced by `.githooks/`:
-1. **Mandatory ticket:** every change requires a Story/Epic/Task ID (Jira, ClickUp, Trello, etc., e.g. `PROJ-123`, `CU-86a1b2`, `#45`). Ask for it if missing.
-2. **Working branch:** never commit on `main`, `master` or `development`. Create a ticket branch first (e.g. `feat/PROJ-123-short-slug`, `fix/CU-86a1b2-timeout`).
+1. **Mandatory ticket & plan approval:** every change requires an approved plan (`discovery` / `sdlc` Gate 1) and a Story/Epic/Task ID (Jira, ClickUp, Trello, GitHub Issues, etc., e.g. `PROJ-123`, `CU-86a1b2`, `#45`). Ask for it if missing and never write code before Gate 1 approval.
+2. **Working branch from `development`:** never commit on `main`, `master` or `development`. Create a ticket branch from `development` first (e.g. `git checkout -b feat/PROJ-123-short-slug development`).
 3. **Commit message:** reference the ticket ID in every commit (`feat(PROJ-123): ...`).
-4. **Pull Request only:** never push directly to `main`, `master` or `development`; push the branch and open a PR/MR.
+4. **Pull Request to `development` & formal review:** never push directly to `main`, `master` or `development`; push the working branch, open a PR targeting **`development`** (`staging`), publish the `review` + `security` audit report on the PR, and promote `development` → `main` via release PR for `production`.
 
 ## 4. SDLC & clean code
 - **Lifecycle (`sdlc`):** Understand & trace → Branch & design (`adr` / `rfc`) → Implement & test (`testing`) → Review (`review` + `security`) → Operate (`observability`, `infrastructure`, `docs`, `runbook`, postmortem).
@@ -38,6 +38,11 @@ Enforced by `.githooks/`:
 ## 6. Security by design (`security`)
 - **Zero secrets/PII** in code, tests, logs, memory, prompts or docs; load from env/secret manager.
 - **Validate all untrusted input** (HTTP, webhooks, CLI, files, queues, LLM/tool outputs) at boundaries; enforce least-privilege authn/authz and pin vetted dependencies.
+
+## Project memory
+
+- **[2026-10-20]** `[BASE-002]` `#sdlc` init and service new must bootstrap initial commit on main + development branch BEFORE activating .githooks (ADR-0002)
+- **[2026-10-20]** `[BASE-002]` `#sdlc` Working branches must branch from development, open PRs targeting development (staging), and publish review+security audit before merge (ADR-0002)
 
 ## Available skills
 

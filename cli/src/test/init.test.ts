@@ -4,17 +4,19 @@ import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { init } from "../init.js";
+import { memoryList } from "../memory.js";
 import { aiSync } from "../sync.js";
 
 test("init creates a clean, synced project without CI by default", () => {
   const dir = join(mkdtempSync(join(tmpdir(), "base-ai-init-")), "demo");
   init(dir);
-  for (const f of [".ai/rules.md", ".ai/skills/adr/skill.md", "templates/service/README.md", "services.yaml", "AGENTS.md", ".agents/skills/adr/SKILL.md", ".git", "src/.gitkeep", "docs/architecture/adrs/.gitkeep"]) {
+  for (const f of [".ai/rules.md", ".ai/skills/adr/skill.md", "templates/service/README.md", "services.yaml", "AGENTS.md", ".agents/skills/adr/SKILL.md", ".git", ".githooks/pre-commit", "src/.gitkeep", "docs/architecture/adrs/.gitkeep"]) {
     assert.ok(existsSync(join(dir, f)), f);
   }
   assert.ok(!existsSync(join(dir, ".github/workflows")), "no CI by default");
   assert.ok(!existsSync(join(dir, "cli")), "does not copy the CLI");
   assert.ok(!existsSync(join(dir, "docs/architecture/adrs/ADR-0001-arquitectura-base-ai.md")), "does not copy base-ai ADRs");
+  assert.equal(memoryList(dir).length, 0, "starts with clean project memory");
   assert.equal(aiSync(dir, true)[0].written.length, 0);
 });
 
