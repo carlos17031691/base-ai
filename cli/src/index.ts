@@ -2,6 +2,7 @@
 import { resolve } from "node:path";
 import { buildContextIndex, searchContext } from "./context.js";
 import { init } from "./init.js";
+import { memoryAdd, memoryList } from "./memory.js";
 import { listServices, serviceAdd, serviceNew, serviceRemove, syncServices } from "./services.js";
 import { aiSync } from "./sync.js";
 
@@ -12,7 +13,9 @@ Commands:
   ai sync                                           Export .ai/ to every agent's format and refresh context index
   doctor                                            Validate services.yaml and fail if AI artefacts are out of date
   context index                                     Build/refresh .ai/context-index.json across root and src/<name>
-  context search <query> [--scope s] [--top k]      Retrieve ranked chunks (ADRs, RFCs, runbooks, contracts, docs)
+  context search <query> [--scope s] [--top k]      Retrieve ranked chunks (ADRs, RFCs, runbooks, contracts, memory)
+  memory add "<note>" [--ticket id] [--tag t] [--service s]  Persist a cross-session memory note and sync agents
+  memory list [--service s]                         List persisted project memory notes
   service new <name> <repo> [--template t]          Create src/<name> from templates/<t> with its own git repo & hooks
   service add <name> <repo> [--branch b]            Register an existing repo in services.yaml, clone it & install hooks
   service remove <name> [--purge]                   Remove it from services.yaml (--purge deletes src/<name> if clean)
@@ -65,6 +68,26 @@ function main(argv: string[]): number {
   if (cmd === "context" && sub === "index") {
     const idx = buildContextIndex(root);
     console.log(`✔ Indexed ${idx.chunks.length} chunks into .ai/context-index.json`);
+    return 0;
+  }
+
+  if (cmd === "memory" && sub === "add") {
+    const entry = memoryAdd(root, rest.join(" "), {
+      ticket: str(flags.ticket),
+      tag: str(flags.tag),
+      service: str(flags.service),
+    });
+    console.log(`✔ Memory recorded: ${entry}`);
+    return 0;
+  }
+
+  if (cmd === "memory" && sub === "list") {
+    const entries = memoryList(root, str(flags.service));
+    if (!entries.length) {
+      console.log("No memory entries recorded yet.");
+      return 0;
+    }
+    entries.forEach((e) => console.log(e));
     return 0;
   }
 
