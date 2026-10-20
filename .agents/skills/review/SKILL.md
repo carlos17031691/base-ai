@@ -1,21 +1,22 @@
 ---
-name: review
-description: >-
-  Ejecuta una revisión híbrida de código o PR validando cobertura, seguridad
-  financiera (Ledger), idempotencia y reglas estrictas del SDLC de JavaCash.
-  Úsese cuando el usuario solicite revisar código, auditar un PR o validar el SDLC.
+name: "review"
+description: "Revisa código o un pull request con criterios de corrección, seguridad, calidad y aislamiento entre servicios. Úsalo antes de un merge o cuando se pida una revisión."
 ---
+<!-- generado por base-ai: no editar. Fuente: .ai/ -->
 
-# Contexto: Gatekeeper del SDLC de JavaCash
+# Revisión de código / PR
 
-Ejecuta una revisión estricta del PR o código actual basándote en el manual operativo:
+Revisa el diff y reporta los hallazgos ordenados por severidad (**Bloqueante**, **Importante**, **Sugerencia**), cada uno con archivo, línea y una propuesta concreta.
 
-1. **Trazabilidad:** Verifica que la descripción incluya el enlace al ticket de ClickUp.
-2. **Granularidad:** Si el cambio es muy extenso y supera los 4 días de Lead Time estimado, sugiere dividirlo en múltiples PRs.
-3. **Seguridad:** Escanea en busca de secretos expuestos, vulnerabilidades BOLA, SSRF en webhooks y fugas de datos sensibles (PII/PCI) en los logs.
-4. **Aislamiento:** Asegura que toda consulta a base de datos filtre obligatoriamente por `tenant_id`.
-5. **Comunicaciones:** Genera el borrador del mensaje para notificar en `#deploys-stag` o `#deploys-prod`.
+Lista de verificación:
+1. **Corrección:** el código hace lo que dice; se cubren los casos borde y los errores.
+2. **Tests:** existen, son significativos y cubren el cambio; el CI está en verde.
+3. **Seguridad:** no hay secretos, las entradas se validan, no hay inyecciones, la autorización es correcta y no se filtran datos sensibles en los logs.
+4. **Resiliencia:** timeouts, reintentos seguros e idempotencia donde aplique.
+5. **Aislamiento:** no hay dependencias por ruta hacia la raíz ni hacia otros servicios; los contratos se mantienen compatibles o están versionados.
+6. **Mantenibilidad:** legibilidad, nombres, duplicación y consistencia con las convenciones del servicio.
+7. **Operación:** observabilidad suficiente y runbook o documentación actualizados.
+8. **Gobernanza:** si hay una decisión arquitectónica o un cambio de alto impacto, existe su ADR o RFC.
+9. **Archivos generados:** no se editaron a mano archivos `generado por base-ai`.
 
-Si detectas lógica transaccional, integraciones con terceros o endpoints de mutación, aplica obligatoriamente las habilidades/reglas de:
-- [ledger-validator.md](../../../.ai/prompts/ledger-validator.md)
-- [idempotency-checker.md](../../../.ai/prompts/idempotency-checker.md)
+Termina con un veredicto: **Aprobar**, **Aprobar con cambios** o **Solicitar cambios**.

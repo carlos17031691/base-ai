@@ -1,0 +1,31 @@
+{
+  "name": "base-ai",
+  "version": "0.1.0",
+  "description": "CLI de base-ai: scaffolding para proyectos impulsados e integrados por IA",
+  "type": "module",
+  "bin": {
+    "base-ai": "dist/index.js",
+    "create-base-ai": "dist/create.js"
+  },
+  "files": [
+    "dist",
+    "template"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "npm run build && node --test dist/test/",
+    "dev": "tsc --watch",
+    "prepack": "npm run build && node scripts/bundle-template.mjs"
+  },
+  "dependencies": {
+    "yaml": "^2.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.0",
+    "typescript": "^5.6.0"
+  },
+  "license": "UNLICENSED"
+}

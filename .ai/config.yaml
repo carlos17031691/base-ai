@@ -1,0 +1,10 @@
+# Configuración de la fuente única de IA (ver ADR-0001)
+version: 1
+lang: es
+agents:
+  - antigravity
+  - claude
+  - cursor
+  - copilot
+  - codex
+  - windsurf

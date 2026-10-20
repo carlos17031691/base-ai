@@ -1,0 +1,112 @@
+<!-- generado por base-ai: no editar. Fuente: .ai/ -->
+
+# Reglas globales para agentes de IA
+
+> Fuente única (ver ADR-0001). Se exporta a AGENTS.md, CLAUDE.md, .cursor/rules, Copilot y Windsurf. Los servicios pueden extender estas reglas con su propio `.ai/rules.md`; si hay conflicto, gana la regla local.
+
+## 1. Contexto del proyecto
+- El repo raíz es una **plantilla paraguas**: aquí no hay código de aplicación.
+- Cada servicio vive en `src/<nombre>/` y es un **repositorio independiente** con su propia arquitectura, infraestructura y CI/CD.
+- `services.yaml` es la fuente de verdad sobre qué servicios existen.
+
+## 2. Límites de aislamiento
+- No crees dependencias de un servicio hacia la raíz ni hacia otro servicio vía rutas del sistema de archivos. Los servicios se comunican solo mediante contratos publicados (APIs, eventos, paquetes versionados).
+- Antes de modificar algo, identifica en qué repo estás (raíz o `src/<nombre>`) y limita el cambio a ese repo.
+- No edites archivos marcados como `generado por base-ai`; edita su fuente en `.ai/`.
+
+## 3. Forma de trabajo
+- **Entiende antes de cambiar:** lee el código y la documentación relevantes antes de proponer cambios.
+- **Cambios pequeños y verificables:** cada cambio va acompañado de tests o de una forma explícita de validarlo.
+- **Decisiones documentadas:** las decisiones de arquitectura van en un ADR (skill `adr`) y los cambios de alto impacto pasan primero por un RFC (skill `rfc`).
+- **Operabilidad:** todo componente desplegable debe tener un runbook (skill `runbook`).
+- **Revisión:** usa el skill `review` antes de proponer un merge.
+- Si un requisito es ambiguo, pregunta en lugar de suponer.
+
+## 4. Calidad y seguridad
+- No incluyas secretos, tokens ni datos personales en el código, los logs, los prompts ni la documentación.
+- Valida todas las entradas externas y aplica el principio de mínimo privilegio.
+- Las operaciones que se reintentan deben ser idempotentes. Los errores deben manejarse explícitamente, nunca silenciarse.
+- Respeta el estilo, el linter y las convenciones ya existentes en el servicio.
+- Conserva los comentarios y docstrings que no estén relacionados con tu cambio.
+
+## 5. Documentación
+- ADRs: `docs/architecture/adrs/ADR-XXXX-titulo.md` (inmutables; se reemplazan, no se editan).
+- RFCs: `docs/architecture/rfcs/RFC-XXXX-titulo.md`.
+- Runbooks: `docs/operations/runbooks/`. Postmortems: `docs/operations/postmortems/`.
+- Las decisiones transversales se documentan en la raíz; las propias de un servicio, en su repo.
+
+## Skill: adr
+
+Crea un Architecture Decision Record (ADR) inmutable que documenta el qué, el por qué y el cómo de una decisión técnica. Úsalo cuando se pida documentar una decisión de arquitectura o crear un ADR.
+
+# ADR (Architecture Decision Record)
+
+1. Determina el alcance: si la decisión es **transversal**, va en la raíz; si es **propia de un servicio**, va en `src/<nombre>/`.
+2. Calcula el siguiente número disponible en `docs/architecture/adrs/` y crea `ADR-XXXX-titulo-corto.md`.
+3. Usa esta estructura:
+   - **Título y metadatos:** fecha, estado (`Propuesto`, `Aceptado`, `Deprecado`, `Reemplazado por ADR-YYYY`) y autores.
+   - **Contexto y problema:** las fuerzas técnicas, de negocio o regulatorias que motivan la decisión.
+   - **Decisión:** qué se adopta y cómo, de forma concreta y verificable.
+   - **Impacto:** efectos en seguridad, resiliencia, rendimiento, costo y operación.
+   - **Consecuencias:** trade-offs positivos, negativos y riesgos, con sus mitigaciones.
+   - **Alternativas consideradas:** opciones evaluadas y por qué se descartaron.
+4. Los ADR aceptados son inmutables: para cambiar una decisión, crea un ADR nuevo y marca el anterior como `Reemplazado por`.
+
+## Skill: review
+
+Revisa código o un pull request con criterios de corrección, seguridad, calidad y aislamiento entre servicios. Úsalo antes de un merge o cuando se pida una revisión.
+
+# Revisión de código / PR
+
+Revisa el diff y reporta los hallazgos ordenados por severidad (**Bloqueante**, **Importante**, **Sugerencia**), cada uno con archivo, línea y una propuesta concreta.
+
+Lista de verificación:
+1. **Corrección:** el código hace lo que dice; se cubren los casos borde y los errores.
+2. **Tests:** existen, son significativos y cubren el cambio; el CI está en verde.
+3. **Seguridad:** no hay secretos, las entradas se validan, no hay inyecciones, la autorización es correcta y no se filtran datos sensibles en los logs.
+4. **Resiliencia:** timeouts, reintentos seguros e idempotencia donde aplique.
+5. **Aislamiento:** no hay dependencias por ruta hacia la raíz ni hacia otros servicios; los contratos se mantienen compatibles o están versionados.
+6. **Mantenibilidad:** legibilidad, nombres, duplicación y consistencia con las convenciones del servicio.
+7. **Operación:** observabilidad suficiente y runbook o documentación actualizados.
+8. **Gobernanza:** si hay una decisión arquitectónica o un cambio de alto impacto, existe su ADR o RFC.
+9. **Archivos generados:** no se editaron a mano archivos `generado por base-ai`.
+
+Termina con un veredicto: **Aprobar**, **Aprobar con cambios** o **Solicitar cambios**.
+
+## Skill: rfc
+
+Redacta un Request for Comments (RFC) para cambios de alto impacto antes de implementarlos. Úsalo para nuevas funcionalidades relevantes, cambios de contrato entre servicios, migraciones o cambios de infraestructura.
+
+# RFC (Request for Comments)
+
+1. Determina el alcance (raíz si afecta a varios servicios, o el servicio concreto) y crea `docs/architecture/rfcs/RFC-XXXX-titulo-corto.md`.
+2. Usa esta estructura:
+   - **Metadatos:** fecha, estado (`Borrador`, `En revisión`, `Aprobado`, `Rechazado`, `Implementado`), autores y revisores.
+   - **Resumen:** un párrafo con el cambio propuesto.
+   - **Motivación:** el problema que resuelve y cómo se mide el éxito.
+   - **Diseño propuesto:** componentes, contratos (APIs/eventos), datos y diagramas.
+   - **Servicios afectados:** qué repos cambian y el orden de despliegue.
+   - **Seguridad y privacidad:** amenazas, datos sensibles y controles.
+   - **Resiliencia:** modos de fallo, timeouts, reintentos e idempotencia.
+   - **Observabilidad:** métricas, logs, trazas y alertas.
+   - **Plan de rollout y rollback:** feature flags, migraciones y cómo revertir.
+   - **Alternativas y preguntas abiertas.**
+3. Si el RFC se aprueba y fija una decisión duradera, deriva de él un ADR.
+
+## Skill: runbook
+
+Genera un runbook operativo para on-call de un servicio o componente. Úsalo cuando se despliegue algo nuevo, se cree una alerta o se pida documentar cómo operar o mitigar un incidente.
+
+# Runbook operativo
+
+Crea `docs/operations/runbooks/<componente>.md` dentro del repo del servicio con:
+
+- **Descripción:** qué hace el componente, quién es el responsable y sus dependencias upstream y downstream.
+- **Accesos:** dashboards, logs, trazas y consolas (enlaces, nunca credenciales).
+- **Alertas:** por cada alerta, qué significa, su severidad y su impacto en el usuario.
+- **Diagnóstico:** pasos ordenados y comandos concretos para confirmar la causa.
+- **Mitigación:** acciones seguras e idempotentes (rollback, escalar, desactivar un feature flag, drenar tráfico), con cómo verificar cada una.
+- **Escalamiento:** a quién avisar y cuándo.
+- **Postmortem:** enlace a la plantilla en `docs/operations/postmortems/`.
+
+Los comandos deben poder copiarse y pegarse tal cual, y deben indicar si son de solo lectura o modifican el estado.

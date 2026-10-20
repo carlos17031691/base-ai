@@ -1,0 +1,25 @@
+{
+  "files": [
+    ".agents/skills/adr/SKILL.md",
+    ".agents/skills/review/SKILL.md",
+    ".agents/skills/rfc/SKILL.md",
+    ".agents/skills/runbook/SKILL.md",
+    ".claude/commands/adr.md",
+    ".claude/commands/review.md",
+    ".claude/commands/rfc.md",
+    ".claude/commands/runbook.md",
+    ".cursor/rules/adr.mdc",
+    ".cursor/rules/base-ai.mdc",
+    ".cursor/rules/review.mdc",
+    ".cursor/rules/rfc.mdc",
+    ".cursor/rules/runbook.mdc",
+    ".github/copilot-instructions.md",
+    ".github/prompts/adr.prompt.md",
+    ".github/prompts/review.prompt.md",
+    ".github/prompts/rfc.prompt.md",
+    ".github/prompts/runbook.prompt.md",
+    ".windsurfrules",
+    "AGENTS.md",
+    "CLAUDE.md"
+  ]
+}

@@ -1,17 +1,19 @@
 ---
-name: runbook
-description: >-
-  Redacta una guía operativa On-call (Runbook) paso a paso en
-  docs/operations/runbooks/ basada en el código de integración actual. Úsese
-  cuando el usuario pida crear o actualizar un runbook operativo.
+name: "runbook"
+description: "Genera un runbook operativo para on-call de un servicio o componente. Úsalo cuando se despliegue algo nuevo, se cree una alerta o se pida documentar cómo operar o mitigar un incidente."
 ---
+<!-- generado por base-ai: no editar. Fuente: .ai/ -->
 
-# Generación de Runbook (Operaciones On-call)
+# Runbook operativo
 
-Analiza el código provisto y genera un Runbook en formato Markdown para el directorio `docs/operations/runbooks/` que incluya:
-- Nombre de la alerta y gravedad inicial (SEV1 a SEV4).
-- Impacto esperado en la plataforma.
-- Pasos de diagnóstico (queries, métricas a revisar).
-- Acciones seguras de mitigación temporal.
-- Acciones prohibidas (ej. "No reenviar el pago sin consultar").
-- Escalamiento y plantilla de comunicación a clientes.
+Crea `docs/operations/runbooks/<componente>.md` dentro del repo del servicio con:
+
+- **Descripción:** qué hace el componente, quién es el responsable y sus dependencias upstream y downstream.
+- **Accesos:** dashboards, logs, trazas y consolas (enlaces, nunca credenciales).
+- **Alertas:** por cada alerta, qué significa, su severidad y su impacto en el usuario.
+- **Diagnóstico:** pasos ordenados y comandos concretos para confirmar la causa.
+- **Mitigación:** acciones seguras e idempotentes (rollback, escalar, desactivar un feature flag, drenar tráfico), con cómo verificar cada una.
+- **Escalamiento:** a quién avisar y cuándo.
+- **Postmortem:** enlace a la plantilla en `docs/operations/postmortems/`.
+
+Los comandos deben poder copiarse y pegarse tal cual, y deben indicar si son de solo lectura o modifican el estado.

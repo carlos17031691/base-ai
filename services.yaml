@@ -1,0 +1,8 @@
+# Registro de servicios (ver ADR-0001). Cada uno es un repo independiente en src/<name>.
+version: 1
+services: []
+#  - name: api
+#    repo: git@github.com:org/api.git
+#    branch: main
+#    template: service
+#    ai: inherit
