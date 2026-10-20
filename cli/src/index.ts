@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 import { resolve } from "node:path";
 import { init } from "./init.js";
-import { serviceAdd, serviceNew, serviceRemove, syncServices } from "./services.js";
+import { listServices, serviceAdd, serviceNew, serviceRemove, syncServices } from "./services.js";
 import { aiSync } from "./sync.js";
 
 const USAGE = `base-ai <command> [--root <dir>]
 
 Commands:
-  init <dir> [--ci none|github|gitlab]          Create a new project from the base-ai template
-  ai sync                                       Export .ai/ to every agent's format (root and services)
-  doctor                                        Fail if AI artefacts are out of date (for CI)
-  service new <name> [--template t] [--repo url]   Create src/<name> from templates/<t> (git init)
-  service add <name> <repo> [--branch b]        Register an existing repo in services.yaml and clone it
-  service remove <name> [--purge]               Remove it from services.yaml (--purge deletes src/<name> if clean)
-  sync                                          Clone/fast-forward all services, then run ai sync
+  init <dir> [--ci none|github|gitlab]              Create a new project from the base-ai template
+  ai sync                                           Export .ai/ to every agent's format (root and services)
+  doctor                                            Validate services.yaml and fail if AI artefacts are out of date
+  service new <name> <repo> [--template t]          Create src/<name> from templates/<t> with its own git repo & hooks
+  service add <name> <repo> [--branch b]            Register an existing repo in services.yaml, clone it & install hooks
+  service remove <name> [--purge]                   Remove it from services.yaml (--purge deletes src/<name> if clean)
+  sync                                              Clone/fast-forward all services, install hooks and run ai sync
 `;
 
 function parseArgs(argv: string[]) {
@@ -44,6 +44,7 @@ function main(argv: string[]): number {
 
   if ((cmd === "ai" && sub === "sync") || cmd === "doctor") {
     const check = cmd === "doctor";
+    if (check) listServices(root);
     let drift = 0;
     for (const r of aiSync(root, check)) {
       r.written.forEach((f) => console.log(`  ${check ? "out of date" : "written"}: ${f}`));
@@ -59,7 +60,8 @@ function main(argv: string[]): number {
   }
 
   if (cmd === "service" && sub === "new") {
-    console.log(`✔ Service created at ${serviceNew(root, rest[0], str(flags.template), str(flags.repo))}`);
+    const repo = rest[1] ?? str(flags.repo);
+    console.log(`✔ Service created at ${serviceNew(root, rest[0], repo, str(flags.template))}`);
     return 0;
   }
   if (cmd === "service" && sub === "add") {
