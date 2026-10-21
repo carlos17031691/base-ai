@@ -48,6 +48,7 @@ Enforced by `.githooks/`:
 - **[2026-10-21]** `[BASE-004]` Environment isolation must separate GCP projects and billing alerts by environment (staging vs production), and CI/CD OIDC deployers require exactly: roles/run.admin, roles/artifactregistry.writer, roles/iam.serviceAccountUser, roles/cloudbuild.builds.editor, roles/storage.admin, roles/serviceusage.serviceUsageConsumer, and roles/viewer
 - **[2026-10-21]** `[BASE-005]` `#ai-ops,integrations,infrastructure` AI integrations using OpenRouter/LLM gateways should support a prioritized comma-separated model cascade (AI_MODELS) to automatically roll over on 429 quota exhaustion or timeouts, enforce explicit 'json' wording in prompts when json_object mode is requested, and sandbox projects must block production CD jobs with if: false.
 - **[2026-10-21]** `[BASE-006]` `#sdlc,review,testing` Dual quality gates in root and services enforce deterministic SAST & test coverage >= 80% (Sonar via sonar-project.properties) alongside contextual AI PR review (CodeRabbit via .coderabbit.yaml)
+- **[2026-10-21]** `[BASE-006]` `#infrastructure,gitops,security` Zero direct cloud mutations allowed via CLI or console. All infrastructure changes must flow through version-controlled OpenTofu/Terraform with remote state object versioning enabled in GCS/S3 to guarantee deterministic auditability and automated rollback.
 
 ## Available skills
 

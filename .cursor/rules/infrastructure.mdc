@@ -35,10 +35,16 @@ Guide the user to the simplest cloud architecture that meets their requirements 
   - **Sandbox / MVP Production Block Guardrail:** in sandbox, MVP, or experimental projects, hard-block production CD jobs by default (e.g. `if: false` on the production deploy job in CI/CD workflows) until security, budget alerts, and formal verification gates are approved.
 
 ## 3. Infrastructure as Code (IaC) & GitOps deployment workflow
+- **Zero Direct Cloud Mutations (Immutable GitOps Policy):**
+  - **Strictly prohibit manual or CLI-directed cloud resource mutations** (`gcloud`, `aws`, `az`, cloud web consoles) in managed environments.
+  - **Every infrastructure change must flow through IaC (OpenTofu / Terraform):** code committed to Git, reviewed in PR (`tofu plan`), and applied via automated CI/CD (`tofu apply`) using remote state with object versioning enabled.
+  - **Auditability & Deterministic Rollback in GCP/Cloud:**
+    - Remote state backends (e.g. GCS buckets `gs://<project>-tfstate-<env>`) **must have Object Versioning enabled** (`versioning { enabled = true }`).
+    - Every change records an immutable state snapshot in cloud storage. Rollbacks are executed deterministically either by reverting the Git commit or by restoring a prior state generation, preventing configuration drift and unversioned outages.
 - **Structure inside the service (`src/<name>/infrastructure/`):**
   - `modules/`: reusable, stateless resource definitions (compute, db, queue, monitoring).
   - `staging/` & `production/`: environment compositions with isolated remote state.
-- **Remote state & locking:** store state in encrypted remote backends (S3 + DynamoDB/S3 lock, GCS, Azure Blob) — **never commit `*.tfstate` files to Git**.
+- **Remote state & locking:** store state in encrypted remote backends (S3 + DynamoDB/S3 lock, GCS, Azure Blob) with versioning — **never commit `*.tfstate` files to Git**.
 - **Mandatory resource tags/labels:** apply `service = <name>`, `env = staging|production`, `managed_by = iac` and `cost_center` on every cloud resource.
 - **PR-driven GitOps pipeline:**
   1. **On Pull Request:** run `fmt --check`, `validate`, IaC security scanning (`trivy config` / `checkov` / `tfsec`), generate the execution `plan` against `staging` and post the diff (plus cost delta) on the PR.
