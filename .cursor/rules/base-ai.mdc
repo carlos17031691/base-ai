@@ -28,6 +28,7 @@ Enforced by `.githooks/`:
 
 ## 4. SDLC & clean code
 - **Lifecycle (`sdlc`):** Understand & trace → Branch & design (`adr` / `rfc`) → Implement & test (`testing`) → Review (`review` + `security`) → Operate (`observability`, `infrastructure`, `docs`, `runbook`, postmortem).
+- **Quality gates & PR reviews (`review`):** enforce a dual review gate on every PR: deterministic SAST & test coverage (SonarQube/SonarCloud >= 80% coverage, zero vulnerabilities via `sonar-project.properties`) and cognitive review (CodeRabbit via `.coderabbit.yaml` validating ticket traceability, isolation boundaries, clean code and security).
 - **Clean code:** apply **SOLID**, **KISS**, **YAGNI** and pragmatic **DRY**. Use intention-revealing names, small cohesive functions, guard clauses, strict types and immutability.
 - **Errors & comments:** fail fast on bugs; return typed errors on domain/I/O failures; never swallow errors. Comment *why*, not *what*; preserve unrelated comments and match the service's style/linter.
 
@@ -50,3 +51,4 @@ Enforced by `.githooks/`:
 - **[2026-10-20]** `[BASE-003]` Every HTTP/gRPC service must include an executable runtime bootstrap (main) matched to Dockerfile CMD and an HTTP smoke test verifying real socket binding on PORT, /healthz, /readyz and SIGTERM graceful shutdown
 - **[2026-10-21]** `[BASE-004]` Environment isolation must separate GCP projects and billing alerts by environment (staging vs production), and CI/CD OIDC deployers require exactly: roles/run.admin, roles/artifactregistry.writer, roles/iam.serviceAccountUser, roles/cloudbuild.builds.editor, roles/storage.admin, roles/serviceusage.serviceUsageConsumer, and roles/viewer
 - **[2026-10-21]** `[BASE-005]` `#ai-ops,integrations,infrastructure` AI integrations using OpenRouter/LLM gateways should support a prioritized comma-separated model cascade (AI_MODELS) to automatically roll over on 429 quota exhaustion or timeouts, enforce explicit 'json' wording in prompts when json_object mode is requested, and sandbox projects must block production CD jobs with if: false.
+- **[2026-10-21]** `[BASE-006]` `#sdlc,review,testing` Dual quality gates in root and services enforce deterministic SAST & test coverage >= 80% (Sonar via sonar-project.properties) alongside contextual AI PR review (CodeRabbit via .coderabbit.yaml)

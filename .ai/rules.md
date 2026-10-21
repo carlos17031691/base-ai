@@ -22,6 +22,7 @@ Enforced by `.githooks/`:
 
 ## 4. SDLC & clean code
 - **Lifecycle (`sdlc`):** Understand & trace → Branch & design (`adr` / `rfc`) → Implement & test (`testing`) → Review (`review` + `security`) → Operate (`observability`, `infrastructure`, `docs`, `runbook`, postmortem).
+- **Quality gates & PR reviews (`review`):** enforce a dual review gate on every PR: deterministic SAST & test coverage (SonarQube/SonarCloud >= 80% coverage, zero vulnerabilities via `sonar-project.properties`) and cognitive review (CodeRabbit via `.coderabbit.yaml` validating ticket traceability, isolation boundaries, clean code and security).
 - **Clean code:** apply **SOLID**, **KISS**, **YAGNI** and pragmatic **DRY**. Use intention-revealing names, small cohesive functions, guard clauses, strict types and immutability.
 - **Errors & comments:** fail fast on bugs; return typed errors on domain/I/O failures; never swallow errors. Comment *why*, not *what*; preserve unrelated comments and match the service's style/linter.
 
