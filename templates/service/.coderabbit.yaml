@@ -48,7 +48,16 @@ reviews:
            - Isolate domain logic from transport/infrastructure (Dependency Inversion).
            - Outbound integrations (APIs, webhooks, LLMs) MUST have explicit timeouts, retries with backoff+jitter, and error handling.
            - Fail fast on bugs; return typed domain errors; never swallow exceptions.
-        
-        5. QUALITY GATES & TESTING:
-           - Every business rule and boundary case must have automated tests (target >= 80% coverage).
-           - Validate that HTTP services include health probes (/healthz, /readyz) and graceful SIGTERM shutdown.
+
+        5. RUNTIME BOOTSTRAP & OBSERVABILITY (ADR-0003):
+           - Every HTTP/gRPC service must include an executable runtime bootstrap (`main`) matched to `Dockerfile` `CMD`.
+           - Must bind to `process.env.PORT` (or equivalent), serve `/healthz` (liveness) and `/readyz` (readiness), and handle `SIGTERM` for graceful socket draining and shutdown.
+           - Must provide automated HTTP smoke tests verifying socket binding, probe endpoints, and graceful termination.
+
+        6. SEVERITY CLASSIFICATION, CONVERSATION RESOLUTION & HUMAN APPROVAL:
+           - You MUST explicitly classify every review finding into one of three severities: [High], [Medium], or [Low].
+           - [High]: Critical bugs, security vulnerabilities (OWASP/STRIDE), architectural boundary violations, data loss, breaking contract changes. These are BLOCKERS and must be fixed before human approval.
+           - [Medium]: Missing test coverage (<80%), unhandled error paths, cognitive complexity, race conditions, code smells. These are BLOCKERS and must be fixed before human approval.
+           - [Low]: Non-blocking improvements, minor naming polish, or non-urgent refactoring. Remind the author and reviewer that Low findings may only be approved without code changes if logged as an explicit Technical Debt Issue.
+           - ZERO UNRESOLVED DISCUSSIONS: Remind the author that all review comments and conversation threads must be verified and marked resolved before merge.
+           - MANDATORY HUMAN APPROVAL: Remind the author that all PR merges require final human sign-off; automated checks and bot reviews are pre-conditions for human approval.

@@ -27,10 +27,14 @@ Guide a task through the full engineering lifecycle and verify each gate before 
    - Integration/contract tests for adapters and boundaries.
    - Linter, typecheck and test suite pass deterministically (`base-ai doctor` green when `.ai/` changes).
 
-5. **Gate 5 — Code review & Pull Request:**
+5. **Gate 5 — Code review, Quality Gates & Pull Request:**
    - Commit messages include the ticket ID (e.g. `feat(PROJ-123): ...`).
    - Push the working branch and open a **Pull Request** targeting **`development`** (`staging`) — never open feature PRs directly against `main` or `master` (promote `development` → `main` via a dedicated release PR for `production`).
-   - Run `review` and `security` skills against the PR diff, publish the structured audit report on the PR, and resolve all Blocker/Major/Critical/High findings before merging.
+   - Run dual automated quality gates: Sonar (SAST, coverage >= 80%) and CodeRabbit (PR analysis against `.coderabbit.yaml`).
+   - Triage all findings by severity: **High** and **Medium** findings MUST be corrected in code before human review. **Low** findings may be approved if registered as an explicit project issue (technical debt).
+   - **Zero Unresolved Conversations:** Inspect, verify, and resolve all review threads raised by CodeRabbit or human reviewers. Unresolved comments strictly block merge.
+   - Enforce repository branch protection on `development` and `main`: require status checks (`SonarCloud Code Analysis`, `ci`), require conversation resolution (`required_conversation_resolution: true`), and require at least 1 human approval (`required_approving_review_count: 1`).
+   - Obtain mandatory **human approval** on the PR before merging. Never auto-merge without human sign-off.
 
 6. **Gate 6 — Release & operational readiness:**
    - Backward-compatible rollout and tested rollback plan (feature flags, safe migrations).
