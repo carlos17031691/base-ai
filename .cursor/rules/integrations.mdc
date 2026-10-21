@@ -23,8 +23,14 @@ Integrate third-party providers, AI gateways and LLM services safely and resilie
    - Deduplicate incoming events by provider event ID in persistent storage (idempotent consumer) and acknowledge quickly (`2xx`), processing heavy work asynchronously when needed.
 
 4. **AI Gateways / Model Routers (e.g. OpenRouter, LiteLLM, Portkey) & LLMs:**
-   - **Unified gateway over vendor lock-in:** prefer routing LLM calls through a unified, OpenAI-compatible gateway adapter (such as **OpenRouter** or **LiteLLM**) configured via environment variables (`AI_BASE_URL`, `AI_MODEL_PRIMARY`, `AI_MODEL_FALLBACK`) so switching or combining providers (Anthropic, OpenAI, Gemini, Llama, DeepSeek, Mistral) requires zero code changes.
-   - **Automatic fallbacks & routing:** configure ordered fallback models for `429`/`5xx`/timeout failures and route tasks by complexity (fast/cheap models for classification/extraction; frontier models for complex reasoning).
+   - **Unified gateway over vendor lock-in:** prefer routing LLM calls through a unified, OpenAI-compatible gateway adapter (such as **OpenRouter** or **LiteLLM**) configured via environment variables (`AI_BASE_URL`, `AI_MODELS` or `AI_MODEL_PRIMARY`, `AI_MODEL_FALLBACK`) so switching or combining providers (Anthropic, OpenAI, Gemini, Llama, DeepSeek, Mistral) requires zero code changes.
+   - **Cascading Multi-Model Priority & Quota Rollover:**
+     - Configure `AI_MODELS` as a prioritized comma-separated list of model identifiers (e.g. `minimax/minimax-m3.1-flash:free,google/gemma-4-31b-it:free,openai/gpt-4o-mini`).
+     - Gateway adapters must sequentially cascade through candidate models when encountering HTTP `429` (rate limits or upstream free-pool exhaustion), transient network timeouts, or `5xx` gateway errors before raising an error.
+     - Telemetry must report which model actually fulfilled the prompt, its latency, and reflect zero cost (`$0.00`) when utilizing `:free` models.
+   - **JSON Mode Provider Prompt Contract:**
+     - When requesting `response_format: { type: "json_object" }` or structured schema output, many underlying providers (OpenAI, Azure, OpenRouter proxies) strictly enforce that the word `"json"` (case-insensitive) appears in the message payload.
+     - Always include explicit JSON formatting instructions in the static system prompt (e.g. *"Respond strictly in valid, minified JSON matching the specified schema."*).
    - **Prompt & output safety:** version prompts explicitly, separate untrusted user input from system instructions, enforce structured output schemas (JSON Schema / tool definitions) and validate every model output before acting on it.
    - **Cost, token & privacy guardrails:** enforce per-request `max_tokens`, request timeouts and per-tenant/key spend limits; scrub PII and secrets before sending payloads to external models.
 
