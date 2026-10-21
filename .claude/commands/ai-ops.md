@@ -12,7 +12,8 @@ Never use a frontier reasoning model by default for every task. Route requests b
 - **Tier 1 — Fast / Small models** (e.g. Flash-Lite, Haiku, Mini, small open-weight models): classification, intent routing, entity extraction, PII scrubbing, formatting, simple summaries and query rewriting.
 - **Tier 2 — Balanced production models** (e.g. Sonnet, GPT-4o, Gemini Pro/Flash): general RAG synthesis, code generation, multi-step tool calling and structured customer-facing responses.
 - **Tier 3 — Frontier / Deep reasoning models:** complex architectural analysis, multi-constraint planning, ambiguous debugging or formal verification.
-- **Cascade pattern:** try a Tier 1/2 model first with a confidence/schema check; escalate to a higher tier only when validation fails.
+- **Cascade pattern & quota rollover:** try a prioritized list of models (e.g. `AI_MODELS=modelA:free,modelB:free,modelC`). The adapter iterates across candidates upon `429` (rate limit or shared pool exhaustion), transient timeouts, or `5xx` errors. For schema/confidence checks, escalate from Tier 1 to Tier 2 only when output validation fails.
+- **Provider JSON mode compliance:** when setting `response_format: { type: "json_object" }`, always include explicit directives mentioning `"json"` in the system prompt to satisfy OpenAI/Azure/OpenRouter provider API contracts.
 
 ## 2. Input token optimization
 1. **Prompt Caching (Prefix Caching):**

@@ -31,6 +31,7 @@ Guide the user to the simplest cloud architecture that meets their requirements 
   - Separate **GCP Projects by environment** (`<org>-<service>-staging` vs. `<org>-<service>-prod`) so development/staging errors or load spikes can never affect production quotas or data.
   - Configure **dedicated Cloud Billing Budgets per project/environment** alerting at 50%, 80% and 100% of threshold.
   - Enforce **Free Tier & cost-cap guardrails in development/staging**: `min-instances = 0` (scale-to-zero), `max-instances = 1..2`, 512MiB RAM, 1 vCPU, 60s request timeouts, and cheap model overrides (e.g. `gpt-4o-mini`).
+  - **Sandbox / MVP Production Block Guardrail:** in sandbox, MVP, or experimental projects, hard-block production CD jobs by default (e.g. `if: false` on the production deploy job in CI/CD workflows) until security, budget alerts, and formal verification gates are approved.
 
 ## 3. Infrastructure as Code (IaC) & GitOps deployment workflow
 - **Structure inside the service (`src/<name>/infrastructure/`):**
