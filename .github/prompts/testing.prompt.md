@@ -10,7 +10,7 @@ Build fast, deterministic and high-confidence automated tests in every service:
 1. **Test Pyramid & isolation:**
    - **Unit tests (fast, pure, majority):** test domain entities, value objects and business rules in memory with zero network, filesystem or database calls.
    - **Integration tests (adapters & boundaries):** test DB repositories, migrations, queues and HTTP/gRPC controllers against real local/ephemeral instances (e.g. Testcontainers or isolated test schemas) and deterministic HTTP stubs for external vendors.
-   - **End-to-End (E2E) smoke tests:** cover only critical user journeys; keep them few, idempotent and resilient.
+   - **End-to-End (E2E) & Runtime Bootstrap smoke tests:** cover critical user journeys and verify that the service's production entrypoint (`CMD` in `Dockerfile` / `main.ts`) binds to a real local HTTP/gRPC port, responds `200 OK` on `/healthz` and `/readyz`, serves at least one contract route over the network, and shuts down cleanly on `SIGTERM`.
 
 2. **Cross-service Contract Testing (`src/<name>`):**
    - Because services in `src/` are independent repositories, never rely on fragile multi-repo E2E environments to catch breaking API/event changes.
