@@ -13,9 +13,11 @@
 - [ ] PR targets **`development`** (`staging`) for working branches, or **`main`** (`production`) only for release promotion from `development`.
 - [ ] Domain logic is isolated from infrastructure/transport (`architecture` skill).
 - [ ] No cross-service filesystem imports; API/event contracts remain backward-compatible or versioned.
-- [ ] Automated tests added/updated (happy path, edge cases, failure modes) and passing (`testing` skill).
+- [ ] Automated tests added/updated (coverage >= 80%, happy path, edge cases, failure modes) and passing (`testing` skill).
 - [ ] Security checked: zero hardcoded secrets/PII, external inputs validated, authn/authz enforced (`security` skill).
-- [ ] Formal **`review` + `security` audit report** published on this PR with all Blocker/Major findings resolved.
+- [ ] Sonar & CodeRabbit dual gates verified: all **High** and **Medium** findings resolved and re-verified.
+- [ ] Any **Low** findings accepted without changes logged as project issues / technical debt (list Issue # below).
+- [ ] Mandatory **human approval** obtained before merge.
 - [ ] Observability & operations updated: structured logs, metrics/alerts and `docs/operations/runbooks/` if needed (`observability` & `runbook` skills).
 
 ## Rollout, Infrastructure & Rollback Plan

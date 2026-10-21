@@ -6,7 +6,13 @@ alwaysApply: false
 
 # Code / PR review
 
-Review the diff and report findings ordered by severity (**Blocker**, **Major**, **Suggestion**), each with `file:line`, why it matters and a concrete fix.
+Review the diff and report findings ordered by severity (**High**, **Medium**, **Low**), each with `file:line`, why it matters and a concrete fix.
+
+Severity & Approval Policy:
+- **High (Blocker):** Security vulnerabilities (OWASP/STRIDE), data loss, breaking contract changes, missing secret sanitization, or architectural boundary violations. MUST be fixed in code before human approval.
+- **Medium (Blocker):** Missing test coverage (<80%), unhandled error paths, race conditions, cognitive complexity, or swallowed exceptions. MUST be fixed in code before human approval.
+- **Low (Non-blocking / Technical Debt):** Non-critical refactor suggestions, minor naming improvements, or documentation polish. May be approved by the human reviewer without blocking the PR provided an Issue/Ticket is logged in the project tracker as technical debt.
+- **Mandatory Human Approval:** Passing automated checks (Sonar, CodeRabbit) is a prerequisite; no PR may be merged without explicit human sign-off.
 
 Checklist:
 1. **Traceability & Git hygiene (`root` & `src/<name>`):** the change is on a working branch (never `main`, `master` or `development`), both branch name and commit messages reference a Story/Epic/Task ID (Jira/ClickUp/Trello/GitHub Issue), and the Pull Request targets `development` (or is an explicit release promotion PR from `development` to `main`).
