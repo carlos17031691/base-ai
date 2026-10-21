@@ -3,3 +3,4 @@ dist/
 template/
 README.md
 *.tgz
+coverage/
