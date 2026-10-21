@@ -24,6 +24,7 @@ function shouldCopy(src: string, base: string): boolean {
   if (top === ".ai") return !rel.endsWith("generated.json") && !rel.endsWith("context-index.json");
   if (top === "templates") return true;
   if (top === "docs") return !rel.endsWith(".md");
+  if (rel === ".coderabbit.yaml" || rel === "sonar-project.properties") return true;
   return false;
 }
 

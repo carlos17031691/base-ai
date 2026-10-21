@@ -10,7 +10,7 @@ import { aiSync } from "../sync.js";
 test("init creates a clean, synced project without CI by default", () => {
   const dir = join(mkdtempSync(join(tmpdir(), "base-ai-init-")), "demo");
   init(dir);
-  for (const f of [".ai/rules.md", ".ai/skills/adr/skill.md", "templates/service/README.md", "services.yaml", "AGENTS.md", ".agents/skills/adr/SKILL.md", ".git", ".githooks/pre-commit", "src/.gitkeep", "docs/architecture/adrs/.gitkeep"]) {
+  for (const f of [".ai/rules.md", ".ai/skills/adr/skill.md", "templates/service/README.md", "templates/service/.coderabbit.yaml", "templates/service/sonar-project.properties", ".coderabbit.yaml", "sonar-project.properties", "services.yaml", "AGENTS.md", ".agents/skills/adr/SKILL.md", ".git", ".githooks/pre-commit", "src/.gitkeep", "docs/architecture/adrs/.gitkeep"]) {
     assert.ok(existsSync(join(dir, f)), f);
   }
   assert.ok(!existsSync(join(dir, ".github/workflows")), "no CI by default");
