@@ -18,9 +18,20 @@ Guide the user to the simplest cloud architecture that meets their requirements 
 - **Never store long-lived cloud keys** (`AWS_SECRET_ACCESS_KEY`, GCP Service Account JSON keys, Azure Client Secrets) in Git or CI variables.
 - Authenticate CI/CD pipelines to the cloud provider using **OpenID Connect (OIDC) federation**:
   - **AWS:** IAM OIDC Identity Provider + IAM Role scoped to the repository and branch/environment (`sts:AssumeRoleWithWebIdentity`).
-  - **GCP:** Workload Identity Federation + Service Account with least-privilege IAM roles.
+  - **GCP:** Workload Identity Federation (`workloadIdentityPools` + OIDC provider with `attribute.repository_owner` condition) + Service Account with least-privilege IAM roles.
+    - **Exact required IAM roles for Cloud Run + Cloud Build automated CI/CD:**
+      1. `roles/run.admin` (deploy, update revisions and route traffic).
+      2. `roles/artifactregistry.writer` (push built container images).
+      3. `roles/iam.serviceAccountUser` (act as the runtime service account).
+      4. `roles/cloudbuild.builds.editor` (execute remote container builds).
+      5. `roles/storage.admin` (upload build context to `gs://<project>_cloudbuild`).
+      6. `roles/serviceusage.serviceUsageConsumer` (consume Cloud Build & Run APIs).
+      7. `roles/viewer` (stream build logs back to GitHub Actions runner without leaking credentials).
   - **Azure:** Workload Identity Federation (Federated Identity Credentials on Managed Identity / App Registration).
-- Use separate IAM roles/identities for `staging` (triggered on `development`/`main`) and `production` (requiring protected environment approval).
+- **Environment & Billing Isolation:**
+  - Separate **GCP Projects by environment** (`<org>-<service>-staging` vs. `<org>-<service>-prod`) so development/staging errors or load spikes can never affect production quotas or data.
+  - Configure **dedicated Cloud Billing Budgets per project/environment** alerting at 50%, 80% and 100% of threshold.
+  - Enforce **Free Tier & cost-cap guardrails in development/staging**: `min-instances = 0` (scale-to-zero), `max-instances = 1..2`, 512MiB RAM, 1 vCPU, 60s request timeouts, and cheap model overrides (e.g. `gpt-4o-mini`).
 
 ## 3. Infrastructure as Code (IaC) & GitOps deployment workflow
 - **Structure inside the service (`src/<name>/infrastructure/`):**
