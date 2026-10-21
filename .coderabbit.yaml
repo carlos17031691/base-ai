@@ -1,0 +1,54 @@
+# CodeRabbit configuration for base-ai umbrella repository
+# Reference: https://docs.coderabbit.ai/
+language: "en"
+early_access: false
+
+reviews:
+  profile: "assertive"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - "main"
+      - "development"
+
+  path_filters:
+    - "!node_modules/**"
+    - "!dist/**"
+    - "!cli/dist/**"
+    - "!cli/template/**"
+    - "!.git/**"
+    - "!package-lock.json"
+    - "!cli/package-lock.json"
+
+  path_instructions:
+    - path: "**/*"
+      instructions: |
+        You are reviewing a Pull Request in a project governed by `base-ai` engineering standards (ADR-0001, ADR-0002).
+        Enforce the following non-negotiable rules:
+        
+        1. TRACEABILITY & SDLC GATES:
+           - Every PR and commit MUST reference a valid Ticket/Issue ID (e.g. `PROJ-123`, `BASE-123`, `#45`).
+           - Working branches MUST target `development` (staging). Only release promotion PRs (`development` -> `main`) target `main`. Flag any feature PR opened directly against `main`.
+        
+        2. ISOLATION BOUNDARIES:
+           - Root repository is an umbrella with NO application code.
+           - Services in `src/<name>` must be completely independent repositories. Flag any cross-service filesystem imports (`../other-service`) or imports from root.
+        
+        3. SECURITY BY DESIGN (OWASP):
+           - Zero hardcoded secrets, API keys, tokens, or PII. Flag any unredacted credential immediately as CRITICAL.
+           - All external inputs (CLI, HTTP, files, webhooks) must be strictly validated at boundaries.
+        
+        4. CLEAN CODE & ARCHITECTURE:
+           - Apply SOLID, KISS, YAGNI, and pragmatic DRY.
+           - Prefer small cohesive functions, strict types, guard clauses, and immutable data structures.
+           - Never swallow errors silently or use untyped `any` without strong justification.
+        
+        5. QUALITY GATES (SONAR & TESTS):
+           - Ensure automated unit/integration tests accompany new features or bug fixes.
+           - Verify that test coverage meets or exceeds 80% without regressions.

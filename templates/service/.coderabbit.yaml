@@ -1,0 +1,54 @@
+# CodeRabbit configuration for base-ai service
+# Reference: https://docs.coderabbit.ai/
+language: "en"
+early_access: false
+
+reviews:
+  profile: "assertive"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - "main"
+      - "development"
+
+  path_filters:
+    - "!node_modules/**"
+    - "!dist/**"
+    - "!.git/**"
+    - "!package-lock.json"
+    - "!pnpm-lock.yaml"
+    - "!yarn.lock"
+
+  path_instructions:
+    - path: "**/*"
+      instructions: |
+        You are reviewing a Pull Request for an independent service created via `base-ai`.
+        Enforce the following non-negotiable engineering rules:
+        
+        1. TRACEABILITY & BRANCHING:
+           - Every PR title and commit MUST contain a valid Ticket ID (e.g. `PROJ-123`, `FIN-101`, `#45`).
+           - All feature/fix PRs MUST target `development`. Flag any feature PR opened against `main`.
+        
+        2. SERVICE ISOLATION:
+           - This service is an independent repository. It MUST NEVER import from `../../` or sibling services.
+           - All communication with external services must use versioned contracts (OpenAPI, gRPC, event schemas).
+        
+        3. SECURITY BY DESIGN (OWASP / STRIDE):
+           - Zero secrets, tokens, or PII in code, tests, docs, or logs.
+           - Validate all inputs at the boundary using strict schemas (e.g. Zod, Joi, Pydantic).
+           - Parameterize all SQL/NoSQL queries; never interpolate untrusted strings into commands or queries.
+        
+        4. CLEAN CODE & RESILIENCE:
+           - Isolate domain logic from transport/infrastructure (Dependency Inversion).
+           - Outbound integrations (APIs, webhooks, LLMs) MUST have explicit timeouts, retries with backoff+jitter, and error handling.
+           - Fail fast on bugs; return typed domain errors; never swallow exceptions.
+        
+        5. QUALITY GATES & TESTING:
+           - Every business rule and boundary case must have automated tests (target >= 80% coverage).
+           - Validate that HTTP services include health probes (/healthz, /readyz) and graceful SIGTERM shutdown.

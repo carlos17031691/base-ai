@@ -21,3 +21,5 @@ cpSync(new URL("../../docs", import.meta.url), new URL("docs", out), {
 });
 
 cpSync(new URL("../../README.md", import.meta.url), new URL("../README.md", import.meta.url));
+cpSync(new URL("../../.coderabbit.yaml", import.meta.url), new URL(".coderabbit.yaml", out));
+cpSync(new URL("../../sonar-project.properties", import.meta.url), new URL("sonar-project.properties", out));
