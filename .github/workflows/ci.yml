@@ -29,8 +29,7 @@ jobs:
       - name: Artefactos de IA sincronizados con .ai/
         run: node dist/index.js doctor --root ..
       - name: SonarCloud Scan
-        if: env.SONAR_TOKEN != ''
-        working-directory: .
+        if: ${{ secrets.SONAR_TOKEN != '' }}
         uses: SonarSource/sonarcloud-github-action@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
