@@ -27,7 +27,7 @@ jobs:
           cache-dependency-path: cli/package-lock.json
       - run: npm ci
       - name: Run tests with coverage
-        run: npm run build && node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/lcov.info --test-reporter=spec --test-reporter-destination=stdout dist/test/
+        run: mkdir -p coverage && npm run build && node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/lcov.info --test-reporter=spec --test-reporter-destination=stdout dist/test/
       - name: Artefactos de IA sincronizados con .ai/
         run: node dist/index.js doctor --root ..
       - name: SonarCloud Scan
