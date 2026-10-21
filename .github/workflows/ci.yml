@@ -4,11 +4,26 @@ on:
   push:
     branches: [main, development]
   pull_request:
+    types: [opened, reopened, synchronize]
 
 permissions:
   contents: read
 
 jobs:
+  notify-pr-opened:
+    if: github.event_name == 'pull_request' && (github.event.action == 'opened' || github.event.action == 'reopened')
+    runs-on: ubuntu-latest
+    env:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Notificar apertura de PR en Slack
+        if: env.SLACK_WEBHOOK_URL != ''
+        run: node .github/scripts/slack-notify.js pr_opened
+
   cli:
     runs-on: ubuntu-latest
     defaults:
@@ -16,6 +31,7 @@ jobs:
         working-directory: cli
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -36,3 +52,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      - name: Notificar en Slack: PR listo para aprobación humana
+        if: success() && github.event_name == 'pull_request' && env.SLACK_WEBHOOK_URL != ''
+        run: node ../.github/scripts/slack-notify.js pr_ready_for_review
+      - name: Notificar en Slack: Fallo de CI
+        if: failure() && env.SLACK_WEBHOOK_URL != ''
+        run: node ../.github/scripts/slack-notify.js ci_failure
