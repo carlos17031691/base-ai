@@ -17,6 +17,7 @@
 - [ ] Security checked: zero hardcoded secrets/PII, external inputs validated, authn/authz enforced (`security` skill).
 - [ ] Sonar & CodeRabbit dual gates verified: all **High** and **Medium** findings resolved and re-verified.
 - [ ] Any **Low** findings accepted without changes logged as project issues / technical debt (list Issue # below).
+- [ ] All review conversations and comments explicitly addressed and marked resolved (Zero Unresolved Conversations rule).
 - [ ] Mandatory **human approval** obtained before merge.
 - [ ] Observability & operations updated: structured logs, metrics/alerts and `docs/operations/runbooks/` if needed (`observability` & `runbook` skills).
 

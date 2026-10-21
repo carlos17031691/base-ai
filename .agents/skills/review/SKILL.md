@@ -9,10 +9,12 @@ description: "Review code or a pull request for ticket traceability, branch/PR h
 Review the diff and report findings ordered by severity (**High**, **Medium**, **Low**), each with `file:line`, why it matters and a concrete fix.
 
 Severity & Approval Policy:
+- **Zero Unresolved Conversations (Blocker):** Every comment, thread or question opened by automated bots (CodeRabbit) or human reviewers MUST be explicitly addressed, verified by the developer and marked resolved before merge approval. Never merge with open conversations.
 - **High (Blocker):** Security vulnerabilities (OWASP/STRIDE), data loss, breaking contract changes, missing secret sanitization, or architectural boundary violations. MUST be fixed in code before human approval.
 - **Medium (Blocker):** Missing test coverage (<80%), unhandled error paths, race conditions, cognitive complexity, or swallowed exceptions. MUST be fixed in code before human approval.
-- **Low (Non-blocking / Technical Debt):** Non-critical refactor suggestions, minor naming improvements, or documentation polish. May be approved by the human reviewer without blocking the PR provided an Issue/Ticket is logged in the project tracker as technical debt.
-- **Mandatory Human Approval:** Passing automated checks (Sonar, CodeRabbit) is a prerequisite; no PR may be merged without explicit human sign-off.
+- **Low (Non-blocking / Technical Debt):** Non-critical refactor suggestions, minor naming improvements, or documentation polish. May be approved by the human reviewer without blocking the PR provided an Issue/Ticket is logged in the project tracker as technical debt and the discussion thread is resolved referencing the issue.
+- **Mandatory Human Approval:** Passing automated checks (Sonar, CodeRabbit) and resolving all threads are prerequisites; no PR may be merged without explicit human sign-off.
+- **Branch Protection Policy (`development` & `main`):** Enforce `Require conversation resolution before merging` (`required_conversation_resolution: true`), `Require approvals: 1` human approval, and required passing status checks (`SonarCloud Code Analysis`, `ci/cli`).
 
 Checklist:
 1. **Traceability & Git hygiene (`root` & `src/<name>`):** the change is on a working branch (never `main`, `master` or `development`), both branch name and commit messages reference a Story/Epic/Task ID (Jira/ClickUp/Trello/GitHub Issue), and the Pull Request targets `development` (or is an explicit release promotion PR from `development` to `main`).

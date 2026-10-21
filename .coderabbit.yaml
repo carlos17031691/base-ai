@@ -49,9 +49,10 @@ reviews:
            - Prefer small cohesive functions, strict types, guard clauses, and immutable data structures.
            - Never swallow errors silently or use untyped `any` without strong justification.
         
-        5. SEVERITY CLASSIFICATION & HUMAN APPROVAL:
+        5. SEVERITY CLASSIFICATION, CONVERSATION RESOLUTION & HUMAN APPROVAL:
            - You MUST explicitly classify every review finding into one of three severities: [High], [Medium], or [Low].
            - [High]: Critical bugs, security vulnerabilities (OWASP/STRIDE), architectural boundary violations, data loss, breaking contract changes. These are BLOCKERS and must be fixed before human approval.
            - [Medium]: Missing test coverage (<80%), unhandled error paths, cognitive complexity, race conditions, code smells. These are BLOCKERS and must be fixed before human approval.
            - [Low]: Non-blocking improvements, minor naming polish, or non-urgent refactoring. Remind the author and reviewer that Low findings may only be approved without code changes if logged as an explicit Technical Debt Issue.
-           - Remind the author that all PR merges require final human sign-off; automated checks are pre-conditions for human approval.
+           - ZERO UNRESOLVED DISCUSSIONS: Remind the author that all review comments and conversation threads must be verified and marked resolved before merge.
+           - MANDATORY HUMAN APPROVAL: Remind the author that all PR merges require final human sign-off; automated checks are pre-conditions for human approval.
