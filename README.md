@@ -149,6 +149,34 @@ base-ai doctor
 | **GitHub Copilot™** | `.github/copilot-instructions.md`, `.github/prompts/` |
 | **OpenAI Codex™ / ChatGPT™** | `AGENTS.md` |
 
+### 🔌 Model Context Protocol (MCP) Integration
+
+`base-ai` includes a native [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server (`base-ai mcp`) running over standard `stdio` with zero external dependencies. It exposes project memory, hybrid context search, health diagnostics, token statistics, service catalogs, and architectural prompts directly to agentic workflows.
+
+#### Claude Desktop (`claude_desktop_config.json`)
+```json
+{
+  "mcpServers": {
+    "base-ai": {
+      "command": "npx",
+      "args": ["-y", "@carlos17031691/base-ai", "mcp"]
+    }
+  }
+}
+```
+
+#### Cursor (`.cursor/mcp.json`)
+```json
+{
+  "mcpServers": {
+    "base-ai": {
+      "command": "npx",
+      "args": ["-y", "@carlos17031691/base-ai", "mcp"]
+    }
+  }
+}
+```
+
 ---
 
 ## 🗺️ Product Roadmap
@@ -170,13 +198,13 @@ flowchart LR
 - [x] **PR Review Governance:** Severity-based triage (High/Medium blockers vs. Low tech debt) with mandatory human approval.
 - [x] **Zero Unresolved Discussions:** Strict blocker rule requiring all review comments to be resolved before merge.
 - [x] **ChatOps Integration:** Automated Slack® Block Kit notifications for PR lifecycle, quality gates, CI failures, and releases.
+- [x] **[#22](https://github.com/carlos17031691/base-ai/issues/22) Native Model Context Protocol (MCP) Server (`base-ai mcp`):** Zero-dependency stdio server exposing memory, context search, doctor health checks, token FinOps, service catalogs, and SDLC prompts.
 
 ---
 
 ### 🚀 Upcoming Horizons
 
 #### 🟢 Phase 1: Developer Experience & Model Context Protocol (Short-Term)
-- [ ] **[#22](https://github.com/carlos17031691/base-ai/issues/22) Native Model Context Protocol (MCP) Server (`base-ai mcp`):** Expose `base-ai` capabilities over stdio/SSE so agents (Claude, Cursor, Antigravity) can natively query project memory, search context, and run health checks.
 - [ ] **[#23](https://github.com/carlos17031691/base-ai/issues/23) Interactive Terminal UI Wizard (`base-ai wizard`):** Interactive prompt for scaffolding projects, selecting stacks (Node, Python, Go, Rust), cloud providers, and CI/CD targets.
 - [ ] **[#24](https://github.com/carlos17031691/base-ai/issues/24) CI Token Budget FinOps Guardrail (`base-ai ai stats`):** Enforce hard token and cost ceilings in CI to prevent prompt bloat and uncontrolled API spend.
 
