@@ -7,6 +7,12 @@
 
 const fs = require('fs');
 
+function sanitizeLog(input) {
+  return String(input || '')
+    .replace(/[\r\n\t]/g, ' ')
+    .slice(0, 500);
+}
+
 async function main() {
   const webhookUrl = process.env.SLACK_WEBHOOK_URL;
   if (!webhookUrl || webhookUrl.trim() === '') {
@@ -41,10 +47,11 @@ async function main() {
   const baseRef = pr.base ? pr.base.ref : 'development';
 
   // Extract Ticket ID from title or branch
-  const ticketMatch = (prTitle + ' ' + headRef).match(/([A-Z]{2,10}-\d+|#\d+)/i);
+  const ticketMatch = /\b([A-Z]{2,10}-\d+|#\d+)\b/i.exec(prTitle + ' ' + headRef);
   const ticketId = ticketMatch ? ticketMatch[1].toUpperCase() : 'N/A';
 
-  const version = process.env.RELEASE_VERSION || (prTitle.match(/v?\d+\.\d+\.\d+/) || ['latest'])[0];
+  const versionMatch = /\bv?\d{1,5}\.\d{1,5}\.\d{1,5}\b/.exec(prTitle);
+  const version = process.env.RELEASE_VERSION || (versionMatch ? versionMatch[0] : 'latest');
   const releaseUrl = `${repoUrl}/releases/tag/${version.startsWith('v') ? version : 'v' + version}`;
 
   const message = buildSlackMessage(eventType, {
@@ -73,12 +80,12 @@ async function main() {
 
     if (!res.ok) {
       const text = await res.text();
-      console.error(`[slack-notify] Error posting to Slack: ${res.status} ${res.statusText} - ${text}`);
+      console.error(`[slack-notify] Error posting to Slack: ${res.status} ${res.statusText} - ${sanitizeLog(text)}`);
     } else {
       console.log(`[slack-notify] Notification successfully delivered to Slack (${eventType}).`);
     }
   } catch (err) {
-    console.error('[slack-notify] Network failure posting to Slack:', err.message);
+    console.error('[slack-notify] Network failure posting to Slack:', sanitizeLog(err.message));
   }
 }
 
@@ -221,7 +228,10 @@ function buildSlackMessage(type, ctx) {
 }
 
 if (require.main === module) {
-  main();
+  main().catch((err) => {
+    console.error('[slack-notify] Fatal error:', sanitizeLog(err.message));
+    process.exit(1);
+  });
 }
 
-module.exports = { buildSlackMessage, main };
+module.exports = { buildSlackMessage, sanitizeLog, main };
