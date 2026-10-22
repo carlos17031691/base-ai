@@ -13,6 +13,30 @@ function sanitizeLog(input) {
     .slice(0, 500);
 }
 
+function formatBlockKit(color, headerText, fields, contextText) {
+  return {
+    attachments: [
+      {
+        color,
+        blocks: [
+          { type: 'header', text: { type: 'plain_text', text: headerText, emoji: true } },
+          {
+            type: 'section',
+            fields: fields.map(([label, value]) => ({
+              type: 'mrkdwn',
+              text: `*${label}:*\n${value}`,
+            })),
+          },
+          {
+            type: 'context',
+            elements: [{ type: 'mrkdwn', text: contextText }],
+          },
+        ],
+      },
+    ],
+  };
+}
+
 async function main() {
   const webhookUrl = process.env.SLACK_WEBHOOK_URL;
   if (!webhookUrl || webhookUrl.trim() === '') {
@@ -92,133 +116,56 @@ async function main() {
 function buildSlackMessage(type, ctx) {
   switch (type) {
     case 'pr_opened':
-      return {
-        attachments: [
-          {
-            color: '#1f6feb',
-            blocks: [
-              {
-                type: 'header',
-                text: { type: 'plain_text', text: '📋 Nuevo Pull Request Abierto', emoji: true },
-              },
-              {
-                type: 'section',
-                fields: [
-                  { type: 'mrkdwn', text: `*Repositorio:*\n<${ctx.repoUrl}|${ctx.repo}>` },
-                  { type: 'mrkdwn', text: `*Pull Request:*\n<${ctx.prUrl}|${ctx.prNumber} ${ctx.prTitle}>` },
-                  { type: 'mrkdwn', text: `*Autor:*\n@${ctx.prAuthor}` },
-                  { type: 'mrkdwn', text: `*Ramas:*\n\`${ctx.headRef}\` ➔ \`${ctx.baseRef}\`` },
-                ],
-              },
-              {
-                type: 'context',
-                elements: [
-                  { type: 'mrkdwn', text: `🔖 *Ticket:* \`${ctx.ticketId}\` | ⏳ Ejecutando análisis de CI, SonarCloud y CodeRabbit...` },
-                ],
-              },
-            ],
-          },
+      return formatBlockKit(
+        '#1f6feb',
+        '📋 Nuevo Pull Request Abierto',
+        [
+          ['Repositorio', `<${ctx.repoUrl}|${ctx.repo}>`],
+          ['Pull Request', `<${ctx.prUrl}|${ctx.prNumber} ${ctx.prTitle}>`],
+          ['Autor', `@${ctx.prAuthor}`],
+          ['Ramas', `\`${ctx.headRef}\` ➔ \`${ctx.baseRef}\``],
         ],
-      };
+        `🔖 *Ticket:* \`${ctx.ticketId}\` | ⏳ Ejecutando análisis de CI, SonarCloud y CodeRabbit...`
+      );
 
     case 'pr_ready_for_review':
-      return {
-        attachments: [
-          {
-            color: '#238636',
-            blocks: [
-              {
-                type: 'header',
-                text: { type: 'plain_text', text: '✅ PR Listo para Aprobación Humana', emoji: true },
-              },
-              {
-                type: 'section',
-                fields: [
-                  { type: 'mrkdwn', text: `*Pull Request:*\n<${ctx.prUrl}|${ctx.prNumber} ${ctx.prTitle}>` },
-                  { type: 'mrkdwn', text: `*Autor:*\n@${ctx.prAuthor}` },
-                  { type: 'mrkdwn', text: `*Ticket ID:*\n\`${ctx.ticketId}\`` },
-                  { type: 'mrkdwn', text: `*Quality Gates:*\nTests OK • SonarCloud Passed` },
-                ],
-              },
-              {
-                type: 'context',
-                elements: [
-                  {
-                    type: 'mrkdwn',
-                    text: '🛡️ *Regla SDLC:* Verificar y resolver todos los comentarios de revisión antes del merge. Requiere aprobación humana.',
-                  },
-                ],
-              },
-            ],
-          },
+      return formatBlockKit(
+        '#238636',
+        '✅ PR Listo para Aprobación Humana',
+        [
+          ['Pull Request', `<${ctx.prUrl}|${ctx.prNumber} ${ctx.prTitle}>`],
+          ['Autor', `@${ctx.prAuthor}`],
+          ['Ticket ID', `\`${ctx.ticketId}\``],
+          ['Quality Gates', 'Tests OK • SonarCloud Passed'],
         ],
-      };
+        '🛡️ *Regla SDLC:* Verificar y resolver todos los comentarios de revisión antes del merge. Requiere aprobación humana.'
+      );
 
     case 'ci_failure':
-      return {
-        attachments: [
-          {
-            color: '#da3633',
-            blocks: [
-              {
-                type: 'header',
-                text: { type: 'plain_text', text: '🚨 Fallo en Pipeline de CI / Quality Gate', emoji: true },
-              },
-              {
-                type: 'section',
-                fields: [
-                  { type: 'mrkdwn', text: `*Repositorio:*\n<${ctx.repoUrl}|${ctx.repo}>` },
-                  { type: 'mrkdwn', text: `*Rama / Ref:*\n\`${ctx.refName}\`` },
-                  { type: 'mrkdwn', text: `*Ejecutado por:*\n@${ctx.actor}` },
-                  { type: 'mrkdwn', text: `*Logs CI:*\n<${ctx.runUrl}|Ver detalles del fallo>` },
-                ],
-              },
-              {
-                type: 'context',
-                elements: [
-                  {
-                    type: 'mrkdwn',
-                    text: '⚠️ Un check automatizado o compuerta de calidad ha fallado. Revisa los logs para corregirlo.',
-                  },
-                ],
-              },
-            ],
-          },
+      return formatBlockKit(
+        '#da3633',
+        '🚨 Fallo en Pipeline de CI / Quality Gate',
+        [
+          ['Repositorio', `<${ctx.repoUrl}|${ctx.repo}>`],
+          ['Rama / Ref', `\`${ctx.refName}\``],
+          ['Ejecutado por', `@${ctx.actor}`],
+          ['Logs CI', `<${ctx.runUrl}|Ver detalles del fallo>`],
         ],
-      };
+        '⚠️ Un check automatizado o compuerta de calidad ha fallado. Revisa los logs para corregirlo.'
+      );
 
     case 'release_published':
-      return {
-        attachments: [
-          {
-            color: '#8957e5',
-            blocks: [
-              {
-                type: 'header',
-                text: { type: 'plain_text', text: '🚀 Nuevo Release Desplegado en Producción', emoji: true },
-              },
-              {
-                type: 'section',
-                fields: [
-                  { type: 'mrkdwn', text: `*Repositorio:*\n<${ctx.repoUrl}|${ctx.repo}>` },
-                  { type: 'mrkdwn', text: `*Versión:*\n<${ctx.releaseUrl}|${ctx.version}>` },
-                  { type: 'mrkdwn', text: `*Publicado por:*\n@${ctx.actor}` },
-                  { type: 'mrkdwn', text: `*Destino:*\nProducción (\`main\`)` },
-                ],
-              },
-              {
-                type: 'context',
-                elements: [
-                  {
-                    type: 'mrkdwn',
-                    text: '📦 Paquete publicado en npm con Provenance y tag inmutable de Git creado.',
-                  },
-                ],
-              },
-            ],
-          },
+      return formatBlockKit(
+        '#8957e5',
+        '🚀 Nuevo Release Desplegado en Producción',
+        [
+          ['Repositorio', `<${ctx.repoUrl}|${ctx.repo}>`],
+          ['Versión', `<${ctx.releaseUrl}|${ctx.version}>`],
+          ['Publicado por', `@${ctx.actor}`],
+          ['Destino', 'Producción (`main`)'],
         ],
-      };
+        '📦 Paquete publicado en npm con Provenance y tag inmutable de Git creado.'
+      );
 
     default:
       return {
@@ -234,4 +181,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { buildSlackMessage, sanitizeLog, main };
+module.exports = { buildSlackMessage, sanitizeLog, formatBlockKit, main };
