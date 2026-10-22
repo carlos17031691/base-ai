@@ -58,6 +58,7 @@ Enforced by `.githooks/`:
 - **[2026-10-21]** `[BASE-008]` `#sdlc,integrations` SDLC ChatOps integration with Slack via Incoming Webhooks (SLACK_WEBHOOK_URL) broadcasts rich Block Kit notifications on PR opened with Ticket ID, CI failure alerts, PR ready for human review (passing tests and Sonar), and production releases, with strict graceful degradation when secrets are omitted.
 - **[2026-10-22]** `[BASE-008]` `#sdlc,integrations` Slack CI notifications must invoke pr_ready_for_review event to generate rich Block Kit attachments with zero unresolved conversations reminder and must use .cjs extension for Node.js ES module compatibility.
 - **[2026-10-22]** `[BASE-008]` `#testing,sdlc` SonarCloud analysis for services using root organization key requires explicit exclusion of .github automation scripts and cpd duplication check suppression to pass Quality Gate on new code.
+- **[2026-10-22]** `[BASE-009]` `#agents,mcp` Native Model Context Protocol (MCP) server over stdio (`base-ai mcp`) exposes search_context, get_memory, add_memory, check_health, get_ai_stats, and list_services tools with zero external dependencies.
 
 ## Available skills
 

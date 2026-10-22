@@ -19,6 +19,7 @@ export interface MemoryOptions {
 
 function resolveMemoryPath(root: string, service?: string): string {
   if (!service) return join(root, ".ai", "memory.md");
+  if (!/^[a-z0-9-]+$/.test(service)) throw new Error(`Invalid service name "${service}"`);
   const svcDir = join(root, "src", service);
   if (!existsSync(svcDir)) throw new Error(`Service directory not found: ${svcDir}`);
   return join(svcDir, ".ai", "memory.md");

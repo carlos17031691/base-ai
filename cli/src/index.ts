@@ -7,6 +7,7 @@ import { memoryAdd, memoryList } from "./memory.js";
 import { listServices, serviceAdd, serviceNew, serviceRemove, syncServices } from "./services.js";
 import { computeAiStats } from "./stats.js";
 import { aiSync } from "./sync.js";
+import { startMcpServer } from "./mcp.js";
 
 const USAGE = `base-ai <command> [--root <dir>]
 
@@ -23,6 +24,7 @@ Commands:
   service add <name> <repo> [--branch b]            Register an existing repo in services.yaml, clone it & install hooks
   service remove <name> [--purge]                   Remove it from services.yaml (--purge deletes src/<name> if clean)
   sync                                              Clone/fast-forward all services, install hooks and run ai sync
+  mcp                                               Start Model Context Protocol (MCP) server over stdio for AI agents
 `;
 
 function parseArgs(argv: string[]) {
@@ -150,6 +152,10 @@ function main(argv: string[]): number {
   if (cmd === "sync") {
     for (const r of syncServices(root)) console.log(`  ${r.name}: ${r.action}${r.reason ? ` (${r.reason})` : ""}`);
     console.log("✔ sync complete");
+    return 0;
+  }
+  if (cmd === "mcp") {
+    startMcpServer(root);
     return 0;
   }
 
