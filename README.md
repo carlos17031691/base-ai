@@ -1,122 +1,172 @@
 # base-ai
 
-> Generic CLI scaffolding for **scalable, AI-driven software projects**.
+<p align="center">
+  <a href="https://www.npmjs.com/package/@carlos17031691/base-ai"><img src="https://img.shields.io/npm/v/@carlos17031691/base-ai?style=for-the-badge&logo=npm&logoColor=white&color=CB3837" alt="npm version" /></a>
+  <a href="https://github.com/carlos17031691/base-ai/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/carlos17031691/base-ai/ci.yml?branch=main&style=for-the-badge&logo=github&logoColor=white&label=CI" alt="CI Status" /></a>
+  <a href="https://sonarcloud.io/dashboard?id=carlos17031691_base-ai"><img src="https://sonarcloud.io/api/project_badges/measure?project=carlos17031691_base-ai&metric=alert_status" alt="SonarCloud Quality Gate" /></a>
+  <a href="https://sonarcloud.io/dashboard?id=carlos17031691_base-ai"><img src="https://sonarcloud.io/api/project_badges/measure?project=carlos17031691_base-ai&metric=coverage" alt="Coverage" /></a>
+  <a href="https://coderabbit.ai"><img src="https://img.shields.io/badge/CodeRabbit-Review-ff5a00?style=for-the-badge&logo=coderabbit&logoColor=white" alt="CodeRabbit Review" /></a>
+  <a href="https://slack.com"><img src="https://img.shields.io/badge/Slack-ChatOps-4A154B?style=for-the-badge&logo=slack&logoColor=white" alt="Slack ChatOps" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="License: MIT" /></a>
+</p>
 
-`base-ai` is not a framework and contains no application code. It defines the **root** of a project: the AI layer (rules, skills), cross-cutting governance (ADRs/RFCs) and a service registry. Each service or module lives in `src/<name>` as a **fully independent repository**, with its own stack, architecture, infrastructure and CI/CD.
+> Enterprise-grade CLI scaffolding & governance for **scalable, AI-driven software architectures**.
+
+`base-ai` is an umbrella governance framework. It contains no application code; instead, it establishes the **single source of truth** for your AI development layer (`.ai/`), cross-cutting architectural governance (ADRs/RFCs), strict SDLC quality gates, and automated ChatOps. Each service or module lives in `src/<name>` as a **fully independent Git repository** with its own stack, data, cloud infrastructure, and CI/CD pipelines.
 
 ---
 
-## 🧭 Model
+## 🧭 System Architecture & Isolation Model
 
 ```mermaid
 flowchart TD
-    root["base-ai (root repo)"] --> ai[".ai/ + AGENTS.md: AI layer"]
-    root --> docs["docs/: cross-cutting decisions"]
-    root --> manifest["services.yaml: registry"]
-    root --> tpl["templates/service/"]
-    manifest -->|clone| s1["src/service-a (own repo)"]
-    manifest -->|clone| s2["src/service-b (own repo)"]
-    tpl -->|scaffold| s3["src/new-service"]
+    subgraph Root["Umbrella Governance (base-ai)"]
+        root["base-ai (root repo)"]
+        ai[".ai/ + AGENTS.md: AI single source of truth"]
+        docs["docs/: cross-cutting ADRs & RFCs"]
+        manifest["services.yaml: service registry"]
+        tpl["templates/service/: scaffold & CI templates"]
+        root --> ai
+        root --> docs
+        root --> manifest
+        root --> tpl
+    end
+
+    subgraph Services["Independent Microservices (src/)"]
+        manifest -->|git clone| s1["src/orders-api (Repo A: Go / AWS)"]
+        manifest -->|git clone| s2["src/billing-service (Repo B: Node / GCP)"]
+        tpl -->|base-ai service new| s3["src/auth-service (Repo C: Python / K8s)"]
+    end
+
+    subgraph ChatOps["SDLC Automation & Observability"]
+        ci["GitHub Actions CI/CD"]
+        sonar["SonarCloud SAST"]
+        coderabbit["CodeRabbit AI"]
+        slack["Slack ChatOps (#dev-sdlc)"]
+        ci --> sonar
+        ci --> coderabbit
+        ci -->|Block Kit Webhook| slack
+    end
 ```
 
-| Level | Responsibility | Repository |
-|-------|----------------|------------|
-| **Root** (`base-ai`) | AI layer, conventions, cross-cutting decisions, service registry | Own |
-| **Service** (`src/<name>`) | Code, architecture, infrastructure, tests, CI/CD | Own and independent |
-
-**Principles:**
-- **Full isolation & own repository:** every service in `src/<name>` has its own remote Git repository (`repo` in `services.yaml`) and never depends on the root repo to build, test or deploy. `src/` is git-ignored.
-- **Mandatory ticket traceability & PR-only workflow:** every change inside `src/<name>` must be tied to a Story/Epic/Task (Jira, ClickUp, Trello, etc.), committed on a working branch (e.g. `feat/PROJ-123-slug`) with the ticket ID in the commit message, and merged via **Pull Request** — direct commits or pushes to `main`, `master` or `development` are blocked by `.githooks/`.
-- **Stack- and platform-agnostic:** each service chooses its language, architecture, cloud and CI provider.
-- **Single AI source of truth:** rules and skills are written once in `.ai/` and exported to every agent.
-- **Built for any experience level:** AI agents proactively guide developers from idea and service breakdown to production deployment, explaining trade-offs clearly along the way.
-- **End-to-end engineering standards:** SDLC gates, Clean Code (SOLID, KISS, YAGNI), decoupled architecture, resilient external API/AI integrations, safe database design & migrations, observability, cloud infrastructure/CI/CD, living documentation and Security by Design (OWASP, STRIDE, zero secrets).
+| Scope | Responsibility | Repository | Remote |
+|-------|----------------|------------|--------|
+| **Root (`base-ai`)** | AI rules/skills, governance (ADRs/RFCs), ChatOps & service registry | Umbrella Repo | Single origin |
+| **Services (`src/<name>`)** | Domain logic, framework, database, infrastructure & CI/CD | Independent Repos | Dedicated remotes (`services.yaml`) |
 
 ---
 
-## 🧩 Core skills
+## 🛡️ Non-Negotiable SDLC Governance & Quality Gates
+
+Every change in `base-ai` and its services adheres to strict engineering rules:
+
+1. **Ticket Traceability & Git Hygiene:**
+   - Every change requires a valid Story/Epic/Task ID (e.g. `PROJ-123`, `BASE-008`, `#20`).
+   - Feature branches must branch from `development` (e.g. `feat/PROJ-123-slug`). Direct pushes to `main`, `master`, or `development` are blocked by `.githooks/`.
+2. **Dual Automated Quality Gates:**
+   - **SonarQube™ / SonarCloud™:** Deterministic SAST, zero vulnerabilities, and $\ge 80\%$ test coverage.
+   - **CodeRabbit™:** Automated AI cognitive review analyzing architecture boundaries, clean code, and security.
+3. **Severity-Based Triage & Mandatory Human Approval:**
+   - **High & Medium findings:** Must be fixed and re-verified in code before human approval.
+   - **Low findings:** May merge without code modifications only if registered as technical debt (Project Issue).
+   - **Human Sign-off:** Passing automated checks is a prerequisite; no PR can merge without explicit human review.
+4. **Zero Unresolved Conversations Rule:**
+   - All review comments and discussion threads raised by bots (CodeRabbit) or human peers must be verified and marked resolved before merge.
+5. **ChatOps & Slack™ Integration:**
+   - CI/CD pipelines broadcast structured Slack Block Kit notifications on:
+     - 📋 **PR Opened / Reopened** with Ticket ID.
+     - ✅ **PR Ready for Human Review** (after passing unit tests and SonarCloud).
+     - 🚨 **CI / Quality Gate Failures** with direct links to workflow logs.
+     - 🚀 **Production Releases** published to npm and GitHub.
+   - Strict graceful degradation: skips silently without breaking CI if `SLACK_WEBHOOK_URL` is omitted.
+
+---
+
+## 🧩 19 Core Engineering Skills
+
+Exported from `.ai/` into every AI coding assistant:
 
 | Skill | Purpose |
 |-------|---------|
-| `discovery` | Turn raw ideas into MVP scope, service boundaries (`services.yaml`), Epics & Gherkin User Stories (Jira/ClickUp/Trello) |
-| `sdlc` | End-to-end engineering workflow & quality gates (ticket → branch → design → code → test → PR → operate) |
-| `architecture` | Stack-agnostic service design (domain isolation, dependency inversion, contracts, resilience) |
-| `integrations` | External APIs, third-party providers, webhooks, AI gateways (e.g. OpenRouter, LiteLLM) & LLM models |
-| `ai-ops` | Model tiering/routing, prompt prefix caching, input/output token optimization & LLM cost/token telemetry (AI FinOps) |
-| `agents` | Tool-using AI agents & MCP servers with least-privilege tools, Human-in-the-Loop and step/cost guardrails |
-| `workflows` | Workflow automation & orchestration engines (e.g. n8n, Temporal, queues) with GitOps, security & idempotency |
-| `memory` | Persistent cross-session project memory (`.ai/memory.md`) & short/long-term AI application memory architecture |
-| `rag` | Retrieval-Augmented Generation (chunking, embeddings, hybrid search, pre-retrieval ACLs, grounded citations & evaluation) |
-| `database` | SQL/NoSQL/cache modeling, indexing, concurrency & zero-downtime migrations (Expand & Contract) |
-| `testing` | Test pyramid (unit, integration, E2E), cross-service Contract Testing & deterministic AI/RAG Evals |
-| `observability` | Structured logs, RED/USE metrics, SLIs/SLOs, distributed tracing, health probes, cloud alarms & alerting |
-| `infrastructure` | Cloud providers (AWS/GCP/Azure/Cloudflare/PaaS), keyless OIDC auth, IaC GitOps (`plan`→`apply`), Monitoring as Code & Cloud FinOps |
-| `security` | Threat modeling (STRIDE) and OWASP security audit |
-| `review` | Code/PR review across traceability, clean code, architecture, security and SDLC |
-| `docs` | Service READMEs, OpenAPI/AsyncAPI contracts, architecture diagrams & postmortems |
+| `discovery` | Turn raw ideas into MVP boundaries, candidate services, Epics & Gherkin User Stories (Jira, ClickUp, Trello) |
+| `sdlc` | End-to-end engineering lifecycle & gates (Traceability → Branch → Design → Implement → Verify → Review → Release) |
+| `architecture` | Domain isolation, Dependency Inversion, backward-compatible contracts & resilience patterns |
+| `integrations` | External APIs, webhook signature verification, Slack ChatOps & resilient LLM gateways (OpenRouter, LiteLLM) |
+| `ai-ops` | Model tiering, prompt prefix caching, token optimization & cost telemetry (AI FinOps) |
+| `agents` | Tool-calling AI agents & MCP servers with least-privilege tools and Human-in-the-Loop guardrails |
+| `workflows` | Workflow automation engines (n8n, Temporal, Inngest) with GitOps, versioning & idempotency |
+| `memory` | Persistent cross-session project memory (`.ai/memory.md`) & AI app memory architectures |
+| `rag` | Retrieval-Augmented Generation (chunking, embeddings, hybrid search, pre-retrieval ACLs & eval) |
+| `database` | Zero-downtime database migrations (Expand-and-Contract), connection pooling & SQL/NoSQL tuning |
+| `testing` | Test pyramid (unit, integration, cross-service contract tests) & deterministic AI Evals |
+| `observability` | Structured JSON logging with `trace_id`, RED/USE metrics, `/healthz` + `/readyz`, and Monitoring as Code |
+| `infrastructure` | Cloud IaC (OpenTofu, Terraform, Pulumi), keyless OIDC auth, GitOps PR `plan`→`apply` & immutable rollback |
+| `security` | Threat modeling (STRIDE), OWASP security audits, secret scanning (GitGuardian) & input sanitization |
+| `review` | PR review across traceability, clean code, architecture, security, and severity triage |
+| `docs` | Service documentation, OpenAPI/AsyncAPI specifications & architecture blueprints |
 | `adr` | Immutable Architecture Decision Records |
-| `rfc` | Request for Comments for high-impact or cross-service changes |
-| `runbook` | On-call operational runbooks |
+| `rfc` | Requests for Comments for high-impact or cross-service architectural shifts |
+| `runbook` | On-call operational runbooks and disaster mitigation procedures |
 
 ---
 
-## 📁 Layout
-
-```
-base-ai/
-├── AGENTS.md              # Global rules for AI agents (generated)
-├── .ai/                   # Single AI source of truth (rules, config, skills)
-├── .agents/skills/        # Exported skills (19 core skills across discovery, SDLC, AI/FinOps, architecture, data, ops & security)
-├── docs/
-│   ├── architecture/{adrs,rfcs}/        # Cross-cutting decisions
-│   └── operations/{runbooks,postmortems}/
-├── services.yaml          # Service registry (repo, optional branch)
-├── templates/service/     # Minimal, stack-neutral service template
-└── src/                   # Cloned services (git-ignored)
-```
-
----
-
-## 🚀 CLI
+## 🚀 CLI Quick Start
 
 ```bash
-npx @carlos17031691/base-ai init my-project [--ci none|github|gitlab]     # initialise the root project (or: npm i -g @carlos17031691/base-ai)
-base-ai service new api <repo> [--cloud aws|gcp|...] [--iac opentofu|terraform|pulumi|...] # scaffold service + optional IaC
-base-ai service add web <repo> [--branch main]            # register in services.yaml, clone & install git hooks
-base-ai service remove web [--purge]                      # remove from manifest (and optionally delete src/web)
-base-ai sync                                              # clone/fast-forward all services, install hooks & ai sync
-base-ai ai sync                                           # export .ai/ to every agent & refresh context index
-base-ai ai stats                                          # inspect token footprint of always-on rules vs on-demand skills
-base-ai memory add "<note>" [--ticket ID] [--tag tag]     # persist cross-session project memory & sync agents
-base-ai memory list [--service <name>]                    # list persisted project memory notes
-base-ai context search "<query>" [--scope root|service:x] # retrieve ranked ADRs, RFCs, runbooks, memory & contracts
-base-ai doctor                                            # validate services.yaml & fail if AI artefacts drift (CI)
+# 1. Initialize an umbrella root project
+npx @carlos17031691/base-ai init my-project --ci github
+
+# 2. Scaffold a new independent service with Cloud & IaC templates
+base-ai service new orders-api git@github.com:myorg/orders-api.git --cloud gcp --iac opentofu
+
+# 3. Register and clone an existing service
+base-ai service add billing-svc git@github.com:myorg/billing-svc.git --branch main
+
+# 4. Sync AI conventions across all assistants & clone all services
+base-ai sync
+
+# 5. Add persistent cross-session memory
+base-ai memory add "Production deploys require staging validation first" --ticket PROJ-101 --tag ops
+
+# 6. Hybrid context search across ADRs, RFCs, Runbooks & Contracts
+base-ai context search "How do we handle database migrations?"
+
+# 7. Validate project health & detect configuration drift in CI
+base-ai doctor
 ```
 
-CLI development: `cd cli && npm install && npm test`.
+---
+
+## 🤖 Supported AI Agents & Ecosystem
+
+`base-ai` syncs `.ai/` into native instruction files across all major coding assistants:
+
+| Assistant / Platform | Generated File(s) |
+|----------------------|-------------------|
+| **Google Antigravity™ / Gemini™** | `AGENTS.md`, `.agents/skills/` |
+| **Anthropic Claude Code™** | `CLAUDE.md`, `.claude/commands/` |
+| **Cursor™** | `.cursor/rules/*.mdc` |
+| **GitHub Copilot™** | `.github/copilot-instructions.md`, `.github/prompts/` |
+| **OpenAI Codex™ / ChatGPT™** | `AGENTS.md` |
 
 ---
 
-## 🤖 Supported agents
+## 📄 License & Trademarks
 
-| Agent | Generated file(s) |
-|-------|-------------------|
-| Antigravity / Gemini | `AGENTS.md`, `.agents/skills/` |
-| Claude Code | `CLAUDE.md`, `.claude/commands/` |
-| Cursor | `.cursor/rules/*.mdc` |
-| GitHub Copilot | `.github/copilot-instructions.md`, `.github/prompts/` |
-| OpenAI Codex | `AGENTS.md` |
+Licensed under the [MIT License](LICENSE).
 
----
+### Trademarks & Attributions
+All product names, logos, brands, and registered trademarks mentioned in this documentation and repository are property of their respective owners:
+- **GitHub®**, **GitHub Actions®**, and **GitHub Copilot®** are registered trademarks of GitHub, Inc.
+- **Slack®** is a registered trademark of Slack Technologies, LLC / Salesforce, Inc.
+- **SonarQube™** and **SonarCloud™** are trademarks of SonarSource SA.
+- **CodeRabbit™** is a trademark of CodeRabbit, Inc.
+- **GitGuardian®** is a registered trademark of GitGuardian SAS.
+- **Google®** and **Gemini™** are trademarks of Google LLC.
+- **Claude™** is a trademark of Anthropic PBC.
+- **Cursor™** is a trademark of Anysphere, Inc.
+- **OpenAI®** and **ChatGPT®** are registered trademarks of OpenAI, Inc.
+- **OpenTofu™** is a trademark of the Linux Foundation.
+- **Terraform®** is a registered trademark of HashiCorp / IBM.
 
-## 🗺️ Roadmap
-
-- [x] Root layout + minimal service template
-- [x] ADR-0001: CLI architecture, manifest and single AI source
-- [x] English `.ai/rules.md` and generic skills (`adr`, `rfc`, `runbook`, `review`)
-- [x] CLI: `init`, `service new|add|remove`, `sync`, `ai sync`, `doctor`
-- [x] Publish to npm (`base-ai`)
-
-## 📄 License
-
-MIT.
+Use of these marks does not imply any affiliation, sponsorship, or endorsement.
