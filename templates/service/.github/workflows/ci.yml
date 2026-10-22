@@ -16,13 +16,12 @@ jobs:
     env:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
-        with:
-          node-version: 20
-      - name: Notificar apertura de PR en Slack
+      - name: "Notificar apertura de PR en Slack"
         if: env.SLACK_WEBHOOK_URL != ''
-        run: node .github/scripts/slack-notify.js pr_opened
+        run: |
+          curl -s -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"📋 [${{ github.repository }}] Nuevo PR abierto #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.html_url }}\"}" \
+            "$SLACK_WEBHOOK_URL" || true
 
   service:
     runs-on: ubuntu-latest
@@ -48,7 +47,13 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       - name: "Notificar en Slack: PR listo para aprobación humana"
         if: success() && github.event_name == 'pull_request' && env.SLACK_WEBHOOK_URL != ''
-        run: node .github/scripts/slack-notify.js pr_ready_for_review
+        run: |
+          curl -s -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"✅ [${{ github.repository }}] PR #${{ github.event.pull_request.number }} pasó pruebas y Quality Gates. Listo para revisión humana: ${{ github.event.pull_request.html_url }}\"}" \
+            "$SLACK_WEBHOOK_URL" || true
       - name: "Notificar en Slack: Fallo de CI"
         if: failure() && env.SLACK_WEBHOOK_URL != ''
-        run: node .github/scripts/slack-notify.js ci_failure
+        run: |
+          curl -s -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"🚨 [${{ github.repository }}] Fallo en pipeline de CI en ${{ github.ref_name }}: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+            "$SLACK_WEBHOOK_URL" || true
