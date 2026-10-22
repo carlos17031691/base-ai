@@ -35,9 +35,11 @@ Guide a task through the full engineering lifecycle and verify each gate before 
    - Triage all findings by severity: **High** and **Medium** findings MUST be corrected in code before human review. **Low** findings may be approved if registered as an explicit project issue (technical debt).
    - **Zero Unresolved Conversations:** Inspect, verify, and resolve all review threads raised by CodeRabbit or human reviewers. Unresolved comments strictly block merge.
    - Enforce repository branch protection on `development` and `main`: require status checks (`SonarCloud Code Analysis`, `ci`), require conversation resolution (`required_conversation_resolution: true`), and require at least 1 human approval (`required_approving_review_count: 1`).
+   - **SDLC Slack Notifications:** Notify Slack (`SLACK_WEBHOOK_URL`) on PR opened with Ticket ID, notify on CI failure, and broadcast "PR ready for human review" once unit tests and Sonar pass.
    - Obtain mandatory **human approval** on the PR before merging. Never auto-merge without human sign-off.
 
 6. **Gate 6 — Release & operational readiness:**
    - Backward-compatible rollout and tested rollback plan (feature flags, safe migrations).
    - Structured logs, metrics/alerts and runbook (`runbook` skill) updated.
+   - Broadcast release deployment notification to Slack with version and changelog link.
    - Post-incident changes linked to a blameless postmortem in `docs/operations/postmortems/`.

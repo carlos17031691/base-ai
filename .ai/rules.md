@@ -19,6 +19,7 @@ Enforced by `.githooks/`:
 2. **Working branch from `development`:** never commit on `main`, `master` or `development`. Create a ticket branch from `development` first (e.g. `git checkout -b feat/PROJ-123-short-slug development`).
 3. **Commit message:** reference the ticket ID in every commit (`feat(PROJ-123): ...`).
 4. **Pull Request to `development`, dual quality gates, resolved conversations & mandatory human approval:** never push directly to `main`, `master` or `development`; push the working branch, open a PR targeting **`development`** (`staging`), publish the `review` + `security` audit report on the PR, ensure all review conversations and comments are explicitly verified and resolved (zero unresolved discussions rule), and obtain mandatory **human approval**. Promote `development` → `main` via release PR for `production`.
+5. **SDLC ChatOps & Slack notifications:** CI/CD pipelines broadcast structured Block Kit notifications to Slack (`SLACK_WEBHOOK_URL`) on: PR opened with Ticket ID, CI failures, Quality Gates passed & ready for human review, and production releases. Must degrade gracefully when the webhook secret is omitted.
 
 ## 4. SDLC & clean code
 - **Lifecycle (`sdlc`):** Understand & trace → Branch & design (`adr` / `rfc`) → Implement & test (`testing`) → Review (`review` + `security`) → Operate (`observability`, `infrastructure`, `docs`, `runbook`, postmortem).

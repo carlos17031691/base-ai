@@ -21,7 +21,12 @@ Integrate third-party providers, AI gateways and LLM services safely and resilie
    - Verify cryptographic signatures (HMAC/public key) and timestamps to prevent spoofing and replay attacks.
    - Deduplicate incoming events by provider event ID in persistent storage (idempotent consumer) and acknowledge quickly (`2xx`), processing heavy work asynchronously when needed.
 
-4. **AI Gateways / Model Routers (e.g. OpenRouter, LiteLLM, Portkey) & LLMs:**
+4. **ChatOps & Slack Webhook Integrations:**
+   - **Structured Payloads (Block Kit):** broadcast SDLC and operational events (PR opened with Ticket ID, CI failures, Ready for Human Review, and Production Releases) via Slack Incoming Webhooks (`SLACK_WEBHOOK_URL`).
+   - **Graceful Degradation:** if `SLACK_WEBHOOK_URL` is omitted or empty, logging must cleanly notify that the webhook is skipped and exit with code 0 without breaking the CI pipeline or application startup.
+   - **Security:** zero hardcoded webhook URLs; load exclusively from secrets manager or GitHub Action secrets.
+
+5. **AI Gateways / Model Routers (e.g. OpenRouter, LiteLLM, Portkey) & LLMs:**
    - **Unified gateway over vendor lock-in:** prefer routing LLM calls through a unified, OpenAI-compatible gateway adapter (such as **OpenRouter** or **LiteLLM**) configured via environment variables (`AI_BASE_URL`, `AI_MODELS` or `AI_MODEL_PRIMARY`, `AI_MODEL_FALLBACK`) so switching or combining providers (Anthropic, OpenAI, Gemini, Llama, DeepSeek, Mistral) requires zero code changes.
    - **Cascading Multi-Model Priority & Quota Rollover:**
      - Configure `AI_MODELS` as a prioritized comma-separated list of model identifiers (e.g. `minimax/minimax-m3.1-flash:free,google/gemma-4-31b-it:free,openai/gpt-4o-mini`).

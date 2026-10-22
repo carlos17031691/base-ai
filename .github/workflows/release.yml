@@ -107,3 +107,10 @@ jobs:
             git push origin main
             git push origin main:development || true
           fi
+
+      - name: Notificar release en Slack
+        if: steps.versioning.outputs.should_publish == 'true'
+        env:
+          RELEASE_VERSION: ${{ steps.versioning.outputs.new_version }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: node .github/scripts/slack-notify.js release_published
