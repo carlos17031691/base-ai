@@ -46,9 +46,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      - name: Notificar en Slack: PR listo para aprobación humana
+      - name: "Notificar en Slack: PR listo para aprobación humana"
         if: success() && github.event_name == 'pull_request' && env.SLACK_WEBHOOK_URL != ''
         run: node .github/scripts/slack-notify.js pr_ready_for_review
-      - name: Notificar en Slack: Fallo de CI
+      - name: "Notificar en Slack: Fallo de CI"
         if: failure() && env.SLACK_WEBHOOK_URL != ''
         run: node .github/scripts/slack-notify.js ci_failure
