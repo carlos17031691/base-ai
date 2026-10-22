@@ -155,7 +155,8 @@ export function handleToolCall(root: string, name: string, args: Record<string, 
       case "search_context": {
         const query = String(args.query || "").trim();
         if (!query) return { text: "Error: Missing required query parameter.", isError: true };
-        const topK = typeof args.topK === "number" ? args.topK : 5;
+        const topK =
+          typeof args.topK === "number" && Number.isInteger(args.topK) && args.topK > 0 ? Math.min(args.topK, 50) : 5;
         const scope = typeof args.scope === "string" ? args.scope : undefined;
         const hits = searchContext(root, query, topK, scope);
         if (!hits.length) return { text: "No matching context chunks found in project." };
@@ -179,9 +180,18 @@ export function handleToolCall(root: string, name: string, args: Record<string, 
       case "add_memory": {
         const note = String(args.note || "").trim();
         if (!note) return { text: "Error: Missing required note parameter.", isError: true };
-        const ticket = typeof args.ticket === "string" ? args.ticket : undefined;
-        const tag = typeof args.tag === "string" ? args.tag : undefined;
-        const service = typeof args.service === "string" ? args.service : undefined;
+        const ticket = typeof args.ticket === "string" ? args.ticket.trim() : undefined;
+        const tag = typeof args.tag === "string" ? args.tag.trim() : undefined;
+        const service = typeof args.service === "string" ? args.service.trim() : undefined;
+        if (ticket && !/^[A-Za-z0-9#_-]{1,64}$/.test(ticket)) {
+          return { text: "Error: Invalid ticket format.", isError: true };
+        }
+        if (tag && !/^#?[A-Za-z0-9_,-]{1,64}$/.test(tag)) {
+          return { text: "Error: Invalid tag format.", isError: true };
+        }
+        if (service && !/^[a-z0-9-]+$/.test(service)) {
+          return { text: "Error: Invalid service name.", isError: true };
+        }
         const entry = memoryAdd(root, note, { ticket, tag, service });
         return { text: `✔ Memory added and agents synchronized:\n${entry}` };
       }
@@ -355,6 +365,9 @@ export function processMcpMessage(root: string, req: JsonRpcRequest): JsonRpcRes
 
 /** Starts the stdio JSON-RPC server loop. */
 export function startMcpServer(root: string): void {
+  if (!existsSync(join(root, ".ai"))) {
+    throw new Error(`Not a base-ai project: ${root} (missing .ai/). Pass --root <dir>.`);
+  }
   // Informative start message on stderr (stdout is reserved exclusively for JSON-RPC)
   process.stderr.write(`[base-ai-mcp] Starting MCP server v${MCP_SERVER_INFO.version} (root: ${root})\n`);
 
@@ -364,22 +377,23 @@ export function startMcpServer(root: string): void {
     const line = raw.trim();
     if (!line) return;
 
+    const send = (r: JsonRpcResponse) => process.stdout.write(JSON.stringify(r) + "\n");
+    let req: JsonRpcRequest;
     try {
-      const req = JSON.parse(line) as JsonRpcRequest;
-      const resp = processMcpMessage(root, req);
-      if (resp !== null) {
-        process.stdout.write(JSON.stringify(resp) + "\n");
-      }
+      req = JSON.parse(line) as JsonRpcRequest;
     } catch (err) {
-      const errResp: JsonRpcResponse = {
-        jsonrpc: "2.0",
-        id: null,
-        error: {
-          code: -32700,
-          message: `Parse error: ${(err as Error).message}`,
-        },
-      };
-      process.stdout.write(JSON.stringify(errResp) + "\n");
+      send({ jsonrpc: "2.0", id: null, error: { code: -32700, message: `Parse error: ${(err as Error).message}` } });
+      return;
+    }
+    if (!req || typeof req !== "object" || Array.isArray(req) || typeof req.method !== "string") {
+      send({ jsonrpc: "2.0", id: null, error: { code: -32600, message: "Invalid Request" } });
+      return;
+    }
+    try {
+      const resp = processMcpMessage(root, req);
+      if (resp !== null) send(resp);
+    } catch (err) {
+      send({ jsonrpc: "2.0", id: req.id ?? null, error: { code: -32603, message: `Internal error: ${(err as Error).message}` } });
     }
   });
 

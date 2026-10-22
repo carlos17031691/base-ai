@@ -1,19 +1,21 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { handleResourceRead, handleToolCall, processMcpMessage, TOOLS, RESOURCES } from "../mcp.js";
+import { Readable, Writable } from "node:stream";
+import { handleResourceRead, handleToolCall, processMcpMessage, startMcpServer, TOOLS, RESOURCES } from "../mcp.js";
 import { init } from "../init.js";
 
-function setupFixture(): string {
+function setupFixture(t: { after(callback: () => void): void }): string {
   const d = mkdtempSync(join(tmpdir(), "base-ai-mcp-test-"));
+  t.after(() => rmSync(d, { recursive: true, force: true }));
   init(d);
   return d;
 }
 
-test("MCP server: initialize handshake and ping", () => {
-  const root = setupFixture();
+test("MCP server: initialize handshake and ping", (t) => {
+  const root = setupFixture(t);
 
   // initialize
   const initResp = processMcpMessage(root, {
@@ -46,8 +48,8 @@ test("MCP server: initialize handshake and ping", () => {
   assert.equal(notifResp, null);
 });
 
-test("MCP server: tools/list and tools/call execution", () => {
-  const root = setupFixture();
+test("MCP server: tools/list and tools/call execution", (t) => {
+  const root = setupFixture(t);
 
   // tools/list
   const listResp = processMcpMessage(root, {
@@ -78,6 +80,7 @@ test("MCP server: tools/list and tools/call execution", () => {
   assert.equal(searchCall?.id, 11);
   const searchContent = (searchCall?.result as any).content[0].text;
   assert.ok(searchContent.length > 0);
+  assert.equal((searchCall?.result as any).isError, false);
 
   // tools/call: get_memory
   const memGetCall = processMcpMessage(root, {
@@ -115,7 +118,7 @@ test("MCP server: tools/list and tools/call execution", () => {
   });
   assert.equal(healthCall?.id, 14);
   const healthContent = (healthCall?.result as any).content[0].text;
-  assert.ok(healthContent.includes("base-ai doctor"));
+  assert.ok(healthContent.includes("doctor health checks passed cleanly"));
 
   // tools/call: get_ai_stats
   const statsCall = processMcpMessage(root, {
@@ -147,8 +150,47 @@ test("MCP server: tools/list and tools/call execution", () => {
   assert.equal((unknownCall?.result as any).isError, true);
 });
 
-test("MCP server: resources/list and resources/read", () => {
-  const root = setupFixture();
+test("MCP server: handleToolCall validation and error paths", (t) => {
+  const root = setupFixture(t);
+
+  // empty search query returns error
+  const emptyQuery = handleToolCall(root, "search_context", { query: "" });
+  assert.equal(emptyQuery.isError, true);
+  assert.ok(emptyQuery.text.includes("Missing required query"));
+
+  // topK clamping and valid hits
+  const searchHit = handleToolCall(root, "search_context", { query: "base-ai", topK: 100 });
+  assert.equal(searchHit.isError, undefined);
+  assert.ok(searchHit.text.includes("base-ai"));
+
+  // empty note returns error
+  const emptyNote = handleToolCall(root, "add_memory", { note: "" });
+  assert.equal(emptyNote.isError, true);
+  assert.ok(emptyNote.text.includes("Missing required note"));
+
+  // secret-like note returns error
+  const secretNote = handleToolCall(root, "add_memory", { note: "Secret API token sk-1234567890123456" });
+  assert.equal(secretNote.isError, true);
+  assert.ok(secretNote.text.includes("Refusing to store a potential secret"));
+
+  // invalid ticket format returns error
+  const invalidTicket = handleToolCall(root, "add_memory", { note: "Note", ticket: "INVALID TICKET with spaces!" });
+  assert.equal(invalidTicket.isError, true);
+  assert.ok(invalidTicket.text.includes("Invalid ticket format"));
+
+  // invalid tag format returns error
+  const invalidTag = handleToolCall(root, "add_memory", { note: "Note", tag: "bad tag with spaces" });
+  assert.equal(invalidTag.isError, true);
+  assert.ok(invalidTag.text.includes("Invalid tag format"));
+
+  // invalid service name returns error
+  const invalidSvc = handleToolCall(root, "add_memory", { note: "Note", service: "../../escape" });
+  assert.equal(invalidSvc.isError, true);
+  assert.ok(invalidSvc.text.includes("Invalid service name"));
+});
+
+test("MCP server: resources/list and resources/read", (t) => {
+  const root = setupFixture(t);
 
   // resources/list
   const resList = processMcpMessage(root, {
@@ -180,8 +222,8 @@ test("MCP server: resources/list and resources/read", () => {
   assert.equal(readMissing?.error?.code, -32602);
 });
 
-test("MCP server: prompts/list and prompts/get", () => {
-  const root = setupFixture();
+test("MCP server: prompts/list and prompts/get", (t) => {
+  const root = setupFixture(t);
 
   const promptList = processMcpMessage(root, {
     jsonrpc: "2.0",
@@ -202,8 +244,8 @@ test("MCP server: prompts/list and prompts/get", () => {
   assert.ok((promptGet?.result as any).messages[0].content.text.includes("secure = true"));
 });
 
-test("MCP server: unknown method error handling", () => {
-  const root = setupFixture();
+test("MCP server: unknown method and startMcpServer validation", (t) => {
+  const root = setupFixture(t);
 
   const unknownResp = processMcpMessage(root, {
     jsonrpc: "2.0",
@@ -212,4 +254,9 @@ test("MCP server: unknown method error handling", () => {
   });
   assert.equal(unknownResp?.id, 99);
   assert.equal(unknownResp?.error?.code, -32601);
+
+  // startMcpServer throws if directory is not a base-ai project
+  assert.throws(() => {
+    startMcpServer(tmpdir());
+  }, /missing \.ai/);
 });

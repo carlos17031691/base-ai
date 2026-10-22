@@ -159,7 +159,7 @@ base-ai doctor
   "mcpServers": {
     "base-ai": {
       "command": "npx",
-      "args": ["-y", "@carlos17031691/base-ai", "mcp"]
+      "args": ["-y", "@carlos17031691/base-ai", "mcp", "--root", "/absolute/path/to/your/project"]
     }
   }
 }
@@ -171,7 +171,7 @@ base-ai doctor
   "mcpServers": {
     "base-ai": {
       "command": "npx",
-      "args": ["-y", "@carlos17031691/base-ai", "mcp"]
+      "args": ["-y", "@carlos17031691/base-ai", "mcp", "--root", "${workspaceFolder}"]
     }
   }
 }
