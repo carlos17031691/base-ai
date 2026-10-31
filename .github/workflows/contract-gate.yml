@@ -1,0 +1,89 @@
+name: Contract Testing Gate (BASE-008 / #25)
+
+on:
+  pull_request:
+    paths:
+            - '**/openapi*.json'
+            - '**/openapi*.yaml'
+            - '**/proto/**'
+            - '**/*.proto'
+            - '.github/workflows/contract-gate.yml'
+
+jobs:
+  contract-gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+            - name: Checkout base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.base_ref }}
+          path: base
+
+            - name: Checkout head
+        uses: actions/checkout@v4
+        with:
+          path: head
+
+            - name: OASDiff - OpenAPI Breaking Check
+        uses: oasdiff/oasdiff-action@v1
+        id: oasdiff
+        with:
+          base: base/openapi.json
+          head: head/openapi.json
+          fail-on-breaking: 'true'
+          format: 'text'
+        continue-on-error: true
+
+            - name: Buf Breaking - Protobuf Breaking Check
+        uses: bufbuild/buf-breaking-action@v1
+        id: buf
+        with:
+          input: head/proto
+          against: base/proto
+        continue-on-error: true
+
+            - name: Post Compatibility Report
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const oasResult = '${{ steps.oasdiff.outcome }}';
+            const bufResult = '${{ steps.buf.outcome }}';
+            
+            let body = '### 🔍 Contract Testing Gate Report (BASE-008 / #25)\n\n';
+            
+            if (oasResult === 'failure') {
+              body += '❌ **BREAKING: OpenAPI change detected**\n';
+              body += '- Type: field rename / type change (number -> string) / nullable -> required / enum removed\n';
+              body += '- Action Required: Need v2 or deprecated flag, see #25\n\n';
+            } else if (oasResult === 'success') {
+              body += '✅ OpenAPI: No breaking changes\n\n';
+            } else {
+              body += 'ℹ️ OpenAPI: No spec found (gate ready for future specs)\n\n';
+            }
+
+            if (bufResult === 'failure') {
+              body += '❌ **BREAKING: Protobuf change detected**\n';
+              body += '- Check buf breaking logs\n\n';
+            } else if (bufResult === 'success') {
+              body += '✅ Protobuf: No breaking changes\n\n';
+            } else {
+              body += 'ℹ️ Protobuf: No proto changes (gate ready)\n\n';
+            }
+
+            if (oasResult === 'failure' || bufResult === 'failure') {
+              body += '**Result: BLOCKED** - Merge blocked without version bump per #25 roadmap.';
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: body
+              });
+              core.setFailed('Breaking change detected - see report');
+            } else {
+              body += '**Result: PASSED** - No breaking changes.';
+              console.log(body);
+            }
