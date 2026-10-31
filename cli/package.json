@@ -1,6 +1,6 @@
 {
   "name": "@carlos17031691/base-ai",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "description": "base-ai CLI: generic scaffolding for AI-driven software projects",
   "type": "module",
   "bin": {
