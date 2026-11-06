@@ -9,81 +9,145 @@ on:
       - '**/*.proto'
       - '.github/workflows/contract-gate.yml'
 
+concurrency:
+  group: contract-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   contract-gate:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: write
     steps:
       - name: Checkout base
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ github.base_ref }}
           path: base
+          persist-credentials: false
 
       - name: Checkout head
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           path: head
+          persist-credentials: false
+
+      - name: Detect specs
+        id: detect
+        run: |
+          has_openapi=false
+          has_proto=false
+          for f in base/openapi*.json base/openapi*.yaml base/**/openapi*.json base/**/openapi*.yaml; do
+            if [ -f "$f" ]; then has_openapi=true; break; fi
+          done
+          if [ -d "base/proto" ] || find base -name '*.proto' -print -quit 2>/dev/null | grep -q .; then
+            has_proto=true
+          fi
+          echo "has_openapi=$has_openapi" >> "$GITHUB_OUTPUT"
+          echo "has_proto=$has_proto" >> "$GITHUB_OUTPUT"
 
       - name: OASDiff - OpenAPI Breaking Check
-        uses: oasdiff/oasdiff-action@9e56cf8b3aff7edb326d5767d3d23f96127e20c3 # v0.1.21
+        if: steps.detect.outputs.has_openapi == 'true'
+        uses: oasdiff/oasdiff-action/breaking@9e56cf8b3aff7edb326d5767d3d23f96127e20c3 # v0.1.21
         id: oasdiff
         with:
           base: base/openapi.json
-          head: head/openapi.json
-          fail-on-breaking: 'true'
-          format: 'text'
+          revision: head/openapi.json
+          fail-on: ERR
+          review: false
         continue-on-error: true
 
+      - name: Setup Buf
+        if: steps.detect.outputs.has_proto == 'true'
+        uses: bufbuild/buf-setup-action@a47c93e0b1648d5651a065437926377d060baa99 # v1.50.0
+
       - name: Buf Breaking - Protobuf Breaking Check
-        uses: bufbuild/buf-breaking-action@c57b3d842a5c3f3b454756ef65305a50a587c5ba # v1.1.4 (archived)
+        if: steps.detect.outputs.has_proto == 'true'
         id: buf
-        with:
-          input: head/proto
-          against: base/proto
+        run: buf breaking head/proto --against base/proto
         continue-on-error: true
 
       - name: Post Compatibility Report
         if: always()
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        env:
+          OAS_OUTCOME: ${{ steps.oasdiff.outcome }}
+          BUF_OUTCOME: ${{ steps.buf.outcome }}
+          HAS_OPENAPI: ${{ steps.detect.outputs.has_openapi }}
+          HAS_PROTO: ${{ steps.detect.outputs.has_proto }}
         with:
           script: |
-            const oasResult = '${{ steps.oasdiff.outcome }}';
-            const bufResult = '${{ steps.buf.outcome }}';
+            const marker = '<!-- contract-gate-report -->';
+            const oasResult = process.env.OAS_OUTCOME;
+            const bufResult = process.env.BUF_OUTCOME;
+            const hasOpenapi = process.env.HAS_OPENAPI === 'true';
+            const hasProto = process.env.HAS_PROTO === 'true';
 
-            let body = '### Contract Testing Gate Report (BASE-008 / #25)\n\n';
+            let body = `${marker}\n### Contract Testing Gate Report (BASE-008 / #25)\n\n`;
 
-            if (oasResult === 'failure') {
+            if (!hasOpenapi) {
+              body += 'OpenAPI: No spec found (gate ready for future specs)\n\n';
+            } else if (oasResult === 'failure') {
               body += '**BREAKING: OpenAPI change detected**\n';
               body += '- Type: field rename / type change / nullable->required / enum removed\n';
               body += '- Action Required: Need v2 or deprecated flag, see #25\n\n';
             } else if (oasResult === 'success') {
               body += 'OpenAPI: No breaking changes\n\n';
             } else {
-              body += 'OpenAPI: No spec found (gate ready for future specs)\n\n';
+              body += 'OpenAPI: Check was cancelled\n\n';
             }
 
-            if (bufResult === 'failure') {
+            if (!hasProto) {
+              body += 'Protobuf: No proto files found (gate ready)\n\n';
+            } else if (bufResult === 'failure') {
               body += '**BREAKING: Protobuf change detected**\n';
               body += '- Check buf breaking logs\n\n';
             } else if (bufResult === 'success') {
               body += 'Protobuf: No breaking changes\n\n';
             } else {
-              body += 'Protobuf: No proto changes (gate ready)\n\n';
+              body += 'Protobuf: Check was cancelled\n\n';
             }
 
-            if (oasResult === 'failure' || bufResult === 'failure') {
+            const hasBreaking =
+              (hasOpenapi && oasResult === 'failure') ||
+              (hasProto && bufResult === 'failure');
+
+            if (hasBreaking) {
               body += '**Result: BLOCKED** - Merge blocked without version bump per #25 roadmap.';
-              await github.rest.issues.createComment({
+            } else {
+              body += '**Result: PASSED** - No breaking changes.';
+            }
+
+            try {
+              const { data: comments } = await github.rest.issues.listComments({
                 issue_number: context.issue.number,
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                body: body
               });
+              const existing = comments.find(c => c.body && c.body.includes(marker));
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existing.id,
+                  body: body,
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: body,
+                });
+              }
+            } catch (err) {
+              core.warning(`Could not post PR comment (expected on fork PRs): ${err.message}`);
+            }
+
+            await core.summary.addRaw(body).write();
+
+            if (hasBreaking) {
               core.setFailed('Breaking change detected - see report');
-            } else {
-              body += '**Result: PASSED** - No breaking changes.';
-              core.info(body);
             }
