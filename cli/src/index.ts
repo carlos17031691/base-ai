@@ -5,7 +5,7 @@ import { runDoctor } from "./doctor.js";
 import { init } from "./init.js";
 import { memoryAdd, memoryList } from "./memory.js";
 import { listServices, serviceAdd, serviceNew, serviceRemove, syncServices } from "./services.js";
-import { computeAiStats } from "./stats.js";
+import { computeAiStats, renderCiReport } from "./stats.js";
 import { aiSync } from "./sync.js";
 import { startMcpServer } from "./mcp.js";
 
@@ -14,7 +14,7 @@ const USAGE = `base-ai <command> [--root <dir>]
 Commands:
   init <dir> [--ci none|github|gitlab]              Create a new project from the base-ai template
   ai sync                                           Export .ai/ to every agent's format and refresh context index
-  ai stats                                          Report token footprint of always-on rules/memory and on-demand skills
+  ai stats [--max-tokens N] [--ci]                   Report token footprint; --max-tokens fails if exceeded; --ci outputs Markdown
   doctor                                            Validate services.yaml and fail if AI artefacts are out of date
   context index                                     Build/refresh .ai/context-index.json across root and src/<name>
   context search <query> [--scope s] [--top k]      Retrieve ranked chunks (ADRs, RFCs, runbooks, contracts, memory)
@@ -63,12 +63,29 @@ function main(argv: string[]): number {
   }
 
   if (cmd === "ai" && sub === "stats") {
-    const st = computeAiStats(root);
-    const status = st.withinBudget ? "✔ within budget" : "⚠ exceeds recommended budget";
-    console.log(`Always-on context (rules + memory + skill index): ~${st.alwaysOnTokens} tokens (budget: ${st.alwaysOnBudget}) [${status}]`);
-    console.log(`On-demand skills (${st.skills.length} skills, loaded only when invoked): ~${st.skillsTotalTokens} tokens total\n`);
-    for (const s of st.skills) {
-      console.log(`  - ${s.name.padEnd(16)} ~${String(s.estimatedTokens).padStart(4)} tokens (${s.chars} chars)`);
+    const maxTokens = str(flags["max-tokens"]) ? Number(str(flags["max-tokens"])) : undefined;
+    const ci = flags.ci === true;
+    const st = computeAiStats(root, { maxTokens, ci });
+
+    if (ci) {
+      console.log(renderCiReport(st));
+    } else {
+      const status = st.withinBudget ? "✔ within budget" : "⚠ exceeds budget";
+      console.log(`Always-on context (rules + memory + skill index): ~${st.alwaysOnTokens} tokens (budget: ${st.alwaysOnBudget}) [${status}]`);
+      console.log(`On-demand skills (${st.skills.length} skills, loaded only when invoked): ~${st.skillsTotalTokens} tokens total\n`);
+      for (const s of st.skills) {
+        console.log(`  - ${s.name.padEnd(16)} ~${String(s.estimatedTokens).padStart(4)} tokens (${s.chars} chars)`);
+      }
+    }
+
+    if (st.violations.length > 0) {
+      if (!ci) {
+        console.log("\n✖ Token budget violations:");
+        for (const v of st.violations) {
+          console.log(`  - ${v.name}: ${v.estimatedTokens} tokens (max: ${maxTokens})`);
+        }
+      }
+      return 1;
     }
     return 0;
   }
