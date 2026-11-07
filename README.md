@@ -142,6 +142,12 @@ base-ai ai stats --max-tokens 5000 --ci
 
 # 10. Run AI eval suites (deterministic + LLM-as-judge)
 base-ai eval --ci
+
+# 11. Start local dev mesh (Docker Compose from services.yaml)
+base-ai dev
+base-ai dev --service api
+base-ai dev stop
+base-ai dev status
 ```
 
 ---
@@ -212,6 +218,7 @@ flowchart LR
 - [x] **[#25](https://github.com/carlos17031691/base-ai/issues/25) Automated API Breaking Change Detection (Contract Testing Gate):** GitHub Actions workflow running `oasdiff` (OpenAPI) and `buf breaking` (gRPC/Protobuf) on PRs to block unversioned contract breaks across services.
 - [x] **[#23](https://github.com/carlos17031691/base-ai/issues/23) Interactive CLI Wizard (`base-ai wizard`):** Zero-dependency interactive TUI for scaffolding new projects and services with guided selection of cloud provider, IaC tool, and CI/CD target.
 - [x] **[#26](https://github.com/carlos17031691/base-ai/issues/26) Deterministic AI Evaluation Suite (`base-ai eval`):** YAML-driven eval runner with deterministic assertions (exact, contains, regex, gte/lte, json_schema), context search quality evals, optional LLM-as-judge via `EVAL_LLM_URL`, SSRF protection, and CI Markdown reports.
+- [x] **[#27](https://github.com/carlos17031691/base-ai/issues/27) Multi-Service Local Dev Mesh (`base-ai dev`):** Dynamic Docker Compose generation from `services.yaml` with per-service port mapping, environment variables, infrastructure dependencies (Redis, Postgres, etc.), hot-reload volume mounts, service name validation, and image reference security checks.
 
 ---
 
@@ -219,7 +226,6 @@ flowchart LR
 
 
 #### 🔵 Phase 3: Local Dev Mesh & Polyglot Blueprints (Long-Term)
-- [ ] **[#27](https://github.com/carlos17031691/base-ai/issues/27) Multi-Service Local Dev Mesh (`base-ai dev`):** Dynamic Docker Compose generation orchestrating all services in `services.yaml` with hot reloading and mock cloud/AI dependencies.
 - [ ] **[#28](https://github.com/carlos17031691/base-ai/issues/28) Specialized Service Blueprint Catalog:** Production-ready templates including `FastAPI + UV`, `Go + Gin/sqlc`, `RAG + pgvector/hybrid search`, and `MCP Server`.
 
 #### 🟣 Phase 4: Intelligent Operations & Self-Healing (Vision)
