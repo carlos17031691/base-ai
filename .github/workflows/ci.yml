@@ -46,6 +46,8 @@ jobs:
         run: mkdir -p coverage && npm run build && node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/lcov.info --test-reporter=spec --test-reporter-destination=stdout dist/test/
       - name: Artefactos de IA sincronizados con .ai/
         run: node dist/index.js doctor --root ..
+      - name: Token Budget Guardrail (BASE-024)
+        run: node dist/index.js ai stats --max-tokens 5000 --ci --root .. >> "$GITHUB_STEP_SUMMARY"
       - name: SonarCloud Scan
         if: env.SONAR_TOKEN != ''
         uses: SonarSource/sonarcloud-github-action@master
