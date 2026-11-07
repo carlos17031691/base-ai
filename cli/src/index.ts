@@ -10,6 +10,7 @@ import { aiSync } from "./sync.js";
 import { startMcpServer } from "./mcp.js";
 import { runEvals, renderEvalReport } from "./eval.js";
 import { runWizard } from "./wizard.js";
+import { devUp, devStop, devStatus } from "./dev.js";
 
 const USAGE = `base-ai <command> [--root <dir>]
 
@@ -27,6 +28,9 @@ Commands:
   service remove <name> [--purge]                   Remove it from services.yaml (--purge deletes src/<name> if clean)
   sync                                              Clone/fast-forward all services, install hooks and run ai sync
   eval [--ci] [--suite name]                         Run AI eval suites from .ai/evals/; --ci outputs Markdown
+  dev [--service name]                               Start local dev mesh (Docker Compose from services.yaml)
+  dev stop                                           Stop the local dev mesh
+  dev status                                         Show running dev mesh containers
   mcp                                               Start Model Context Protocol (MCP) server over stdio for AI agents
   wizard                                            Interactive guided setup for new projects and services
 `;
@@ -210,6 +214,21 @@ function main(argv: string[]): number {
       console.error(`✖ ${(e as Error).message}`);
       process.exitCode = 1;
     });
+    return 0;
+  }
+  if (cmd === "dev" && sub === "stop") {
+    devStop(root);
+    console.log("✔ Dev mesh stopped");
+    return 0;
+  }
+  if (cmd === "dev" && sub === "status") {
+    console.log(devStatus(root));
+    return 0;
+  }
+  if (cmd === "dev") {
+    const result = devUp(root, str(flags.service));
+    console.log(`✔ Dev mesh started: ${result.services.join(", ")}${result.infra.length ? ` + infra: ${result.infra.join(", ")}` : ""}`);
+    if (result.skipped.length) console.log(`  skipped (no Dockerfile): ${result.skipped.join(", ")}`);
     return 0;
   }
   if (cmd === "wizard") {
