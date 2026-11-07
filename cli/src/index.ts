@@ -178,7 +178,10 @@ function main(argv: string[]): number {
     return 0;
   }
   if (cmd === "wizard") {
-    runWizard(root).then((code) => { process.exitCode = code; });
+    runWizard(root).then((code) => { process.exitCode = code; }).catch((e) => {
+      console.error(`✖ ${(e as Error).message}`);
+      process.exitCode = 1;
+    });
     return 0;
   }
 
