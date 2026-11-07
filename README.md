@@ -139,6 +139,9 @@ base-ai wizard
 
 # 9. Token budget guardrail in CI (exit 1 on violations)
 base-ai ai stats --max-tokens 5000 --ci
+
+# 10. Run AI eval suites (deterministic + LLM-as-judge)
+base-ai eval --ci
 ```
 
 ---
@@ -208,13 +211,12 @@ flowchart LR
 - [x] **[#24](https://github.com/carlos17031691/base-ai/issues/24) CI Token Budget FinOps Guardrail (`base-ai ai stats --max-tokens N --ci`):** Enforce hard token and cost ceilings in CI with Markdown reports (tokens, estimated USD, latency per component). Exit code 1 on violations blocks the pipeline.
 - [x] **[#25](https://github.com/carlos17031691/base-ai/issues/25) Automated API Breaking Change Detection (Contract Testing Gate):** GitHub Actions workflow running `oasdiff` (OpenAPI) and `buf breaking` (gRPC/Protobuf) on PRs to block unversioned contract breaks across services.
 - [x] **[#23](https://github.com/carlos17031691/base-ai/issues/23) Interactive CLI Wizard (`base-ai wizard`):** Zero-dependency interactive TUI for scaffolding new projects and services with guided selection of cloud provider, IaC tool, and CI/CD target.
+- [x] **[#26](https://github.com/carlos17031691/base-ai/issues/26) Deterministic AI Evaluation Suite (`base-ai eval`):** YAML-driven eval runner with deterministic assertions (exact, contains, regex, gte/lte, json_schema), context search quality evals, optional LLM-as-judge via `EVAL_LLM_URL`, SSRF protection, and CI Markdown reports.
 
 ---
 
 ### 🚀 Upcoming Horizons
 
-#### 🟡 Phase 2: AI Evals (Mid-Term)
-- [ ] **[#26](https://github.com/carlos17031691/base-ai/issues/26) Deterministic AI Evaluation Suite (`base-ai eval`):** Automated regression testing for prompts, tools, and RAG pipelines (faithfulness, precision, recall, and hallucination rate) directly in CI.
 
 #### 🔵 Phase 3: Local Dev Mesh & Polyglot Blueprints (Long-Term)
 - [ ] **[#27](https://github.com/carlos17031691/base-ai/issues/27) Multi-Service Local Dev Mesh (`base-ai dev`):** Dynamic Docker Compose generation orchestrating all services in `services.yaml` with hot reloading and mock cloud/AI dependencies.
