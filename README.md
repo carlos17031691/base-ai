@@ -133,6 +133,12 @@ base-ai context search "How do we handle database migrations?"
 
 # 7. Validate project health & detect configuration drift in CI
 base-ai doctor
+
+# 8. Interactive guided setup (wizard)
+base-ai wizard
+
+# 9. Token budget guardrail in CI (exit 1 on violations)
+base-ai ai stats --max-tokens 5000 --ci
 ```
 
 ---
@@ -199,59 +205,15 @@ flowchart LR
 - [x] **Zero Unresolved Discussions:** Strict blocker rule requiring all review comments to be resolved before merge.
 - [x] **ChatOps Integration:** Automated Slack® Block Kit notifications for PR lifecycle, quality gates, CI failures, and releases.
 - [x] **[#22](https://github.com/carlos17031691/base-ai/issues/22) Native Model Context Protocol (MCP) Server (`base-ai mcp`):** Zero-dependency stdio server exposing memory, context search, doctor health checks, token FinOps, service catalogs, and SDLC prompts.
+- [x] **[#24](https://github.com/carlos17031691/base-ai/issues/24) CI Token Budget FinOps Guardrail (`base-ai ai stats --max-tokens N --ci`):** Enforce hard token and cost ceilings in CI with Markdown reports (tokens, estimated USD, latency per component). Exit code 1 on violations blocks the pipeline.
+- [x] **[#25](https://github.com/carlos17031691/base-ai/issues/25) Automated API Breaking Change Detection (Contract Testing Gate):** GitHub Actions workflow running `oasdiff` (OpenAPI) and `buf breaking` (gRPC/Protobuf) on PRs to block unversioned contract breaks across services.
+- [x] **[#23](https://github.com/carlos17031691/base-ai/issues/23) Interactive CLI Wizard (`base-ai wizard`):** Zero-dependency interactive TUI for scaffolding new projects and services with guided selection of cloud provider, IaC tool, and CI/CD target.
 
 ---
 
 ### 🚀 Upcoming Horizons
 
-#### 🟢 Phase 1: Developer Experience & Model Context Protocol (Short-Term)
-- [ ] **[#23](https://github.com/carlos17031691/base-ai/issues/23) Interactive Terminal UI Wizard (`base-ai wizard`):** Interactive prompt for scaffolding projects, selecting stacks (Node, Python, Go, Rust), cloud providers, and CI/CD targets.
-- [ ] **[#24](https://github.com/carlos17031691/base-ai/issues/24) CI Token Budget FinOps Guardrail (`base-ai ai stats`):** Enforce hard token and cost ceilings in CI to prevent prompt bloat and uncontrolled API spend.
-
-#### 🟡 Phase 2: Contract Governance & AI Evals (Mid-Term)
-- [ ] **[#25](https://github.com/carlos17031691/base-ai/issues/25) Automated API Breaking Change Detection (Contract Testing Gate):** Automated semantic diffing (`oasdiff` / `buf break`) on OpenAPI and gRPC schemas in PRs to block unversioned contract breaks across services.
-- [ ] **[#26](https://github.com/carlos17031691/base-ai/issues/26) Deterministic AI Evaluation Suite (`base-ai eval`):** Automated regression testing for prompts, tools, and RAG pipelines (faithfulness, precision, recall, and hallucination rate) directly in CI.
-
-#### 🔵 Phase 3: Local Dev Mesh & Polyglot Blueprints (Long-Term)
-- [ ] **[#27](https://github.com/carlos17031691/base-ai/issues/27) Multi-Service Local Dev Mesh (`base-ai dev`):** Dynamic Docker Compose generation orchestrating all services in `services.yaml` with hot reloading and mock cloud/AI dependencies.
-- [ ] **[#28](https://github.com/carlos17031691/base-ai/issues/28) Specialized Service Blueprint Catalog:** Production-ready templates including `FastAPI + UV`, `Go + Gin/sqlc`, `RAG + pgvector/hybrid search`, and `MCP Server`.
-
-#### 🟣 Phase 4: Intelligent Operations & Self-Healing (Vision)
-- [ ] **[#29](https://github.com/carlos17031691/base-ai/issues/29) Intelligent Incident Triage & Automated Postmortems (`base-ai triage`):** Ingest production tracebacks or Sentry alerts, match them semantically against ADRs and Runbooks, and generate mitigation guidance and blameless postmortems.
-
----
-
-## 🗺️ Product Roadmap
-
-```mermaid
-flowchart LR
-    H1["Phase 1: Developer Experience & MCP"] --> H2["Phase 2: Contract Governance & Evals"]
-    H2 --> H3["Phase 3: Local Dev Mesh & Blueprints"]
-    H3 --> H4["Phase 4: Intelligent Triage & Auto-Healing"]
-```
-
-### ✅ Completed Milestones
-- [x] **ADR-0001:** CLI architecture, service manifest (`services.yaml`), and single AI source of truth (`.ai/`).
-- [x] **ADR-0002:** Strict Git hooks, branch discipline (`development` staging), and mandatory ticket traceability.
-- [x] **ADR-0003:** Runtime bootstrap, socket binding on `PORT`, `/healthz` + `/readyz`, and graceful `SIGTERM` shutdown.
-- [x] **FinOps & AI Operations:** Multi-model priority cascade (`AI_MODELS`), quota rollover, and JSON schema prompt contracts.
-- [x] **Automated Releases:** Continuous versioning, provenance-backed npm publishing, and GitHub Releases.
-- [x] **Dual Quality Gates:** SonarCloud™ SAST ($\ge 80\%$ test coverage, zero vulnerabilities) & CodeRabbit™ AI cognitive review.
-- [x] **PR Review Governance:** Severity-based triage (High/Medium blockers vs. Low tech debt) with mandatory human approval.
-- [x] **Zero Unresolved Discussions:** Strict blocker rule requiring all review comments to be resolved before merge.
-- [x] **ChatOps Integration:** Automated Slack® Block Kit notifications for PR lifecycle, quality gates, CI failures, and releases.
-
----
-
-### 🚀 Upcoming Horizons
-
-#### 🟢 Phase 1: Developer Experience & Model Context Protocol (Short-Term)
-- [ ] **[#22](https://github.com/carlos17031691/base-ai/issues/22) Native Model Context Protocol (MCP) Server (`base-ai mcp`):** Expose `base-ai` capabilities over stdio/SSE so agents (Claude, Cursor, Antigravity) can natively query project memory, search context, and run health checks.
-- [ ] **[#23](https://github.com/carlos17031691/base-ai/issues/23) Interactive Terminal UI Wizard (`base-ai wizard`):** Interactive prompt for scaffolding projects, selecting stacks (Node, Python, Go, Rust), cloud providers, and CI/CD targets.
-- [ ] **[#24](https://github.com/carlos17031691/base-ai/issues/24) CI Token Budget FinOps Guardrail (`base-ai ai stats`):** Enforce hard token and cost ceilings in CI to prevent prompt bloat and uncontrolled API spend.
-
-#### 🟡 Phase 2: Contract Governance & AI Evals (Mid-Term)
-- [ ] **[#25](https://github.com/carlos17031691/base-ai/issues/25) Automated API Breaking Change Detection (Contract Testing Gate):** Automated semantic diffing (`oasdiff` / `buf break`) on OpenAPI and gRPC schemas in PRs to block unversioned contract breaks across services.
+#### 🟡 Phase 2: AI Evals (Mid-Term)
 - [ ] **[#26](https://github.com/carlos17031691/base-ai/issues/26) Deterministic AI Evaluation Suite (`base-ai eval`):** Automated regression testing for prompts, tools, and RAG pipelines (faithfulness, precision, recall, and hallucination rate) directly in CI.
 
 #### 🔵 Phase 3: Local Dev Mesh & Polyglot Blueprints (Long-Term)

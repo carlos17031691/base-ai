@@ -3,3 +3,4 @@ src/*
 .ai/context-index.json
 .vscode/
 .DS_Store
+.npmrc
