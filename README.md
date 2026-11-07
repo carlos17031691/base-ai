@@ -217,6 +217,7 @@ flowchart LR
 
 ### 🚀 Upcoming Horizons
 
+
 #### 🔵 Phase 3: Local Dev Mesh & Polyglot Blueprints (Long-Term)
 - [ ] **[#27](https://github.com/carlos17031691/base-ai/issues/27) Multi-Service Local Dev Mesh (`base-ai dev`):** Dynamic Docker Compose generation orchestrating all services in `services.yaml` with hot reloading and mock cloud/AI dependencies.
 - [ ] **[#28](https://github.com/carlos17031691/base-ai/issues/28) Specialized Service Blueprint Catalog:** Production-ready templates including `FastAPI + UV`, `Go + Gin/sqlc`, `RAG + pgvector/hybrid search`, and `MCP Server`.
