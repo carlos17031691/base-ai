@@ -8,6 +8,7 @@ import { listServices, serviceAdd, serviceNew, serviceRemove, syncServices } fro
 import { computeAiStats, renderCiReport } from "./stats.js";
 import { aiSync } from "./sync.js";
 import { startMcpServer } from "./mcp.js";
+import { runEvals, renderEvalReport } from "./eval.js";
 import { runWizard } from "./wizard.js";
 
 const USAGE = `base-ai <command> [--root <dir>]
@@ -25,6 +26,7 @@ Commands:
   service add <name> <repo> [--branch b]            Register an existing repo in services.yaml, clone it & install hooks
   service remove <name> [--purge]                   Remove it from services.yaml (--purge deletes src/<name> if clean)
   sync                                              Clone/fast-forward all services, install hooks and run ai sync
+  eval [--ci] [--suite name]                         Run AI eval suites from .ai/evals/; --ci outputs Markdown
   mcp                                               Start Model Context Protocol (MCP) server over stdio for AI agents
   wizard                                            Interactive guided setup for new projects and services
 `;
@@ -175,6 +177,39 @@ function main(argv: string[]): number {
   }
   if (cmd === "mcp") {
     startMcpServer(root);
+    return 0;
+  }
+  if (cmd === "eval") {
+    const ci = flags.ci === true;
+    const suiteFilter = str(flags.suite);
+    runEvals(root).then((raw) => {
+      const filtered = suiteFilter ? raw.results.filter((r) => r.suiteId === suiteFilter) : raw.results;
+      const report = suiteFilter ? {
+        results: filtered,
+        passed: filtered.filter((r) => r.status === "pass").length,
+        failed: filtered.filter((r) => r.status === "fail").length,
+        skipped: filtered.filter((r) => r.status === "skip").length,
+        errored: filtered.filter((r) => r.status === "error").length,
+        totalMs: raw.totalMs,
+      } : raw;
+      if (ci) {
+        console.log(renderEvalReport(report));
+      } else {
+        if (report.results.length === 0) {
+          console.log("No eval suites found in .ai/evals/");
+        } else {
+          for (const r of report.results) {
+            const icon = r.status === "pass" ? "✔" : r.status === "fail" ? "✖" : r.status === "skip" ? "⏭" : "!";
+            console.log(`  ${icon} ${r.suiteId} / ${r.caseId}: ${r.status}${r.error ? ` — ${r.error}` : ""}`);
+          }
+          console.log(`\n${report.passed} passed, ${report.failed} failed, ${report.skipped} skipped, ${report.errored} errors (${report.totalMs}ms)`);
+        }
+      }
+      process.exitCode = report.failed > 0 || report.errored > 0 ? 1 : 0;
+    }).catch((e) => {
+      console.error(`✖ ${(e as Error).message}`);
+      process.exitCode = 1;
+    });
     return 0;
   }
   if (cmd === "wizard") {
