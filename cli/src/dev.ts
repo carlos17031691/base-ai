@@ -132,7 +132,7 @@ export function generateCompose(root: string, serviceFilter?: string): ComposeRe
 function loadManifestWithDev(root: string): ManifestWithDev {
   const manifestPath = join(root, "services.yaml");
   if (!existsSync(manifestPath)) throw new Error("services.yaml not found — run base-ai init first");
-  return (parse(readFileSync(manifestPath, "utf8")) ?? {}) as ManifestWithDev;
+  return (parse(readFileSync(manifestPath, "utf8"), { schema: "core" }) ?? {}) as ManifestWithDev;
 }
 
 function ensureGitignore(root: string): void {
