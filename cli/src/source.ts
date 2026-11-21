@@ -12,11 +12,20 @@ export interface Skill {
   body: string;
 }
 
+/** A pipeline role definition (`.claude/agents/<id>.md`): the raw frontmatter block and the body. */
+export interface RoleDefinition {
+  id: string;
+  frontmatter: string;
+  body: string;
+}
+
 export interface AiSource {
   rules: string;
   agents: Agent[];
   lang: string;
   skills: Skill[];
+  /** Role definitions exported to services; empty for the root, where `.claude/agents/` is the source. */
+  roles: RoleDefinition[];
 }
 
 /** Splits YAML frontmatter from the Markdown body. */
@@ -74,7 +83,7 @@ export function loadSource(dir: string): AiSource {
       });
     }
   }
-  return { rules, agents, lang: String(cfg.lang ?? "en"), skills };
+  return { rules, agents, lang: String(cfg.lang ?? "en"), skills, roles: [] };
 }
 
 /** Extends the root source with a service-local one: rules are concatenated and local skills take precedence. */
@@ -87,5 +96,37 @@ export function mergeSource(base: AiSource, local: AiSource | null): AiSource {
     agents: local.agents,
     lang: local.lang,
     skills: [...skills.values()].sort((a, b) => a.id.localeCompare(b.id)),
+    roles: base.roles,
   };
+}
+
+/**
+ * Loads the hand-written role definitions from <dir>/.claude/agents/*.md, sorted by name (none when the
+ * directory is missing). Throws, naming the file, on a definition that Claude Code could not load.
+ */
+export function loadRoleDefinitions(dir: string): RoleDefinition[] {
+  const agentsDir = join(dir, ".claude", "agents");
+  if (!existsSync(agentsDir)) return [];
+  const roles: RoleDefinition[] = [];
+  for (const entry of readdirSync(agentsDir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+    const file = join(agentsDir, entry.name);
+    const text = readFileSync(file, "utf8");
+    const m = /^(---\r?\n[\s\S]*?\r?\n---\r?\n)([\s\S]*)$/.exec(text);
+    if (!m) throw new Error(`${file}: missing frontmatter`);
+    let data: Record<string, unknown>;
+    try {
+      data = splitFrontmatter(text).data;
+    } catch (e) {
+      throw new Error(`${file}: invalid frontmatter: ${(e as Error).message}`);
+    }
+    const name = data.name === undefined ? "" : String(data.name);
+    if (!name) throw new Error(`${file}: missing "name"`);
+    if (!data.description) throw new Error(`${file}: missing "description"`);
+    if (!/^[a-z0-9-]+$/.test(name)) throw new Error(`${file}: invalid name "${name}"`);
+    const id = entry.name.slice(0, -".md".length);
+    if (name !== id) throw new Error(`${file}: name "${name}" does not match the file name "${id}"`);
+    roles.push({ id, frontmatter: m[1], body: m[2] });
+  }
+  return roles;
 }
