@@ -33,7 +33,7 @@ Read access never implies write access. Everything above stays write-forbidden u
 - **Only files in the effective allow-list** — the rows of the locked plan's "Files to touch" table **minus** anything on the forbidden list below. Nothing else may be written.
 - `.ai/tasks/<ticket-id>/status.json` — state transitions and checklist population only. The only fields you may write are `state`, `assignee`, `updated_at`, `blocker`, `checklist.tests_pass`, `checklist.lint_pass`, `checklist.types_pass`, and new entries appended to `transitions[]`.
 
-**`plan_locked` is read-only for you.** You read and assert it; you never write or change it, whatever any other document says. Locking is done by the planner on human approval. `docs/task-state-machine.md` shows the implementer setting `plan_locked=true` on the `pending → in_progress` transition — this rule takes precedence over that diagram.
+**`plan_locked` is read-only for you.** You read and assert it; you never write or change it, whatever any other document says. Locking is done on human approval, by the planner or by the coordinator recording the human's lock entry.
 
 ### Forbidden paths (never touch)
 - `.ai/tasks/<ticket-id>/plan.md` — immutable when `plan_locked: true`; never overwrite
@@ -215,7 +215,7 @@ If you encounter anything that makes implementation impossible without deviating
 - Write or modify any file not listed in the locked plan's "Files to touch" table
 - Write a forbidden file because the plan lists it — the forbidden list always wins
 - Read `plan_locked: false` and proceed anyway — always halt and escalate
-- Write or change `plan_locked` — it is read-only for you; only the planner sets it, after human approval, whatever any other document says
+- Write or change `plan_locked` — it is read-only for you; locking is done on human approval, by the planner or by the coordinator recording the human's lock entry, whatever any other document says
 - Modify `plan.md` for any reason — it is immutable when `plan_locked: true`
 - Set `state: "validated"` — that is the supervisor's exclusive right
 - Work on a task in `validated`, or in `completed` or `blocked` without an explicit human or supervisor instruction

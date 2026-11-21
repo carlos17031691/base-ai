@@ -9,19 +9,21 @@ The state lives in `.ai/tasks/<ticket-id>/status.json`.
 |---|---|---|
 | `pending` | Plan written, awaiting human approval | planner |
 | `in_progress` | Implementation underway | implementer (on start) |
-| `completed` | Implementation done, checklist populated by the implementer (`false` where no runner exists; QA measures); the supervisor does not gate on these values | implementer (on finish) |
+| `completed` | Implementation done, checklist populated by the implementer (`false` where no runner exists; QA measures); the supervisor does not gate on these values | implementer (on finish); human, only to withdraw a validation |
 | `validated` | All supervisor gates met on evidence: review approved and QA passed for the same latest completion, reports consistent, post-lock decisions recorded, tech debt registered. Not PR approval | supervisor |
-| `blocked` | Escalated to human — no agent may proceed unilaterally | planner or implementer (the reviewer, QA and supervisor halt instead) |
+| `blocked` | Escalated to human — no agent may proceed unilaterally | planner or implementer (the reviewer, QA and supervisor halt instead); the human resets it to the previous state |
 
 ## Transition rules
 
 ```
-pending ──(human approves plan)──► in_progress   [implementer sets plan_locked=true, assignee=implementer]
+pending ──(human approves plan)──► pending       [planner sets plan_locked=true on approval given to it; otherwise the coordinator records the human's lock entry]
+pending ──(implementer claims)──► in_progress    [implementer sets assignee=implementer; asserts plan_locked, never writes it]
 in_progress ──(checklist complete)──► completed  [implementer sets checklist fields]
 completed ──(all supervisor gates met)──► validated [supervisor only]
+validated ──(finding after validation)──► completed [human only: withdraws the validation, recorded in decisions.md; an explicit send-back follows]
 completed ──(reviewer or qa fails)──► in_progress  [supervisor names the gate; implementer records the re-entry on an explicit human or supervisor send-back]
 any ──(unresolvable blocker)──► blocked            [planner or implementer only; reviewer, QA and supervisor halt instead]
-blocked ──(human resolves)──► <previous state>     [human resets manually]
+blocked ──(human resolves)──► <previous state>     [human resets manually, or the implementer re-enters blocked → in_progress on an explicit human instruction]
 ```
 
 ## File layout
@@ -84,7 +86,7 @@ blocked ──(human resolves)──► <previous state>     [human resets manua
 ## Invariants (all agents must enforce)
 
 1. **Only the supervisor** may set `state: "validated"`.
-2. **Only the implementer** may set `state: "in_progress"` or `state: "completed"`.
+2. **Only the implementer** may set `state: "in_progress"` or `state: "completed"`, except two human acts, each recorded in `decisions.md`: resetting `blocked` to its previous state, and withdrawing a validation (`validated → completed`).
 3. **`plan.md` is immutable** when `plan_locked: true` — no agent may overwrite it; escalate to human.
 4. **The planner and the implementer** may set `state: "blocked"` with a `blocker` description; the reviewer, QA and supervisor halt instead.
 5. `transitions[]` is **append-only** — no agent may remove or modify past entries.
@@ -105,4 +107,4 @@ cp templates/task/improvement-report.md .ai/tasks/$TICKET/
 # Edit status.json: set ticket_id and created_at
 ```
 
-Or use the `pipeline` skill which includes the initialization steps.
+The planner does this in its Step 1 (`.claude/agents/planner.md`). The `pipeline` skill summarises the whole protocol and who acts next; it creates no files.
