@@ -1,0 +1,17 @@
+{
+  "ticket_id": "",
+  "state": "pending",
+  "plan_locked": false,
+  "assignee": null,
+  "created_at": "",
+  "updated_at": "",
+  "transitions": [],
+  "checklist": {
+    "tests_pass": false,
+    "lint_pass": false,
+    "types_pass": false,
+    "review_verdict": null,
+    "qa_verdict": null
+  },
+  "blocker": null
+}
