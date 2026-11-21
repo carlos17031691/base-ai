@@ -76,3 +76,91 @@ test("renderCiReport lists violations when present", () => {
   assert.ok(md.includes("### Violations"));
   assert.ok(md.includes("**huge**"));
 });
+
+function addDefinition(dir: string, name: string, bodyChars: number): number {
+  mkdirSync(join(dir, ".claude/agents"), { recursive: true });
+  const text = `---\nname: ${name}\ndescription: Role ${name}\n---\n${"z".repeat(bodyChars)}`;
+  writeFileSync(join(dir, ".claude/agents", `${name}.md`), text);
+  return text.length;
+}
+
+function setBudgets(dir: string, yaml: string): void {
+  writeFileSync(join(dir, ".ai/config.yaml"), `version: 1\n${yaml}`);
+}
+
+test("role definitions are reported with whole-file chars and estimated tokens, largest first", () => {
+  const d = makeProject();
+  const small = addDefinition(d, "planner", 100);
+  const big = addDefinition(d, "qa", 4000);
+
+  const report = computeAiStats(d);
+  assert.deepEqual(report.definitions, [
+    { name: "qa", chars: big, estimatedTokens: Math.ceil(big / 4) },
+    { name: "planner", chars: small, estimatedTokens: Math.ceil(small / 4) },
+  ]);
+  assert.equal(report.definitionsTotalTokens, Math.ceil(big / 4) + Math.ceil(small / 4));
+});
+
+test("a project with no budgets key gets the definitions report and no violation", () => {
+  const d = makeProject();
+  addDefinition(d, "qa", 40_000);
+
+  const report = computeAiStats(d, { maxTokens: 5000 });
+  assert.equal(report.definitionBudgets, null);
+  assert.deepEqual(report.definitionViolations, []);
+  assert.equal(report.withinBudget, true);
+});
+
+test("a definition above its budget is a violation naming the role and both numbers, without --max-tokens", () => {
+  const d = makeProject();
+  const chars = addDefinition(d, "qa", 4000);
+  setBudgets(d, "budgets:\n  definitions:\n    qa: 10\n");
+
+  const report = computeAiStats(d);
+  const tokens = Math.ceil(chars / 4);
+  assert.deepEqual(report.definitionViolations, [{ name: "qa", estimatedTokens: tokens, budget: 10 }]);
+  assert.equal(report.withinBudget, false);
+  assert.ok(renderCiReport(report).includes(`- definition qa: ${tokens} tokens (budget: 10)`));
+});
+
+test("a definition with no entry is a violation when budgets.definitions exists", () => {
+  const d = makeProject();
+  addDefinition(d, "qa", 100);
+  const chars = addDefinition(d, "planner", 100);
+  setBudgets(d, "budgets:\n  definitions:\n    qa: 5000\n");
+
+  const report = computeAiStats(d);
+  assert.deepEqual(report.definitionViolations, [{ name: "planner", estimatedTokens: Math.ceil(chars / 4), budget: null }]);
+  assert.ok(renderCiReport(report).includes("definition planner:"));
+  assert.ok(renderCiReport(report).includes("no entry in budgets.definitions"));
+});
+
+test("definitions within their budgets pass and the CI report shows each budget", () => {
+  const d = makeProject();
+  addDefinition(d, "qa", 100);
+  setBudgets(d, "budgets:\n  definitions:\n    qa: 5000\n");
+
+  const report = computeAiStats(d, { maxTokens: 5000 });
+  assert.deepEqual(report.definitionViolations, []);
+  assert.equal(report.withinBudget, true);
+  const md = renderCiReport(report);
+  assert.ok(md.includes("### Role definitions"));
+  assert.ok(/\| qa \| \d+ \| \d+ \| 5000 \|/.test(md));
+  assert.ok(md.includes("All components within budget."));
+});
+
+test("an invalid budget value throws naming the key", () => {
+  for (const yaml of [
+    "budgets:\n  definitions:\n    qa: 0\n",
+    "budgets:\n  definitions:\n    qa: 1.5\n",
+    "budgets:\n  definitions:\n    qa: many\n",
+  ]) {
+    const d = makeProject();
+    addDefinition(d, "qa", 100);
+    setBudgets(d, yaml);
+    assert.throws(() => computeAiStats(d), /budgets\.definitions\.qa/);
+  }
+  const d = makeProject();
+  setBudgets(d, "budgets:\n  definitions: 5\n");
+  assert.throws(() => computeAiStats(d), /budgets\.definitions/);
+});
