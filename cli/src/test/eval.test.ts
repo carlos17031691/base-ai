@@ -268,32 +268,29 @@ cases:
 
 // ── validateLlmUrl ────────────────────────────────────────────────────
 
-test("validateLlmUrl allows valid HTTPS URLs", () => {
-  assert.doesNotThrow(() => validateLlmUrl("https://api.openai.com/v1/chat/completions"));
-  assert.doesNotThrow(() => validateLlmUrl("http://my-llm-proxy.example.com:8080/v1"));
+test("validateLlmUrl allows valid public URLs", () => {
+  for (const url of ["https://api.openai.com/v1/chat/completions", "http://my-llm-proxy.example.com:8080/v1"]) {
+    assert.doesNotThrow(() => validateLlmUrl(url), `should allow ${url}`);
+  }
 });
 
-test("validateLlmUrl blocks private IPv4 loopback", () => {
-  assert.throws(() => validateLlmUrl("http://127.0.0.1:8080/v1"), /SSRF blocked/);
-  assert.throws(() => validateLlmUrl("https://127.1.2.3/v1"), /SSRF blocked/);
-});
-
-test("validateLlmUrl blocks private RFC-1918 ranges", () => {
-  assert.throws(() => validateLlmUrl("http://10.0.0.1/v1"), /SSRF blocked/);
-  assert.throws(() => validateLlmUrl("http://192.168.1.1/v1"), /SSRF blocked/);
-  assert.throws(() => validateLlmUrl("http://172.16.0.1/v1"), /SSRF blocked/);
-  assert.throws(() => validateLlmUrl("http://172.31.255.255/v1"), /SSRF blocked/);
-});
-
-test("validateLlmUrl blocks link-local and metadata addresses", () => {
-  assert.throws(() => validateLlmUrl("http://169.254.169.254/latest/meta-data/"), /SSRF blocked/);
-  assert.throws(() => validateLlmUrl("http://metadata.google.internal/computeMetadata/v1/"), /SSRF blocked/);
-  assert.throws(() => validateLlmUrl("http://localhost/v1"), /SSRF blocked/);
-});
-
-test("validateLlmUrl blocks non-http protocols", () => {
-  assert.throws(() => validateLlmUrl("file:///etc/passwd"), /Unsupported protocol/);
-  assert.throws(() => validateLlmUrl("ftp://example.com/v1"), /Unsupported protocol/);
+test("validateLlmUrl blocks private/reserved addresses", () => {
+  const blocked: [string, RegExp][] = [
+    ["http://127.0.0.1:8080/v1", /SSRF blocked/],
+    ["https://127.1.2.3/v1", /SSRF blocked/],
+    ["http://10.0.0.1/v1", /SSRF blocked/],
+    ["http://192.168.1.1/v1", /SSRF blocked/],
+    ["http://172.16.0.1/v1", /SSRF blocked/],
+    ["http://172.31.255.255/v1", /SSRF blocked/],
+    ["http://169.254.169.254/latest/meta-data/", /SSRF blocked/],
+    ["http://metadata.google.internal/computeMetadata/v1/", /SSRF blocked/],
+    ["http://localhost/v1", /SSRF blocked/],
+    ["file:///etc/passwd", /Unsupported protocol/],
+    ["ftp://example.com/v1", /Unsupported protocol/],
+  ];
+  for (const [url, pattern] of blocked) {
+    assert.throws(() => validateLlmUrl(url), pattern, `should block ${url}`);
+  }
 });
 
 test("validateLlmUrl rejects malformed URLs", () => {
