@@ -41,3 +41,19 @@ Enforced by `.githooks/`:
 ## 6. Security by design (`security`)
 - **Zero secrets/PII** in code, tests, logs, memory, prompts or docs; load from env/secret manager.
 - **Validate all untrusted input** (HTTP, webhooks, CLI, files, queues, LLM/tool outputs) at boundaries; enforce least-privilege authn/authz and pin vetted dependencies.
+
+## 7. Multi-agent pipeline (`pipeline`)
+- **Never let a single agent self-validate its own work.** Use the pipeline: planner → implementer → reviewer → qa → supervisor → improvement.
+- **Task state machine:** every task lives in `.ai/tasks/<ticket-id>/` with `status.json` tracking `pending → in_progress → completed → validated`. See `docs/task-state-machine.md`.
+- **Role isolation:** each agent has explicit allowed/forbidden paths. The implementer cannot touch `.ai/rules.md`, `.github/`, or `cli/`. The supervisor is the only agent that may set `state: "validated"`.
+- **Locked plans:** `plan.md` becomes immutable once `plan_locked: true`. Any plan change requires human decision — no agent may replan to unblock itself.
+- **Available agent roles** (invoke by name in Claude Code): `planner`, `implementer`, `reviewer`, `qa`, `supervisor`, `improvement`.
+
+## Available agents
+
+- **planner**: Analyzes a ticket and produces a locked plan.md before any code is written. Invoke at the start of every task.
+- **implementer**: _(coming soon)_ Executes the approved plan inside src/ and tests/ only.
+- **reviewer**: _(coming soon)_ Read-only code review producing review-report.md.
+- **qa**: _(coming soon)_ Runs the test suite and produces qa-report.md.
+- **supervisor**: _(coming soon)_ Sole authority to advance task state to validated.
+- **improvement**: _(coming soon)_ Evaluates pipeline cycle quality and proposes skill updates.
