@@ -1,6 +1,8 @@
 src/*
 !src/.gitkeep
 .ai/context-index.json
+# Task artifacts are local by default; commit them explicitly when you want audit trail in the repo
+.ai/tasks/
 .vscode/
 .DS_Store
 .npmrc

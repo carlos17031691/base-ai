@@ -150,12 +150,12 @@ function ensureGitignore(root: string): void {
 
 export function checkPrerequisites(): { ok: boolean; error?: string } {
   try {
-    execFileSync("docker", ["--version"], { stdio: "pipe" });
+    execFileSync("docker", ["--version"], { stdio: "pipe" }); // NOSONAR typescript:S4036 — developer CLI wrapping Docker; PATH lookup is intentional
   } catch {
     return { ok: false, error: "docker not found — install Docker to use base-ai dev" };
   }
   try {
-    const version = execFileSync("docker", ["compose", "version", "--short"], { stdio: "pipe" }).toString().trim();
+    const version = execFileSync("docker", ["compose", "version", "--short"], { stdio: "pipe" }).toString().trim(); // NOSONAR typescript:S4036
     const major = parseInt(version.replace(/^v/, "").split(".")[0], 10);
     if (isNaN(major) || major < 2) {
       return { ok: false, error: `Docker Compose v2+ required (found ${version})` };

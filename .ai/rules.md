@@ -41,3 +41,19 @@ Enforced by `.githooks/`:
 ## 6. Security by design (`security`)
 - **Zero secrets/PII** in code, tests, logs, memory, prompts or docs; load from env/secret manager.
 - **Validate all untrusted input** (HTTP, webhooks, CLI, files, queues, LLM/tool outputs) at boundaries; enforce least-privilege authn/authz and pin vetted dependencies.
+
+## 7. Multi-agent pipeline (`pipeline`)
+- **Never let a single agent self-validate its own work.** Use the pipeline: planner → implementer → reviewer → qa → supervisor → improvement.
+- **Task state machine:** every task lives in `.ai/tasks/<ticket-id>/` with `status.json` tracking `pending → in_progress → completed → validated`. See `docs/task-state-machine.md`.
+- **Role isolation:** each agent has explicit allowed/forbidden paths. The implementer cannot touch `.ai/rules.md`, `.github/`, or `cli/`. The supervisor is the only agent that may set `state: "validated"`.
+- **Locked plans:** `plan.md` becomes immutable once `plan_locked: true`. Any plan change requires human decision — no agent may replan to unblock itself.
+- **Available agent roles** (invoke by name in Claude Code): `planner`, `implementer`, `reviewer`, `qa`, `supervisor`, `improvement`.
+
+## Available agents
+
+- **planner**: Analyzes a ticket and produces a locked plan.md before any code is written. Invoke at the start of every task.
+- **implementer**: Executes the locked plan.md and writes only the files in its "Files to touch" table. Invoke after the plan is locked.
+- **reviewer**: Read-only review of a completed task against its locked plan, producing review-report.md with a verdict. Invoke after the implementer reaches completed.
+- **qa**: Verifies each acceptance criterion of a completed, review-approved task against the deliverable, running the project's tests and checks where they exist, and produces qa-report.md with a verdict. Invoke after the reviewer approves.
+- **supervisor**: Sole authority to advance a completed task to validated: checks that review and QA passed for the same latest completion, that the reports agree, that post-lock decisions are recorded and that tech debt is registered (read-only gh); otherwise names the blocking gate and who must act. Invoke after QA passes.
+- **improvement**: Evaluates one finished pipeline cycle (validated, or completed with review approved and QA passed) against each role's definition and writes improvement-report.md with per-role findings and exact proposed edits to skills, agent definitions, templates and the state-machine doc; never applies them — a human decides. Invoke after the supervisor validates, or after QA passes when the supervisor cannot run.
