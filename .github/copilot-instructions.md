@@ -54,8 +54,8 @@ Enforced by `.githooks/`:
 ## Available agents
 
 - **planner**: Analyzes a ticket and produces a locked plan.md before any code is written. Invoke at the start of every task.
-- **implementer**: _(coming soon)_ Executes the approved plan inside src/ and tests/ only.
-- **reviewer**: _(coming soon)_ Read-only code review producing review-report.md.
+- **implementer**: Executes the locked plan.md and writes only the files in its "Files to touch" table. Invoke after the plan is locked.
+- **reviewer**: Read-only review of a completed task against its locked plan, producing review-report.md with a verdict. Invoke after the implementer reaches completed.
 - **qa**: _(coming soon)_ Runs the test suite and produces qa-report.md.
 - **supervisor**: _(coming soon)_ Sole authority to advance task state to validated.
 - **improvement**: _(coming soon)_ Evaluates pipeline cycle quality and proposes skill updates.
