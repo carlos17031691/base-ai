@@ -1,11 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runDoctor } from "../doctor.js";
 import { serviceNew } from "../services.js";
+import { aiSync } from "../sync.js";
 
 const git = (args: string[], cwd: string) => execFileSync("git", args, { cwd, stdio: "ignore" });
 
@@ -34,4 +35,18 @@ test("runDoctor passes on clean project + service and catches hook/remote/env is
   assert.ok(report.issues.some((i) => i.includes("does not match services.yaml")));
   assert.ok(report.issues.some((i) => i.includes("forbidden secret/env file tracked in Git: .env")));
   assert.ok(report.issues.some((i) => i.includes("forbidden secret/env file tracked in Git: terraform.tfstate")));
+});
+
+test("runDoctor covers role definitions exported to services (BASE-046-D1)", () => {
+  const d = fixture();
+  mkdirSync(join(d, ".claude/agents"), { recursive: true });
+  writeFileSync(join(d, ".claude/agents/qa.md"), "---\nname: qa\ndescription: Verifies criteria\n---\n\nBody\n");
+  const svc = serviceNew(d, "api", "git@example.com:org/api.git");
+  assert.match(readFileSync(join(svc, ".claude/agents/qa.md"), "utf8"), /Source: root \.claude\/agents\//);
+  assert.deepEqual(runDoctor(d).issues, []);
+
+  writeFileSync(join(d, ".claude/agents/qa.md"), "---\nname: qa\ndescription: Verifies criteria\n---\n\nChanged\n");
+  assert.ok(runDoctor(d).issues.some((i) => i.endsWith("AI artefact out of date: .claude/agents/qa.md") && i.includes("api")));
+  aiSync(d);
+  assert.deepEqual(runDoctor(d).issues, []);
 });

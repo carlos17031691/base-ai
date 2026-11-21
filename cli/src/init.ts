@@ -1,8 +1,9 @@
 import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readdirSync, renameSync, writeFileSync } from "node:fs";
-import { basename, dirname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { aiSync } from "./sync.js";
+import { isShippedPath } from "./shipped.js";
 import { MEMORY_HEADER } from "./memory.js";
 import { bootstrapGitBaseline, writeServiceHooks } from "./services.js";
 
@@ -16,16 +17,10 @@ export function templateRoot(): string {
   return existsSync(bundled) ? bundled : resolve(pkg, "..");
 }
 
-/** What gets copied: AI source, service templates and the docs skeleton (.gitkeep only). */
+/** What gets copied: the paths `isShippedPath` accepts (AI source, service and task templates,
+ * the role definitions, the docs skeleton and the state-machine doc). */
 function shouldCopy(src: string, base: string): boolean {
-  const rel = relative(base, src);
-  if (rel === "") return true;
-  const [top] = rel.split(sep);
-  if (top === ".ai") return !rel.endsWith("generated.json") && !rel.endsWith("context-index.json");
-  if (top === "templates") return true;
-  if (top === "docs") return !rel.endsWith(".md");
-  if (rel === ".coderabbit.yaml" || rel === "sonar-project.properties") return true;
-  return false;
+  return isShippedPath(relative(base, src));
 }
 
 const SERVICES = `# Service registry. Each service is an independent repo cloned into src/<name>.
@@ -38,7 +33,7 @@ services: []
 #    ai: inherit         # inherit | none
 `;
 
-const GITIGNORE = "src/*\n!src/.gitkeep\n.ai/context-index.json\n";
+const GITIGNORE = "src/*\n!src/.gitkeep\n.ai/context-index.json\n.ai/tasks/\n";
 
 const CI: Record<Exclude<CiProvider, "none">, { path: string; content: string }> = {
   github: {
