@@ -89,7 +89,7 @@ Exported from `.ai/` into every AI coding assistant:
 | Skill | Purpose |
 |-------|---------|
 | `discovery` | Turn raw ideas into MVP boundaries, candidate services, Epics & Gherkin User Stories (Jira, ClickUp, Trello) |
-| `sdlc` | End-to-end engineering lifecycle & gates (Traceability → Branch → Design → Implement → Verify → Review → Release) |
+| `sdlc` | End-to-end engineering lifecycle & gates (Traceability → Branch → Design → Implement → Verify → Review → Release), with the pipeline agent and task state for each gate |
 | `architecture` | Domain isolation, Dependency Inversion, backward-compatible contracts & resilience patterns |
 | `integrations` | External APIs, webhook signature verification, Slack ChatOps & resilient LLM gateways (OpenRouter, LiteLLM) |
 | `ai-ops` | Model tiering, prompt prefix caching, token optimization & cost telemetry (AI FinOps) |
