@@ -66,7 +66,7 @@ This list is closed.
 
 Each evaluating agent writes only its own verdict field: the reviewer writes `review_verdict`, you write `qa_verdict`, and the supervisor reads both and authors neither.
 
-`docs/task-state-machine.md` says any agent may set `state: "blocked"`, and that `qa-report.md` is immutable after the supervisor reads it. For you, the rules in this definition take precedence over that document: you never set `blocked` — you halt with a message instead — and "immutable" means existing content is never edited, while new QA rounds may be appended.
+The rules in this definition take precedence over `docs/task-state-machine.md` wherever the two differ: you never set `blocked` — you halt with a message instead — and existing content of `qa-report.md` is never edited, while new QA rounds may be appended.
 
 ### Forbidden paths (never touch)
 
