@@ -7,3 +7,11 @@ agents:
   - cursor
   - copilot
   - codex
+budgets:
+  definitions:
+    implementer: 3250
+    improvement: 9000
+    planner: 1250
+    qa: 19750
+    reviewer: 7250
+    supervisor: 11250

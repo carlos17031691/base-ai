@@ -139,6 +139,8 @@ base-ai doctor
 base-ai wizard
 
 # 9. Token budget guardrail in CI (exit 1 on violations)
+#    Also reports each role definition in .claude/agents/ (chars, estimated tokens, total)
+#    and fails when one exceeds its budget in .ai/config.yaml (budgets.definitions)
 base-ai ai stats --max-tokens 5000 --ci
 
 # 10. Run AI eval suites (deterministic + LLM-as-judge)
@@ -153,7 +155,8 @@ base-ai dev status
 
 ### 🧑‍🤝‍🧑 Multi-agent pipeline
 
-- **New projects:** `init` ships the six role definitions in `.claude/agents/` (`planner`, `implementer`, `reviewer`, `qa`, `supervisor`, `improvement`), the task state machine in `docs/task-state-machine.md` and the task templates in `templates/task/`. The root `.claude/agents/*.md` files are editable source (see ADR-0004).
+- **New projects:** `init` ships the six role definitions in `.claude/agents/` (`planner`, `implementer`, `reviewer`, `qa`, `supervisor`, `improvement`), the task state machine in `docs/task-state-machine.md` and the task templates in `templates/task/`. The root `.claude/agents/*.md` files are editable source (see ADR-0004). Every role definition carries a `tools:` list in its frontmatter, so each role gets only the tools it names (least privilege, and less context per run).
+- **Definition budgets:** `ai stats` (plain and `--ci`) measures each role definition as a whole file, frontmatter included (chars and estimated tokens, plus the total), and enforces `budgets.definitions` in `.ai/config.yaml`, a map of role to a maximum number of estimated tokens. It exits 1, naming the role and both numbers, when a definition is above its budget or has no entry in the map; this applies with or without `--max-tokens`. A project with no `budgets` key gets the report and no violation. To raise a budget, change the role's value in `.ai/config.yaml` through a PR whose approved plan says so.
 - **Services:** `ai sync` exports the definitions to every service with `ai: inherit` and Claude enabled, as generated files in `src/<name>/.claude/agents/`, checked by `doctor`. Services do not yet get the state-machine doc or the task templates (follow-up).
 - **Task state:** `.ai/tasks/` is git-ignored in the root and in services created by `service new`.
 - **Upgrading a project created with ≤ 0.8.0:** copy `.claude/agents/*.md` and `docs/task-state-machine.md` from a fresh `init`, add `.ai/tasks/` to `.gitignore`, and delete any hand-made copies of the definitions in services before running `ai sync`.

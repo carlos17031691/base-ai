@@ -1,4 +1,4 @@
-import { loadSource } from "./source.js";
+import { loadRoleDefinitions, loadSource } from "./source.js";
 
 export interface TokenItem {
   name: string;
@@ -13,6 +13,25 @@ export interface AiStatsReport {
   skillsTotalTokens: number;
   skills: TokenItem[];
   violations: TokenItem[];
+  /** Role definitions (`.claude/agents/<name>.md`, whole file), largest first. */
+  definitions: TokenItem[];
+  definitionsTotalTokens: number;
+  /** `budgets.definitions` of `.ai/config.yaml`; null when the project sets none. */
+  definitionBudgets: Record<string, number> | null;
+  definitionViolations: DefinitionViolation[];
+}
+
+/** A definition above its budget, or (budget null) with no entry while `budgets.definitions` exists. */
+export interface DefinitionViolation {
+  name: string;
+  estimatedTokens: number;
+  budget: number | null;
+}
+
+export function describeDefinitionViolation(v: DefinitionViolation): string {
+  return v.budget === null
+    ? `definition ${v.name}: ${v.estimatedTokens} tokens (no entry in budgets.definitions)`
+    : `definition ${v.name}: ${v.estimatedTokens} tokens (budget: ${v.budget})`;
 }
 
 export interface GuardrailOptions {
@@ -68,13 +87,37 @@ export function computeAiStats(root: string, opts?: GuardrailOptions): AiStatsRe
     }
   }
 
+  // Each agent run loads its whole definition, so the whole file is measured, frontmatter included.
+  const definitions: TokenItem[] = loadRoleDefinitions(root)
+    .map((r) => {
+      const chars = r.frontmatter.length + r.body.length;
+      return { name: r.id, chars, estimatedTokens: Math.ceil(chars / 4) };
+    })
+    .sort((a, b) => b.estimatedTokens - a.estimatedTokens);
+  const definitionBudgets = src.definitionBudgets ?? null;
+  // Budgets come from the project's config, so they apply with or without --max-tokens.
+  const definitionViolations: DefinitionViolation[] = [];
+  if (definitionBudgets) {
+    for (const d of definitions) {
+      const budget = definitionBudgets[d.name] ?? null;
+      if (budget === null || d.estimatedTokens > budget) {
+        definitionViolations.push({ name: d.name, estimatedTokens: d.estimatedTokens, budget });
+      }
+    }
+  }
+
   return {
     alwaysOnTokens,
     alwaysOnBudget: maxTokens ?? ALWAYS_ON_BUDGET,
-    withinBudget: violations.length === 0 && alwaysOnTokens <= (maxTokens ?? ALWAYS_ON_BUDGET),
+    withinBudget:
+      violations.length === 0 && definitionViolations.length === 0 && alwaysOnTokens <= (maxTokens ?? ALWAYS_ON_BUDGET),
     skillsTotalTokens,
     skills,
     violations,
+    definitions,
+    definitionsTotalTokens: definitions.reduce((sum, d) => sum + d.estimatedTokens, 0),
+    definitionBudgets,
+    definitionViolations,
   };
 }
 
@@ -94,12 +137,27 @@ export function renderCiReport(report: AiStatsReport): string {
   lines.push("");
   lines.push(`**Budget:** ${report.alwaysOnBudget} tokens/component | **Pricing basis:** Claude Sonnet input @ $${USD_PER_INPUT_MTOK}/MTok`);
 
-  if (report.violations.length > 0) {
+  if (report.definitions.length > 0) {
+    lines.push("");
+    lines.push("### Role definitions (loaded whole by each agent run)");
+    lines.push("");
+    lines.push(`| Definition | Chars | Tokens | Budget |`);
+    lines.push(`|------------|------:|-------:|-------:|`);
+    for (const d of report.definitions) {
+      lines.push(`| ${d.name} | ${d.chars} | ${d.estimatedTokens} | ${report.definitionBudgets?.[d.name] ?? "-"} |`);
+    }
+    lines.push(`| **Total** | | ${report.definitionsTotalTokens} | |`);
+  }
+
+  if (report.violations.length > 0 || report.definitionViolations.length > 0) {
     lines.push("");
     lines.push("### Violations");
     lines.push("");
     for (const v of report.violations) {
       lines.push(`- **${v.name}**: ${v.estimatedTokens} tokens (exceeds ${report.alwaysOnBudget})`);
+    }
+    for (const v of report.definitionViolations) {
+      lines.push(`- ${describeDefinitionViolation(v)}`);
     }
   } else {
     lines.push("");

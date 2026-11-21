@@ -26,6 +26,8 @@ export interface AiSource {
   skills: Skill[];
   /** Role definitions exported to services; empty for the root, where `.claude/agents/` is the source. */
   roles: RoleDefinition[];
+  /** `budgets.definitions` of config.yaml: estimated-token cap per role definition; absent when not configured. */
+  definitionBudgets?: Record<string, number>;
 }
 
 /** Splits YAML frontmatter from the Markdown body. */
@@ -44,6 +46,22 @@ function parseTargets(raw: unknown, file: string): Agent[] {
   return list as Agent[];
 }
 
+/** Reads `budgets.definitions` (role -> positive integer); throws naming the key on any other value. */
+function parseDefinitionBudgets(cfg: Record<string, unknown>, file: string): Record<string, number> | undefined {
+  if (cfg.budgets === undefined) return undefined;
+  const isMap = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+  if (!isMap(cfg.budgets)) throw new Error(`${file}: "budgets" must be a map`);
+  const defs = cfg.budgets.definitions;
+  if (defs === undefined) return undefined;
+  if (!isMap(defs)) throw new Error(`${file}: "budgets.definitions" must be a map of role to tokens`);
+  for (const [role, value] of Object.entries(defs)) {
+    if (!Number.isInteger(value) || (value as number) <= 0) {
+      throw new Error(`${file}: "budgets.definitions.${role}" must be a positive integer`);
+    }
+  }
+  return defs as Record<string, number>;
+}
+
 /** Loads the single AI source from <dir>/.ai. */
 export function loadSource(dir: string): AiSource {
   const ai = join(dir, ".ai");
@@ -52,6 +70,7 @@ export function loadSource(dir: string): AiSource {
   const cfgPath = join(ai, "config.yaml");
   const cfg = existsSync(cfgPath) ? ((parse(readFileSync(cfgPath, "utf8")) ?? {}) as Record<string, unknown>) : {};
   const agents = parseTargets(cfg.agents ?? "all", cfgPath);
+  const definitionBudgets = parseDefinitionBudgets(cfg, cfgPath);
 
   const rulesPath = join(ai, "rules.md");
   const baseRules = existsSync(rulesPath) ? readFileSync(rulesPath, "utf8").trim() : "";
@@ -83,7 +102,7 @@ export function loadSource(dir: string): AiSource {
       });
     }
   }
-  return { rules, agents, lang: String(cfg.lang ?? "en"), skills, roles: [] };
+  return { rules, agents, lang: String(cfg.lang ?? "en"), skills, roles: [], ...(definitionBudgets ? { definitionBudgets } : {}) };
 }
 
 /** Extends the root source with a service-local one: rules are concatenated and local skills take precedence. */
