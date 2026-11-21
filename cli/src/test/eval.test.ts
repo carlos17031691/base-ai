@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { checkAssertion, loadEvalSuites, runEvals, renderEvalReport } from "../eval.js";
+import { checkAssertion, loadEvalSuites, runEvals, renderEvalReport, validateLlmUrl, resolveEnvVars } from "../eval.js";
 
 function makeEvalProject(suiteYaml: string): string {
   const d = mkdtempSync(join(tmpdir(), "base-ai-eval-"));
@@ -264,4 +264,155 @@ cases:
   const report = await runEvals(d);
   assert.equal(report.results.length, 1);
   assert.equal(report.results[0].status, "pass");
+});
+
+// ── validateLlmUrl ────────────────────────────────────────────────────
+
+test("validateLlmUrl allows valid public URLs", () => {
+  for (const url of ["https://api.openai.com/v1/chat/completions", "http://my-llm-proxy.example.com:8080/v1"]) {
+    assert.doesNotThrow(() => validateLlmUrl(url), `should allow ${url}`);
+  }
+});
+
+test("validateLlmUrl blocks private/reserved addresses", () => {
+  const blocked: [string, RegExp][] = [
+    ["http://127.0.0.1:8080/v1", /SSRF blocked/],
+    ["https://127.1.2.3/v1", /SSRF blocked/],
+    ["http://10.0.0.1/v1", /SSRF blocked/],
+    ["http://192.168.1.1/v1", /SSRF blocked/],
+    ["http://172.16.0.1/v1", /SSRF blocked/],
+    ["http://172.31.255.255/v1", /SSRF blocked/],
+    ["http://169.254.169.254/latest/meta-data/", /SSRF blocked/],
+    ["http://metadata.google.internal/computeMetadata/v1/", /SSRF blocked/],
+    ["http://localhost/v1", /SSRF blocked/],
+    ["file:///etc/passwd", /Unsupported protocol/],
+    ["ftp://example.com/v1", /Unsupported protocol/],
+  ];
+  for (const [url, pattern] of blocked) {
+    assert.throws(() => validateLlmUrl(url), pattern, `should block ${url}`);
+  }
+});
+
+test("validateLlmUrl rejects malformed URLs", () => {
+  assert.throws(() => validateLlmUrl("not-a-url"));
+});
+
+// ── resolveEnvVars ────────────────────────────────────────────────────
+
+test("resolveEnvVars returns undefined for undefined input", () => {
+  assert.equal(resolveEnvVars(undefined), undefined);
+});
+
+test("resolveEnvVars returns empty string for empty string", () => {
+  assert.equal(resolveEnvVars(""), undefined);
+});
+
+test("resolveEnvVars substitutes known env vars", () => {
+  process.env["__TEST_EVAL_LLM__"] = "https://example.com";
+  const result = resolveEnvVars("${__TEST_EVAL_LLM__}/v1");
+  delete process.env["__TEST_EVAL_LLM__"];
+  assert.equal(result, "https://example.com/v1");
+});
+
+test("resolveEnvVars uses empty string for unset env vars", () => {
+  delete process.env["__UNSET_EVAL_VAR__"];
+  const result = resolveEnvVars("prefix-${__UNSET_EVAL_VAR__}-suffix");
+  assert.equal(result, "prefix--suffix");
+});
+
+// ── loadEvalSuites validation edge cases ─────────────────────────────
+
+test("loadEvalSuites rejects case missing id", () => {
+  const yaml = `suite: bad
+cases:
+  - type: deterministic
+    input: { value: "x" }
+    assertions:
+      - type: exact
+        value: "x"
+`;
+  const d = makeEvalProject(yaml);
+  assert.throws(() => loadEvalSuites(d), /case missing 'id'/);
+});
+
+test("loadEvalSuites rejects case missing type", () => {
+  const yaml = `suite: bad
+cases:
+  - id: c1
+    input: { value: "x" }
+    assertions:
+      - type: exact
+        value: "x"
+`;
+  const d = makeEvalProject(yaml);
+  assert.throws(() => loadEvalSuites(d), /missing 'type'/);
+});
+
+// ── M1 fix: skipped llm_judge assertions do not inflate pass rate ─────
+
+test("M1 fix: deterministic case with only llm_judge assertions and no URL is skip, not pass", async () => {
+  const yaml = `suite: m1-fix
+cases:
+  - id: llm-only-det
+    type: deterministic
+    input:
+      value: "hello"
+    assertions:
+      - type: llm_judge
+        criteria: "Is it a greeting?"
+        threshold: 0.8
+`;
+  const d = makeEvalProject(yaml);
+  const report = await runEvals(d);
+  assert.equal(report.results[0].status, "skip", "case with only skipped LLM assertions should be skip, not pass");
+  assert.equal(report.skipped, 1);
+  assert.equal(report.passed, 0);
+});
+
+test("M1 fix: mixed case passes on deterministic assertions even when llm_judge is skipped", async () => {
+  const yaml = `suite: m1-mixed
+cases:
+  - id: mixed
+    type: deterministic
+    input:
+      value: "hello world"
+    assertions:
+      - type: contains
+        value: "hello"
+      - type: llm_judge
+        criteria: "Is it a greeting?"
+        threshold: 0.8
+`;
+  const d = makeEvalProject(yaml);
+  const report = await runEvals(d);
+  assert.equal(report.results[0].status, "pass", "deterministic assertions still determine pass when LLM is skipped");
+  assert.equal(report.passed, 1);
+});
+
+// ── llmJudgeRequest error path coverage ──────────────────────────────
+
+test("runEvals handles network error on llm_judge case with unreachable URL", async () => {
+  const yaml = `suite: llm-network-err
+config:
+  llm_judge_url: "https://this-host-does-not-exist.invalid:9999"
+  timeout_ms: 3000
+cases:
+  - id: net-fail
+    type: llm_judge
+    input:
+      prompt: "test prompt"
+    assertions:
+      - type: llm_judge
+        criteria: "Is it relevant?"
+        threshold: 0.8
+`;
+  const d = makeEvalProject(yaml);
+  const report = await runEvals(d);
+  assert.equal(report.results.length, 1);
+  // Should be fail or error — the network call failed, never pass
+  assert.ok(
+    report.results[0].status === "fail" || report.results[0].status === "error",
+    `expected fail or error, got ${report.results[0].status}`,
+  );
+  assert.equal(report.passed, 0);
 });

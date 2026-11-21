@@ -186,7 +186,7 @@ export function checkAssertion(assertion: EvalAssertion, data: unknown): Asserti
 
 const PRIVATE_HOST_RE = /^(localhost|127\.\d+\.\d+\.\d+|::1|0\.0\.0\.0|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|169\.254\.\d+\.\d+|metadata\.google\.internal)$/;
 
-function validateLlmUrl(url: string): void {
+export function validateLlmUrl(url: string): void {
   const parsed = new URL(url);
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
     throw new Error(`Unsupported protocol: ${parsed.protocol}`);
@@ -341,16 +341,26 @@ export async function runEvals(root: string): Promise<EvalReport> {
         } else if (hasLlmAssertions && !llmUrl) {
           const skippedCount = c.assertions.filter((a) => a.type === "llm_judge").length;
           for (let i = 0; i < skippedCount; i++) {
-            assertionResults.push({ type: "llm_judge", passed: true, message: "skipped (no LLM endpoint)" });
+            assertionResults.push({ type: "llm_judge", passed: true, message: "skipped — no EVAL_LLM_URL configured" });
           }
         }
 
-        const allPassed = assertionResults.every((r) => r.passed);
+        // LLM assertions skipped without a URL are excluded from pass/fail so they don't
+        // silently inflate the pass rate when no LLM endpoint is available.
+        const decisiveResults = hasLlmAssertions && !llmUrl
+          ? assertionResults.filter((r) => r.type !== "llm_judge")
+          : assertionResults;
+
+        // A case whose only assertions were LLM and no URL is configured is a skip, not a pass.
+        const caseStatus: CaseStatus = decisiveResults.length === 0 && hasLlmAssertions && !llmUrl
+          ? "skip"
+          : decisiveResults.every((r) => r.passed) ? "pass" : "fail";
+
         results.push({
           suiteId: suite.suite,
           caseId: c.id,
           description: c.description ?? "",
-          status: allPassed ? "pass" : "fail",
+          status: caseStatus,
           assertions: assertionResults,
           durationMs: Date.now() - start,
         });
@@ -378,7 +388,7 @@ export async function runEvals(root: string): Promise<EvalReport> {
   };
 }
 
-function resolveEnvVars(value: string | undefined): string | undefined {
+export function resolveEnvVars(value: string | undefined): string | undefined {
   if (!value) return undefined;
   return value.replace(/\$\{(\w+)\}/g, (_, name: string) => process.env[name] ?? "");
 }
