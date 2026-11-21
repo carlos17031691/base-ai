@@ -35,6 +35,10 @@ jobs:
         working-directory: cli
         run: node dist/index.js doctor --root ..
 
+      - name: Package ships every referenced file (BASE-046-D1)
+        working-directory: cli
+        run: npm run check:package
+
       - name: Calculate and bump next version automatically
         id: versioning
         run: |

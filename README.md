@@ -82,7 +82,7 @@ Every change in `base-ai` and its services adheres to strict engineering rules:
 
 ---
 
-## 🧩 19 Core Engineering Skills
+## 🧩 20 Core Engineering Skills
 
 Exported from `.ai/` into every AI coding assistant:
 
@@ -103,6 +103,7 @@ Exported from `.ai/` into every AI coding assistant:
 | `infrastructure` | Cloud IaC (OpenTofu, Terraform, Pulumi), keyless OIDC auth, GitOps PR `plan`→`apply` & immutable rollback |
 | `security` | Threat modeling (STRIDE), OWASP security audits, secret scanning (GitGuardian) & input sanitization |
 | `review` | PR review across traceability, clean code, architecture, security, and severity triage |
+| `pipeline` | Multi-agent pipeline protocol: task state machine, the agent that owns each transition, per-role reads & writes, locked plans & escalation to the human |
 | `docs` | Service documentation, OpenAPI/AsyncAPI specifications & architecture blueprints |
 | `adr` | Immutable Architecture Decision Records |
 | `rfc` | Requests for Comments for high-impact or cross-service architectural shifts |
@@ -150,6 +151,13 @@ base-ai dev stop
 base-ai dev status
 ```
 
+### 🧑‍🤝‍🧑 Multi-agent pipeline
+
+- **New projects:** `init` ships the six role definitions in `.claude/agents/` (`planner`, `implementer`, `reviewer`, `qa`, `supervisor`, `improvement`), the task state machine in `docs/task-state-machine.md` and the task templates in `templates/task/`. The root `.claude/agents/*.md` files are editable source (see ADR-0004).
+- **Services:** `ai sync` exports the definitions to every service with `ai: inherit` and Claude enabled, as generated files in `src/<name>/.claude/agents/`, checked by `doctor`. Services do not yet get the state-machine doc or the task templates (follow-up).
+- **Task state:** `.ai/tasks/` is git-ignored in the root and in services created by `service new`.
+- **Upgrading a project created with ≤ 0.8.0:** copy `.claude/agents/*.md` and `docs/task-state-machine.md` from a fresh `init`, add `.ai/tasks/` to `.gitignore`, and delete any hand-made copies of the definitions in services before running `ai sync`.
+
 ---
 
 ## 🤖 Supported AI Agents & Ecosystem
@@ -159,7 +167,7 @@ base-ai dev status
 | Assistant / Platform | Generated File(s) |
 |----------------------|-------------------|
 | **Google Antigravity™ / Gemini™** | `AGENTS.md`, `.agents/skills/` |
-| **Anthropic Claude Code™** | `CLAUDE.md`, `.claude/commands/` |
+| **Anthropic Claude Code™** | `CLAUDE.md`, `.claude/commands/`, `.claude/agents/` |
 | **Cursor™** | `.cursor/rules/*.mdc` |
 | **GitHub Copilot™** | `.github/copilot-instructions.md`, `.github/prompts/` |
 | **OpenAI Codex™ / ChatGPT™** | `AGENTS.md` |
