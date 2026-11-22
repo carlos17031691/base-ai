@@ -1,6 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildUsageReport,
+  formatCost,
+  parsePricing,
+  parseUsageLine,
+  recordCost,
+  renderUsageReport,
+  round4,
+  summarizeUsage,
   branchFromHead,
   buildRecords,
   chooseRole,
@@ -170,4 +178,95 @@ test("a model outside the safe charset or over 128 characters is stored as unkno
     JSON.stringify({ type: "assistant", message: { id: "b", model: "m".repeat(129), usage } }),
   ].join("\n"));
   assert.deepEqual(ms.map((m) => m.model), ["unknown", "unknown"]);
+});
+
+// --- Pricing and cost (BASE-101-U2) ---
+
+const P = { input: 3, cache_write: 3.75, cache_read: 0.3, output: 15 };
+const PRICING = { "claude-x": P };
+const rec = (over: Record<string, unknown> = {}) => ({
+  agent: "qa",
+  model: "claude-x",
+  messages: 1,
+  input_tokens: 0,
+  cache_creation_input_tokens: 0,
+  cache_read_input_tokens: 0,
+  output_tokens: 0,
+  ...over,
+});
+
+test("cost with configured prices: Σ tokens × price / 1e6", () => {
+  assert.equal(recordCost(rec({ input_tokens: 1_000_000 }), PRICING), 3);
+  // Hand-computed: 1200×3 + 5000×3.75 + 80000×0.3 + 700×15 = 3600 + 18750 + 24000 + 10500 = 56850 → 0.05685.
+  const mixed = rec({ input_tokens: 1200, cache_creation_input_tokens: 5000, cache_read_input_tokens: 80000, output_tokens: 700 });
+  assert.equal(recordCost(mixed, PRICING), 0.0569);
+});
+
+test("cost is rounded once to 4 decimals, half away from zero", () => {
+  assert.equal(round4(0.00005), 0.0001);
+  assert.equal(round4(0.00004999), 0);
+  assert.equal(round4(1.23456), 1.2346);
+  assert.equal(round4(-0.00005), -0.0001);
+  // 7 output tokens at 15 = 0.000105 → 0.0001.
+  assert.equal(recordCost(rec({ output_tokens: 7 }), PRICING), 0.0001);
+});
+
+test("model without a price: tokens are shown and the cost is no price, never 0", () => {
+  const r = rec({ model: "other", input_tokens: 42 });
+  assert.equal(recordCost(r, PRICING), null);
+  assert.equal(recordCost(r, {}), null);
+  assert.equal(recordCost(rec({ model: "toString" }), PRICING), null, "no prototype lookup");
+  const report = buildUsageReport("T-1", JSON.stringify({ schema: 1, ...r }) + "\n", PRICING);
+  const text = renderUsageReport(report);
+  assert.match(text, /in 42, cache write 0, cache read 0, out 0; no price/);
+  assert.doesNotMatch(text, /\$0\.0000|; 0$/m);
+  assert.equal(report.total.cost_usd, null);
+});
+
+test("group totals mix priced and unpriced records: priced sum plus unpriced_records", () => {
+  const records = [rec({ input_tokens: 1_000_000 }), rec({ model: "other", input_tokens: 5 }), rec({ agent: "reviewer", output_tokens: 100_000 })];
+  const { groups, total } = summarizeUsage(records, PRICING);
+  assert.deepEqual(groups.map((g) => [g.agent, g.model, g.records, g.cost_usd, g.unpriced_records]), [
+    ["qa", "claude-x", 1, 3, 0],
+    ["qa", "other", 1, null, 1],
+    ["reviewer", "claude-x", 1, 1.5, 0],
+  ]);
+  assert.deepEqual([total.records, total.input_tokens, total.output_tokens, total.cost_usd, total.unpriced_records], [3, 1_000_005, 100_000, 4.5, 1]);
+  assert.equal(formatCost(total), "$4.5000 (+1 record with no price)");
+  assert.equal(formatCost({ cost_usd: 1, unpriced_records: 2 }), "$1.0000 (+2 records with no price)");
+  assert.equal(formatCost({ cost_usd: null, unpriced_records: 2 }), "no price");
+  // The sum is rounded once: two records of 0.00003 each (0.0000 alone) give 0.00006 → 0.0001, not 0.
+  const tiny = summarizeUsage([rec({ output_tokens: 2 }), rec({ output_tokens: 2 })], PRICING).total;
+  assert.equal(tiny.cost_usd, 0.0001);
+});
+
+test("usage report text and lines: corrupt lines are skipped and counted, an empty file is no usage data", () => {
+  const good = JSON.stringify({ schema: 1, ...rec({ input_tokens: 1_000_000 }) });
+  const report = buildUsageReport("T-2", `${good}\nnot json\n{"schema":2}\n\n`, PRICING);
+  assert.deepEqual([report.records, report.skipped_lines, report.total.cost_usd], [1, 2, 3]);
+  assert.equal(renderUsageReport(report), [
+    "usage T-2: 1 record (2 unreadable lines skipped)",
+    "  qa / claude-x: in 1000000, cache write 0, cache read 0, out 0; $3.0000",
+    "  total: in 1000000, cache write 0, cache read 0, out 0; $3.0000",
+  ].join("\n"));
+  assert.equal(renderUsageReport(buildUsageReport("T-3", "", PRICING)), "usage T-3: no usage data");
+  assert.equal(parseUsageLine(JSON.stringify({ schema: 1, ...rec({ output_tokens: -1 }) })), null);
+  assert.equal(parseUsageLine("[]"), null);
+  const ctl = buildUsageReport("T-4", JSON.stringify({ schema: 1, ...rec({ agent: "a\u001b[31m" }) }), {});
+  assert.match(renderUsageReport(ctl), /a\?\[31m/);
+});
+
+test("pricing validation: missing key, negative or non-numeric value, unknown key, bad model id", () => {
+  const f = "cfg.yaml";
+  assert.deepEqual(parsePricing(undefined, f), {});
+  assert.deepEqual(parsePricing({}, f), {});
+  assert.deepEqual(parsePricing({ "claude-x": P }, f), { "claude-x": P });
+  assert.throws(() => parsePricing([], f), /"usage\.pricing" must be a map/);
+  assert.throws(() => parsePricing({ "claude-x": { input: 1, cache_write: 1, cache_read: 1 } }, f), /"usage\.pricing\.claude-x\.output" must be a number >= 0/);
+  assert.throws(() => parsePricing({ "claude-x": { ...P, input: -1 } }, f), /usage\.pricing\.claude-x\.input/);
+  assert.throws(() => parsePricing({ "claude-x": { ...P, input: "3" } }, f), /usage\.pricing\.claude-x\.input/);
+  assert.throws(() => parsePricing({ "claude-x": { ...P, input: Infinity } }, f), /usage\.pricing\.claude-x\.input/);
+  assert.throws(() => parsePricing({ "claude-x": { ...P, batch: 1 } }, f), /"usage\.pricing\.claude-x\.batch" is not a price key/);
+  assert.throws(() => parsePricing({ "bad model": P }, f), /"usage\.pricing\.bad model" is not a valid model id/);
+  assert.throws(() => parsePricing({ "claude-x": 3 }, f), /"usage\.pricing\.claude-x" must be a map/);
 });

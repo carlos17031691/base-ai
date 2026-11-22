@@ -245,3 +245,176 @@ export function buildRecords(
     };
   });
 }
+
+// --- Pricing and cost (BASE-101-U2). Cost is computed on read and never stored in usage.jsonl. ---
+
+/** USD per million tokens for each counter, keyed by exact model id in `usage.pricing`. */
+export interface Price {
+  input: number;
+  cache_write: number;
+  cache_read: number;
+  output: number;
+}
+export type Pricing = Record<string, Price>;
+const PRICE_KEYS = ["input", "cache_write", "cache_read", "output"] as const;
+
+/** Validates `usage.pricing`; absent or empty means no prices (P-5). Throws naming `usage.pricing.<model>[.<key>]`. */
+export function parsePricing(raw: unknown, file: string): Pricing {
+  if (raw === undefined || raw === null) return {};
+  if (!isObj(raw)) throw new Error(`${file}: "usage.pricing" must be a map of model id to prices`);
+  const out: Pricing = {};
+  for (const [model, price] of Object.entries(raw)) {
+    const at = `${file}: "usage.pricing.${model}"`;
+    if (!MESSAGE_ID.test(model)) throw new Error(`${at} is not a valid model id`);
+    if (!isObj(price)) throw new Error(`${at} must be a map with ${PRICE_KEYS.join(", ")}`);
+    for (const k of Object.keys(price)) {
+      if (!(PRICE_KEYS as readonly string[]).includes(k)) throw new Error(`${file}: "usage.pricing.${model}.${k}" is not a price key`);
+    }
+    for (const k of PRICE_KEYS) {
+      const v = price[k];
+      if (typeof v !== "number" || !Number.isFinite(v) || v < 0) {
+        throw new Error(`${file}: "usage.pricing.${model}.${k}" must be a number >= 0 (USD per million tokens)`);
+      }
+    }
+    out[model] = price as unknown as Price;
+  }
+  return out;
+}
+
+/** Rounds once to 4 decimals, half away from zero. */
+export function round4(x: number): number {
+  return (Math.sign(x) * Math.round((Math.abs(x) + Number.EPSILON) * 1e4)) / 1e4;
+}
+
+type Counters = Pick<UsageRecord, (typeof COUNTERS)[number]>;
+
+/** Unrounded USD: Σ tokens × price / 1e6 over the four counters. */
+function rawCost(c: Counters, p: Price): number {
+  return (
+    (c.input_tokens * p.input +
+      c.cache_creation_input_tokens * p.cache_write +
+      c.cache_read_input_tokens * p.cache_read +
+      c.output_tokens * p.output) /
+    1e6
+  );
+}
+
+/** A record's cost rounded to 4 decimals, or null when its model has no price: never 0. */
+export function recordCost(r: Counters & { model: string }, pricing: Pricing): number | null {
+  const p = Object.hasOwn(pricing, r.model) ? pricing[r.model] : undefined;
+  return p === undefined ? null : round4(rawCost(r, p));
+}
+
+/** The fields of a usage.jsonl line that a report reads. */
+export type ReportRecord = Counters & { agent: string; model: string; messages: number };
+
+/** One usage.jsonl line as a record, or null when it is not one (the line is skipped and counted). */
+export function parseUsageLine(line: string): ReportRecord | null {
+  let r: unknown;
+  try {
+    r = JSON.parse(line);
+  } catch {
+    return null;
+  }
+  if (!isObj(r) || r.schema !== 1 || typeof r.agent !== "string" || typeof r.model !== "string") return null;
+  if (!COUNTERS.every((c) => isCount(r[c])) || !isCount(r.messages)) return null;
+  const n = (k: string) => r[k] as number;
+  return {
+    agent: r.agent,
+    model: r.model,
+    messages: n("messages"),
+    input_tokens: n("input_tokens"),
+    cache_creation_input_tokens: n("cache_creation_input_tokens"),
+    cache_read_input_tokens: n("cache_read_input_tokens"),
+    output_tokens: n("output_tokens"),
+  };
+}
+
+export interface UsageTotals extends Counters {
+  records: number;
+  messages: number;
+  /** Rounded once over the priced records; null when none is priced. */
+  cost_usd: number | null;
+  unpriced_records: number;
+}
+export interface UsageGroup extends UsageTotals {
+  agent: string;
+  model: string;
+}
+
+function totals(records: ReportRecord[], pricing: Pricing): UsageTotals {
+  const sum = (k: keyof ReportRecord) => records.reduce((n, r) => n + (r[k] as number), 0);
+  let cost = 0;
+  let priced = 0;
+  for (const r of records) {
+    const p = Object.hasOwn(pricing, r.model) ? pricing[r.model] : undefined;
+    if (p === undefined) continue;
+    cost += rawCost(r, p);
+    priced++;
+  }
+  return {
+    records: records.length,
+    messages: sum("messages"),
+    input_tokens: sum("input_tokens"),
+    cache_creation_input_tokens: sum("cache_creation_input_tokens"),
+    cache_read_input_tokens: sum("cache_read_input_tokens"),
+    output_tokens: sum("output_tokens"),
+    cost_usd: priced === 0 ? null : round4(cost),
+    unpriced_records: records.length - priced,
+  };
+}
+
+/** Groups by agent and model in order of first appearance, plus the total (H5). */
+export function summarizeUsage(records: ReportRecord[], pricing: Pricing): { groups: UsageGroup[]; total: UsageTotals } {
+  const byKey = new Map<string, ReportRecord[]>();
+  for (const r of records) {
+    const key = JSON.stringify([r.agent, r.model]);
+    byKey.set(key, [...(byKey.get(key) ?? []), r]);
+  }
+  const groups = [...byKey.values()].map((rs) => ({ agent: rs[0].agent, model: rs[0].model, ...totals(rs, pricing) }));
+  return { groups, total: totals(records, pricing) };
+}
+
+/** `$x.xxxx`, `$x.xxxx (+n records with no price)`, or `no price` when nothing is priced: never `$0.0000` for an unpriced model. */
+export function formatCost(t: Pick<UsageTotals, "cost_usd" | "unpriced_records">): string {
+  if (t.cost_usd === null) return "no price";
+  const extra = t.unpriced_records > 0 ? ` (+${t.unpriced_records} record${t.unpriced_records === 1 ? "" : "s"} with no price)` : "";
+  return `$${t.cost_usd.toFixed(4)}${extra}`;
+}
+
+export interface UsageReport {
+  schema: 1;
+  ticket: string;
+  records: number;
+  skipped_lines: number;
+  groups: UsageGroup[];
+  total: UsageTotals;
+}
+
+/** The report of one task's usage.jsonl text. Blank lines are ignored; other unreadable lines are counted. */
+export function buildUsageReport(ticket: string, text: string, pricing: Pricing): UsageReport {
+  const records: ReportRecord[] = [];
+  let skipped = 0;
+  for (const line of text.split("\n")) {
+    if (!line.trim()) continue;
+    const r = parseUsageLine(line);
+    if (r === null) skipped++;
+    else records.push(r);
+  }
+  const { groups, total } = summarizeUsage(records, pricing);
+  return { schema: 1, ticket, records: records.length, skipped_lines: skipped, groups, total };
+}
+
+const counters = (t: Counters) =>
+  `in ${t.input_tokens}, cache write ${t.cache_creation_input_tokens}, cache read ${t.cache_read_input_tokens}, out ${t.output_tokens}`;
+
+/** The text form of `usage report`. Agent and model come from a versioned file, so control characters are stripped. */
+export function renderUsageReport(r: UsageReport): string {
+  const skipped = r.skipped_lines > 0 ? ` (${r.skipped_lines} unreadable line${r.skipped_lines === 1 ? "" : "s"} skipped)` : "";
+  if (r.records === 0) return `usage ${r.ticket}: no usage data${skipped}`;
+  const clean = (s: string) => s.replace(/[\u0000-\u001f\u007f]/g, "?");
+  const lines = [`usage ${r.ticket}: ${r.records} record${r.records === 1 ? "" : "s"}${skipped}`];
+  for (const g of r.groups) lines.push(`  ${clean(g.agent)} / ${clean(g.model)}: ${counters(g)}; ${formatCost(g)}`);
+  lines.push(`  total: ${counters(r.total)}; ${formatCost(r.total)}`);
+  return lines.join("\n");
+}

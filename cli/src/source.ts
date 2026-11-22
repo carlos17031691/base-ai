@@ -1,6 +1,8 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
+import type { UsageHook } from "./usage-hook.js";
+import { parsePricing, type Pricing } from "./usage.js";
 
 export const AGENTS = ["antigravity", "claude", "cursor", "copilot", "codex"] as const;
 export type Agent = (typeof AGENTS)[number];
@@ -37,6 +39,8 @@ export interface AiSource {
   definitionBudgets?: Record<string, number>;
   /** `budgets.definition_totals`: cap per role on the definition plus its reference files; absent when not configured. */
   definitionTotals?: Record<string, number>;
+  /** `usage.hook` of config.yaml (BASE-101-U2); read only at the root. */
+  usageHook?: UsageHook;
 }
 
 /** Splits YAML frontmatter from the Markdown body. */
@@ -71,13 +75,39 @@ function parseRoleBudgets(cfg: Record<string, unknown>, key: string, file: strin
   return defs as Record<string, number>;
 }
 
+export interface UsageConfig {
+  hook: UsageHook;
+  pricing: Pricing;
+}
+
+const readConfig = (cfgPath: string) =>
+  existsSync(cfgPath) ? ((parse(readFileSync(cfgPath, "utf8")) ?? {}) as Record<string, unknown>) : {};
+
+/** Reads `usage` (hook and pricing); absent means `none` and no prices. Throws naming the key on any other value. */
+function parseUsage(cfg: Record<string, unknown>, file: string): UsageConfig {
+  const usage = cfg.usage;
+  if (usage === undefined || usage === null) return { hook: "none", pricing: {} };
+  const hookError = `${file}: "usage.hook" must be "claude-code" or "none"`;
+  if (typeof usage !== "object" || Array.isArray(usage)) throw new Error(hookError);
+  const { hook = "none", pricing } = usage as Record<string, unknown>;
+  if (hook !== "claude-code" && hook !== "none") throw new Error(hookError);
+  return { hook, pricing: parsePricing(pricing, file) };
+}
+
+/** The `usage` config of <dir>/.ai/config.yaml, read on its own by `usage report`. */
+export function loadUsageConfig(dir: string): UsageConfig {
+  const cfgPath = join(dir, ".ai", "config.yaml");
+  return parseUsage(readConfig(cfgPath), cfgPath);
+}
+
 /** Loads the single AI source from <dir>/.ai. */
 export function loadSource(dir: string): AiSource {
   const ai = join(dir, ".ai");
   if (!existsSync(ai)) throw new Error(`${ai} not found`);
 
   const cfgPath = join(ai, "config.yaml");
-  const cfg = existsSync(cfgPath) ? ((parse(readFileSync(cfgPath, "utf8")) ?? {}) as Record<string, unknown>) : {};
+  const cfg = readConfig(cfgPath);
+  const usage = parseUsage(cfg, cfgPath);
   const agents = parseTargets(cfg.agents ?? "all", cfgPath);
   const definitionBudgets = parseRoleBudgets(cfg, "definitions", cfgPath);
   const definitionTotals = parseRoleBudgets(cfg, "definition_totals", cfgPath);
@@ -118,6 +148,7 @@ export function loadSource(dir: string): AiSource {
     lang: String(cfg.lang ?? "en"),
     skills,
     roles: [],
+    usageHook: usage.hook,
     ...(definitionBudgets ? { definitionBudgets } : {}),
     ...(definitionTotals ? { definitionTotals } : {}),
   };
@@ -134,6 +165,7 @@ export function mergeSource(base: AiSource, local: AiSource | null): AiSource {
     lang: local.lang,
     skills: [...skills.values()].sort((a, b) => a.id.localeCompare(b.id)),
     roles: base.roles,
+    usageHook: base.usageHook,
   };
 }
 
