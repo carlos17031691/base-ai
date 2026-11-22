@@ -50,3 +50,16 @@ test("runDoctor covers role definitions exported to services (BASE-046-D1)", () 
   aiSync(d);
   assert.deepEqual(runDoctor(d).issues, []);
 });
+
+test("runDoctor flags an edited root reference file in every service (BASE-079-T2)", () => {
+  const d = fixture();
+  mkdirSync(join(d, ".claude/agents/qa"), { recursive: true });
+  writeFileSync(join(d, ".claude/agents/qa.md"), "---\nname: qa\ndescription: Verifies criteria\n---\n\nRead `.claude/agents/qa/halt.md`.\n");
+  writeFileSync(join(d, ".claude/agents/qa/halt.md"), "# Halting\n");
+  const svc = serviceNew(d, "api", "git@example.com:org/api.git");
+  assert.match(readFileSync(join(svc, ".claude/agents/qa/halt.md"), "utf8"), /Source: root \.claude\/agents\//);
+  assert.deepEqual(runDoctor(d).issues, []);
+
+  writeFileSync(join(d, ".claude/agents/qa/halt.md"), "# Halting, changed\n");
+  assert.ok(runDoctor(d).issues.some((i) => i.endsWith("AI artefact out of date: .claude/agents/qa/halt.md") && i.includes("api")));
+});

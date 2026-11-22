@@ -1,8 +1,8 @@
-// Fails when a template path referenced by the shipped rules, skills, role definitions or state-machine
+// Fails when a template path referenced by the shipped rules, skills, role definitions (and their reference files) or state-machine
 // doc is missing from the npm package (BASE-046-D1). Run through `npm run check:package`, which builds
 // and bundles first; `--ignore-scripts` keeps prepack output out of the JSON listing.
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { extractPathRefs, findMissing } from "../dist/package-check.js";
@@ -25,6 +25,12 @@ const sources = [
   read(".ai/rules.md"),
   ...list(".ai/skills", (d) => (existsSync(join(tpl, ".ai/skills", d, "skill.md")) ? [read(`.ai/skills/${d}/skill.md`)] : [])),
   ...list(".claude/agents", (f) => (f.endsWith(".md") ? [read(`.claude/agents/${f}`)] : [])),
+  // Reference files of a role (`.claude/agents/<role>/<name>.md`) are part of its definition.
+  ...list(".claude/agents", (d) =>
+    statSync(join(tpl, ".claude/agents", d)).isDirectory()
+      ? readdirSync(join(tpl, ".claude/agents", d)).sort().filter((f) => f.endsWith(".md")).map((f) => read(`.claude/agents/${d}/${f}`))
+      : [],
+  ),
   ...(existsSync(join(tpl, "docs/task-state-machine.md")) ? [read("docs/task-state-machine.md")] : []),
 ];
 

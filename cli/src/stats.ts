@@ -13,22 +13,39 @@ export interface AiStatsReport {
   skillsTotalTokens: number;
   skills: TokenItem[];
   violations: TokenItem[];
-  /** Role definitions (`.claude/agents/<name>.md`, whole file), largest first. */
-  definitions: TokenItem[];
+  /** Role definitions (`.claude/agents/<name>.md`, whole file) with their reference files, largest first. */
+  definitions: DefinitionItem[];
+  /** Sum of the definition files alone. */
   definitionsTotalTokens: number;
+  /** Sum of the definitions plus all their reference files. */
+  definitionsWithReferencesTokens: number;
   /** `budgets.definitions` of `.ai/config.yaml`; null when the project sets none. */
   definitionBudgets: Record<string, number> | null;
+  /** `budgets.definition_totals`; null when the project sets none. */
+  definitionTotals: Record<string, number> | null;
   definitionViolations: DefinitionViolation[];
 }
 
-/** A definition above its budget, or (budget null) with no entry while `budgets.definitions` exists. */
+/** A role definition: the file itself, its reference files (`.claude/agents/<role>/<name>.md`) and both together. */
+export interface DefinitionItem extends TokenItem {
+  references: TokenItem[];
+  totalTokens: number;
+}
+
+/**
+ * kind "definition": the file above `budgets.definitions`, or (budget null) no entry while that map exists.
+ * kind "total": the file plus its reference files above `budgets.definition_totals` (or above the definition budget
+ * when the role has reference files and no total).
+ */
 export interface DefinitionViolation {
   name: string;
+  kind: "definition" | "total";
   estimatedTokens: number;
   budget: number | null;
 }
 
 export function describeDefinitionViolation(v: DefinitionViolation): string {
+  if (v.kind === "total") return `definition ${v.name} with reference files: ${v.estimatedTokens} tokens (budget: ${v.budget})`;
   return v.budget === null
     ? `definition ${v.name}: ${v.estimatedTokens} tokens (no entry in budgets.definitions)`
     : `definition ${v.name}: ${v.estimatedTokens} tokens (budget: ${v.budget})`;
@@ -88,21 +105,34 @@ export function computeAiStats(root: string, opts?: GuardrailOptions): AiStatsRe
   }
 
   // Each agent run loads its whole definition, so the whole file is measured, frontmatter included.
-  const definitions: TokenItem[] = loadRoleDefinitions(root)
+  const definitions: DefinitionItem[] = loadRoleDefinitions(root)
     .map((r) => {
       const chars = r.frontmatter.length + r.body.length;
-      return { name: r.id, chars, estimatedTokens: Math.ceil(chars / 4) };
+      const estimatedTokens = estimateTokens(r.frontmatter + r.body);
+      const references = r.references.map((ref) => ({
+        name: `${r.id}/${ref.name}`,
+        chars: ref.body.length,
+        estimatedTokens: estimateTokens(ref.body),
+      }));
+      const totalTokens = references.reduce((sum, ref) => sum + ref.estimatedTokens, estimatedTokens);
+      return { name: r.id, chars, estimatedTokens, references, totalTokens };
     })
     .sort((a, b) => b.estimatedTokens - a.estimatedTokens);
   const definitionBudgets = src.definitionBudgets ?? null;
+  const definitionTotals = src.definitionTotals ?? null;
+  const own = (map: Record<string, number> | null, key: string): number | null =>
+    map && Object.hasOwn(map, key) ? map[key] : null;
   // Budgets come from the project's config, so they apply with or without --max-tokens.
   const definitionViolations: DefinitionViolation[] = [];
-  if (definitionBudgets) {
-    for (const d of definitions) {
-      const budget = definitionBudgets[d.name] ?? null;
-      if (budget === null || d.estimatedTokens > budget) {
-        definitionViolations.push({ name: d.name, estimatedTokens: d.estimatedTokens, budget });
-      }
+  for (const d of definitions) {
+    const budget = own(definitionBudgets, d.name);
+    if (definitionBudgets && (budget === null || d.estimatedTokens > budget)) {
+      definitionViolations.push({ name: d.name, kind: "definition", estimatedTokens: d.estimatedTokens, budget });
+    }
+    // Text moved into reference files still counts, so a reduction cannot be had by moving text alone.
+    const totalBudget = own(definitionTotals, d.name) ?? (d.references.length > 0 ? budget : null);
+    if (totalBudget !== null && d.totalTokens > totalBudget) {
+      definitionViolations.push({ name: d.name, kind: "total", estimatedTokens: d.totalTokens, budget: totalBudget });
     }
   }
 
@@ -116,7 +146,9 @@ export function computeAiStats(root: string, opts?: GuardrailOptions): AiStatsRe
     violations,
     definitions,
     definitionsTotalTokens: definitions.reduce((sum, d) => sum + d.estimatedTokens, 0),
+    definitionsWithReferencesTokens: definitions.reduce((sum, d) => sum + d.totalTokens, 0),
     definitionBudgets,
+    definitionTotals,
     definitionViolations,
   };
 }
@@ -145,8 +177,12 @@ export function renderCiReport(report: AiStatsReport): string {
     lines.push(`|------------|------:|-------:|-------:|`);
     for (const d of report.definitions) {
       lines.push(`| ${d.name} | ${d.chars} | ${d.estimatedTokens} | ${report.definitionBudgets?.[d.name] ?? "-"} |`);
+      for (const ref of d.references) lines.push(`| ↳ ${ref.name} | ${ref.chars} | ${ref.estimatedTokens} | |`);
+      if (d.references.length > 0) {
+        lines.push(`| ${d.name} with reference files | | ${d.totalTokens} | ${report.definitionTotals?.[d.name] ?? "-"} |`);
+      }
     }
-    lines.push(`| **Total** | | ${report.definitionsTotalTokens} | |`);
+    lines.push(`| **Total** (definitions / with reference files) | | ${report.definitionsTotalTokens} / ${report.definitionsWithReferencesTokens} | |`);
   }
 
   if (report.violations.length > 0 || report.definitionViolations.length > 0) {

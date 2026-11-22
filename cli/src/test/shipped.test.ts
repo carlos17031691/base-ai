@@ -14,6 +14,9 @@ test("isShippedPath ships the AI source, templates, role definitions and the sta
     ".claude",
     ".claude/agents",
     ".claude/agents/qa.md",
+    ".claude/agents/qa",
+    ".claude/agents/qa/halt.md",
+    ".claude/agents/sub/x.md",
     "docs",
     "docs/architecture/adrs",
     "docs/architecture/adrs/.gitkeep",
@@ -35,8 +38,10 @@ test("isShippedPath excludes local state, generated artefacts and repository-onl
     ".claude/commands/adr.md",
     ".claude/settings.json",
     ".claude/settings.local.json",
-    ".claude/agents/sub/x.md",
     ".claude/agents/notes.txt",
+    ".claude/agents/a/b",
+    ".claude/agents/a/b/c.md",
+    ".claude/agents/qa/x.txt",
     "docs/architecture/adrs/ADR-0001-arquitectura-base-ai.md",
     "docs/contract-testing-gate.md",
     "cli/src/init.ts",
@@ -49,6 +54,7 @@ test("isShippedPath excludes local state, generated artefacts and repository-onl
 
 test("isShippedPath normalises Windows separators and trailing slashes", () => {
   assert.equal(isShippedPath(".claude\\agents\\qa.md"), true);
+  assert.equal(isShippedPath(".claude\\agents\\qa\\halt.md"), true);
   assert.equal(isShippedPath(".ai\\tasks\\X\\status.json"), false);
   assert.equal(isShippedPath("docs\\task-state-machine.md"), true);
   assert.equal(isShippedPath(".ai/tasks/"), false);
