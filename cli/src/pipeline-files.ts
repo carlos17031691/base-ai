@@ -30,7 +30,7 @@ export function readBounded(path: string, max = MAX_FILE_BYTES): FileRead {
   }
 }
 
-/** Loads the four task files of `taskDir` (resolved against `root`). */
+/** Loads the task files of `taskDir` (resolved against `root`). */
 export function loadTask(root: string, taskDir: string): TaskInput {
   const absPath = resolve(root, taskDir);
   const read = (name: string) => readBounded(join(absPath, name));
@@ -41,5 +41,6 @@ export function loadTask(root: string, taskDir: string): TaskInput {
     plan: read("plan.md"),
     review: read("review-report.md"),
     qa: read("qa-report.md"),
+    decisions: read("decisions.md"),
   };
 }
