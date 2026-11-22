@@ -2,7 +2,9 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { listServices } from "./services.js";
-import { aiSync, type SyncResult } from "./sync.js";
+import { loadSource } from "./source.js";
+import { aiSync, usageHookState, type SyncResult } from "./sync.js";
+import { SETTINGS_PATH } from "./usage-hook.js";
 
 export interface DoctorReport {
   syncResults: SyncResult[];
@@ -51,6 +53,14 @@ export function runDoctor(root: string): DoctorReport {
   const issues: string[] = [];
   const services = listServices(root);
   const syncResults = aiSync(root, true);
+
+  // The usage hook gets its own issue instead of the generic out-of-date line (BASE-101-U2).
+  const rootResult = syncResults[0];
+  rootResult.written = rootResult.written.filter((f) => f !== SETTINGS_PATH);
+  rootResult.removed = rootResult.removed.filter((f) => f !== SETTINGS_PATH);
+  const hookStatus = usageHookState(root, loadSource(root).usageHook ?? "none");
+  if (hookStatus === "invalid") issues.push(`root: ${SETTINGS_PATH} is not valid JSON settings (fix it, then run: base-ai ai sync)`);
+  else if (hookStatus !== "ok") issues.push(`root: usage hook ${hookStatus} in ${SETTINGS_PATH} (run: base-ai ai sync)`);
 
   for (const r of syncResults) {
     for (const f of r.written) issues.push(`${r.target}: AI artefact out of date: ${f}`);

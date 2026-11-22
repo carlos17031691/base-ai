@@ -4,9 +4,12 @@
  */
 import { closeSync, constants, existsSync, fstatSync, lstatSync, mkdirSync, openSync, readSync, readdirSync, realpathSync, statSync, writeSync } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join, resolve, sep } from "node:path";
+import { basename, isAbsolute, join, resolve, sep } from "node:path";
 import {
   DEADLINE_MS,
+  buildUsageReport,
+  type Pricing,
+  type UsageReport,
   MAX_STDIN_BYTES,
   MAX_TRANSCRIPT_BYTES,
   buildRecords,
@@ -199,4 +202,58 @@ export async function runUsageRecord(deps: UsageDeps): Promise<void> {
   }
   // The deadline is not checked again once writing starts.
   if (!appendLines(target, records.map((r) => JSON.stringify(r)))) fail("write");
+}
+
+/** The process events a hook guard listens to; `process` satisfies it, and tests pass a fake. */
+export interface HookProcess {
+  on(event: "uncaughtException" | "unhandledRejection", listener: (e: unknown) => void): unknown;
+  exit(code: number): never | void;
+}
+
+/**
+ * L6 (a): an error raised outside the `usage record` promise (for example an `error` event on stderr) must not
+ * fail the agent either. Writes the `internal` line once, ignores a failing write (EPIPE), and exits 0.
+ */
+export function guardHookProcess(proc: HookProcess, stderr: (line: string) => void): void {
+  let written = false;
+  const handler = () => {
+    if (!written) {
+      written = true;
+      try {
+        stderr(stderrLine("internal"));
+      } catch {
+        // stderr itself may be the failure; the exit code is what matters to the agent.
+      }
+    }
+    proc.exit(0);
+  };
+  proc.on("uncaughtException", handler);
+  proc.on("unhandledRejection", handler);
+}
+
+/**
+ * `base-ai usage report` (BASE-101-U2): reads `<task-dir>/usage.jsonl` through the bounded, O_NOFOLLOW reader.
+ * A relative `<task-dir>` resolves against `root`. A missing file is an empty report; a missing task directory
+ * or a usage file that cannot be read safely throws.
+ */
+export function readUsageReport(root: string, taskDir: string, pricing: Pricing): UsageReport {
+  const dir = resolve(root, taskDir);
+  let isDir = false;
+  try {
+    isDir = statSync(dir).isDirectory();
+  } catch {
+    // Reported below.
+  }
+  if (!isDir) throw new Error(`task directory not found: ${taskDir}`);
+  const file = join(dir, "usage.jsonl");
+  let text = "";
+  try {
+    lstatSync(file);
+    const read = readRegular(file, MAX_TRANSCRIPT_BYTES);
+    if (read === null) throw new Error(`${join(taskDir, "usage.jsonl")} is not a regular file of at most 50 MiB`);
+    text = read;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
+  }
+  return buildUsageReport(basename(dir), text, pricing);
 }

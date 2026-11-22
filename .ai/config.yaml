@@ -19,3 +19,16 @@ budgets:
     qa: 18250
     reviewer: 7000
     supervisor: 11250
+# Token usage (BASE-101-U2). `base-ai ai sync` writes (claude-code) or removes (none) the marked
+# SubagentStop/Stop hook of .claude/settings.json; absent means none. `init` sets none in new projects.
+usage:
+  hook: claude-code
+  # USD per million tokens, keyed by the exact model id of the records; all four keys are required.
+  # No default prices: a model with no entry shows "no price", never 0. Example only; copy your
+  # provider's current prices and the model id exactly as the records show it (no aliases, no prefixes):
+  # pricing:
+  #   claude-sonnet-4-5-20250929:
+  #     input: 3
+  #     cache_write: 3.75
+  #     cache_read: 0.3
+  #     output: 15

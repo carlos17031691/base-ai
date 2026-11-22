@@ -32,7 +32,11 @@ obj/
 
 # Local AI index & OS files
 .ai/context-index.json
-.ai/tasks/
+.ai/tasks/*
+!.ai/tasks/*/
+.ai/tasks/*/*
+!.ai/tasks/*/usage.jsonl
+.ai/usage/
 .DS_Store
 Thumbs.db
 *.log

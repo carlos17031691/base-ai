@@ -63,3 +63,34 @@ test("runDoctor flags an edited root reference file in every service (BASE-079-T
   writeFileSync(join(d, ".claude/agents/qa/halt.md"), "# Halting, changed\n");
   assert.ok(runDoctor(d).issues.some((i) => i.endsWith("AI artefact out of date: .claude/agents/qa/halt.md") && i.includes("api")));
 });
+
+test("doctor: an enabled usage hook that is missing or stale is reported with base-ai ai sync (BASE-101-U2)", () => {
+  const d = fixture();
+  const settings = join(d, ".claude/settings.json");
+  writeFileSync(join(d, ".ai/config.yaml"), "usage:\n  hook: claude-code\n");
+  const hookIssues = () => runDoctor(d).issues.filter((i) => i.includes("settings.json"));
+
+  assert.deepEqual(hookIssues(), ["root: usage hook missing in .claude/settings.json (run: base-ai ai sync)"]);
+  aiSync(d);
+  assert.deepEqual(runDoctor(d).issues, [], "after sync: no issue");
+
+  writeFileSync(settings, readFileSync(settings, "utf8").replace("usage record", "usage  record"));
+  assert.deepEqual(hookIssues(), ["root: usage hook stale in .claude/settings.json (run: base-ai ai sync)"], "hand-edited command");
+
+  aiSync(d);
+  writeFileSync(join(d, ".ai/config.yaml"), "usage:\n  hook: none\n");
+  assert.deepEqual(hookIssues(), ["root: usage hook stale in .claude/settings.json (run: base-ai ai sync)"], "leftover while none");
+  aiSync(d);
+  assert.deepEqual(runDoctor(d).issues, []);
+
+  writeFileSync(join(d, ".ai/config.yaml"), "usage:\n  hook: claude-code\n");
+  writeFileSync(settings, "[]");
+  assert.deepEqual(hookIssues(), ["root: .claude/settings.json is not valid JSON settings (fix it, then run: base-ai ai sync)"]);
+
+  // Review r1 M1: opted out (or no usage key), a user's invalid file with no generated entry is not reported.
+  writeFileSync(settings, "{oops");
+  writeFileSync(join(d, ".ai/config.yaml"), "usage:\n  hook: none\n");
+  assert.deepEqual(runDoctor(d).issues, []);
+  writeFileSync(join(d, ".ai/config.yaml"), "");
+  assert.deepEqual(runDoctor(d).issues, []);
+});

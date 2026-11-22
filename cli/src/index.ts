@@ -15,8 +15,9 @@ import { checkTask, renderText } from "./pipeline-check.js";
 import { loadTask } from "./pipeline-files.js";
 import { spawnRunner } from "./pipeline-gh.js";
 import { checkRegistration, renderDebt } from "./pipeline-registration.js";
-import { runUsageRecord } from "./usage-files.js";
-import { stderrLine } from "./usage.js";
+import { loadUsageConfig } from "./source.js";
+import { guardHookProcess, readUsageReport, runUsageRecord } from "./usage-files.js";
+import { renderUsageReport, stderrLine } from "./usage.js";
 
 const USAGE = `base-ai <command> [--root <dir>]
 
@@ -48,6 +49,8 @@ Commands:
                                                      exit 0 registered, 1 missing, 2 could not check
   usage record                                      Record a Claude Code turn's tokens from a Stop/SubagentStop hook (stdin) into
                                                      .ai/tasks/<ticket>/usage.jsonl; always exits 0, nothing on stdout
+  usage report <task-dir> [--json]                  Show a task's recorded tokens per agent and model, with USD cost from
+                                                     usage.pricing of .ai/config.yaml, or "no price". Offline, read-only
 `;
 
 // Flags that never take a value, so `--json <task-dir>` keeps the path positional.
@@ -274,9 +277,21 @@ function main(argv: string[]): number {
   if (cmd === "usage" && sub === "record") {
     // A hook must never fail the agent: every path, an internal error included, exits 0.
     const stderr = (line: string) => process.stderr.write(`${line}\n`);
+    guardHookProcess(process, stderr);
     runUsageRecord({ root, stdin: process.stdin, env: process.env, now: Date.now, stderr })
       .catch(() => stderr(stderrLine("internal")))
       .finally(() => process.exit(0));
+    return 0;
+  }
+
+  if (cmd === "usage" && sub === "report") {
+    const dir = rest[0];
+    if (!dir) {
+      console.error("usage: base-ai usage report <task-dir> [--json] [--root <dir>]");
+      return 1;
+    }
+    const report = readUsageReport(root, dir, loadUsageConfig(root).pricing);
+    console.log(flags.json === true ? JSON.stringify(report, null, 2) : renderUsageReport(report));
     return 0;
   }
 
@@ -325,8 +340,9 @@ function main(argv: string[]): number {
 try {
   process.exitCode = main(process.argv.slice(2));
 } catch (e) {
-  const args = process.argv.slice(2);
-  if (args[0] === "usage" && args[1] === "record") {
+  // L6 (b): the parsed command, so `--root <dir> usage record` is recognised as well.
+  const { pos } = parseArgs(process.argv.slice(2));
+  if (pos[0] === "usage" && pos[1] === "record") {
     // A synchronous throw before dispatch (e.g. a deleted working directory) must not fail the agent either.
     process.stderr.write(`${stderrLine("internal")}\n`);
     process.exit(0);
