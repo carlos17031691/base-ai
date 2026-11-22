@@ -10,11 +10,12 @@ agents:
 budgets:
   definitions:
     implementer: 3250
-    improvement: 9000
+    improvement: 8000
     planner: 1250
     qa: 14250
     reviewer: 6000
-    supervisor: 11500
+    supervisor: 8750
   definition_totals:
     qa: 18000
     reviewer: 7000
+    supervisor: 11250
