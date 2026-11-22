@@ -242,9 +242,12 @@ flowchart LR
 - [x] **[#23](https://github.com/carlos17031691/base-ai/issues/23) Interactive CLI Wizard (`base-ai wizard`):** Zero-dependency interactive TUI for scaffolding new projects and services with guided selection of cloud provider, IaC tool, and CI/CD target.
 - [x] **[#26](https://github.com/carlos17031691/base-ai/issues/26) Deterministic AI Evaluation Suite (`base-ai eval`):** YAML-driven eval runner with deterministic assertions (exact, contains, regex, gte/lte, json_schema), context search quality evals, optional LLM-as-judge via `EVAL_LLM_URL`, SSRF protection, and CI Markdown reports.
 - [x] **[#27](https://github.com/carlos17031691/base-ai/issues/27) Multi-Service Local Dev Mesh (`base-ai dev`):** Dynamic Docker Compose generation from `services.yaml` with per-service port mapping, environment variables, infrastructure dependencies (Redis, Postgres, etc.), hot-reload volume mounts, service name validation, and image reference security checks.
+- [x] **[#80](https://github.com/carlos17031691/base-ai/issues/80) Branch protection:** rulesets on `main` and `development` require a PR, resolved conversations and the `cli` and SonarCloud checks; releases publish without a bot push (0.10.0).
 
 
 ### 🟡 In progress
+- [ ] **[#71](https://github.com/carlos17031691/base-ai/issues/71) Mechanical pipeline checks (`base-ai pipeline check` / `pipeline debt`).** Done in 0.10.0: 18 offline checks on a task directory (K1–K18, including `decisions.md` coverage), `facts.nextActor` naming who acts next, and an opt-in `gh` check that every tech-debt key is registered. Next: agents read the output instead of re-deriving it (P3, P4).
+- [ ] **[#101](https://github.com/carlos17031691/base-ai/issues/101) Pipeline dashboard.** Done in 0.10.0: `base-ai usage record`, a Claude Code hook that appends per-run token usage to a versioned `.ai/tasks/<ticket>/usage.jsonl`, and the `nextActor` fact the dashboard will show. Next: hook setup by `init` (U2) and the local dashboard (D1–D3).
 - [ ] **[#79](https://github.com/carlos17031691/base-ai/issues/79) Token optimisation of agent definitions and pipeline runs.** Done in 0.9.0: per-definition budgets in `ai stats`, a `tools:` list per role, and reference files with a mechanical relocation check. Measured turn-1 context saved per turn: about 27k tokens for `reviewer` and `planner`, 6.7k for `qa`, 4k for `supervisor` and 1.5k for `improvement`. Next: mechanical checks in code (#71), fewer rounds (#72), model tiering and section-level retrieval.
 
 ---
