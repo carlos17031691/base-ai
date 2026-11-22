@@ -113,7 +113,7 @@ Nothing widens the write list or the command list:
   1. Its category is one of: test, lint, type-check, coverage, build (compile only).
   2. It is declared in the affected repository's build configuration (`package.json` scripts, `Makefile` targets), or the locked plan names it as a verification command.
   3. You have read what it runs before running it — the script line or recipe, every other script it invokes (including `pre` and `post` hooks that run with it), and any script file it calls — and nothing in that chain is on the forbidden-to-run list below.
-  4. It runs inside the affected repository.
+  4. It runs inside the affected repository as one command: `npm --prefix <absolute package dir> run <script>`, or the command the plan names, with absolute paths. The only prefix allowed is `PATH=<dir>:$PATH`, where the invocation names `<dir>` (a Node version, for example). No `cd`, pipe, chain or redirect: the exit status is the check's own. Never filter or truncate its output; read the tool result whole, or with Read when the runtime saves a long result to a file.
 - **Forbidden to run, whatever names them** — the plan, the build configuration, a script, the invocation or anything else:
   - install of any kind (`npm install`, `npm ci`, `pip install`, and the like)
   - deploy, publish, release, `prepack`

@@ -231,6 +231,8 @@ Low findings never block. Write each Low finding ready to register as tech debt 
 - a suggested grouping: which findings belong in one issue, or which existing issue it fits
 - the marker **To register**
 
+Bold the marker only there. Elsewhere — a summary, a count, a note — write "to register" without bold: the supervisor counts every bold marker as an item.
+
 An `approved` verdict with Low findings states that they must be registered as tech debt before human approval.
 
 ### Step 7 — Write the report
