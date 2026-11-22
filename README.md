@@ -89,7 +89,7 @@ Exported from `.ai/` into every AI coding assistant:
 | Skill | Purpose |
 |-------|---------|
 | `discovery` | Turn raw ideas into MVP boundaries, candidate services, Epics & Gherkin User Stories (Jira, ClickUp, Trello) |
-| `sdlc` | End-to-end engineering lifecycle & gates (Traceability → Branch → Design → Implement → Verify → Review → Release) |
+| `sdlc` | End-to-end engineering lifecycle & gates (Traceability → Branch → Design → Implement → Verify → Review → Release), with the pipeline agent and task state for each gate |
 | `architecture` | Domain isolation, Dependency Inversion, backward-compatible contracts & resilience patterns |
 | `integrations` | External APIs, webhook signature verification, Slack ChatOps & resilient LLM gateways (OpenRouter, LiteLLM) |
 | `ai-ops` | Model tiering, prompt prefix caching, token optimization & cost telemetry (AI FinOps) |
@@ -139,6 +139,9 @@ base-ai doctor
 base-ai wizard
 
 # 9. Token budget guardrail in CI (exit 1 on violations)
+#    Also reports each role definition in .claude/agents/ and its reference files in
+#    .claude/agents/<role>/ (chars, estimated tokens, totals) and fails when one exceeds its
+#    budget in .ai/config.yaml (budgets.definitions, budgets.definition_totals)
 base-ai ai stats --max-tokens 5000 --ci
 
 # 10. Run AI eval suites (deterministic + LLM-as-judge)
@@ -153,10 +156,13 @@ base-ai dev status
 
 ### 🧑‍🤝‍🧑 Multi-agent pipeline
 
-- **New projects:** `init` ships the six role definitions in `.claude/agents/` (`planner`, `implementer`, `reviewer`, `qa`, `supervisor`, `improvement`), the task state machine in `docs/task-state-machine.md` and the task templates in `templates/task/`. The root `.claude/agents/*.md` files are editable source (see ADR-0004).
-- **Services:** `ai sync` exports the definitions to every service with `ai: inherit` and Claude enabled, as generated files in `src/<name>/.claude/agents/`, checked by `doctor`. Services do not yet get the state-machine doc or the task templates (follow-up).
+- **New projects:** `init` ships the six role definitions in `.claude/agents/` (`planner`, `implementer`, `reviewer`, `qa`, `supervisor`, `improvement`), their reference files in `.claude/agents/<role>/`, the task state machine in `docs/task-state-machine.md` and the task templates in `templates/task/`. The root `.claude/agents/*.md` and `.claude/agents/<role>/*.md` files are editable source (see ADR-0004 and ADR-0005). Every role definition carries a `tools:` list in its frontmatter, so each role gets only the tools it names (least privilege, and less context per run).
+- **Reference files:** a definition may move passages that a run needs only in a given case into reference files, `.claude/agents/<role>/<name>.md` (no frontmatter, one level deep). They are part of that definition and bind exactly as it does; the definition names each one as `.claude/agents/<role>/<name>.md` and says when to read it. `ai stats` and `ai sync` fail, naming the path, on a reference file its definition does not name and on a directory under `.claude/agents/` with no definition. `qa` has three: `.claude/agents/qa/halt.md`, `execution-anomalies.md` and `base-choice.md`. `reviewer` has three: `.claude/agents/reviewer/halt.md`, `base-choice.md` and `re-review.md`. `supervisor` has four: `.claude/agents/supervisor/decisions-format.md`, `registration-match.md`, `steering.md` and `refusal-halt-forms.md`.
+- **Definition budgets:** `ai stats` (plain and `--ci`) measures each role definition as a whole file, frontmatter included, and each of its reference files (chars and estimated tokens; the definition total with its reference files; the sums over all roles). It enforces two maps of role to a maximum number of estimated tokens in `.ai/config.yaml`: `budgets.definitions` (the definition file alone) and `budgets.definition_totals` (the definition plus its reference files; a role with reference files and no total is held to its `definitions` value), so text moved into a reference file still counts. It exits 1, naming the role and both numbers, when a definition or a total is above its budget or a definition has no entry in `budgets.definitions`; this applies with or without `--max-tokens`. A project with no `budgets` key gets the report and no violation. The `qa` budgets are 14,250 for `qa.md` (down from 19,750) and 18,000 with its reference files; the `reviewer` budgets are 6,000 for `reviewer.md` (down from 7,250) and 7,000 with its reference files; the `supervisor` budgets are 8,750 for `supervisor.md` (down from 11,500) and 11,250 with its reference files; the `improvement` budget is 8,000 for `improvement.md` (down from 9,000); each is the measured size rounded up to the next 250. To raise a budget, change the role's value in `.ai/config.yaml` through a PR whose approved plan says so.
+- **Slimming a definition without weakening it:** `cd cli && npm run check:relocation -- <base-commit> <role> [--map <file>]` compares the definition and its reference files with the definition at a base commit and writes nothing. Without `--map` every base line must still be present, in the core or a reference file, in its original order; only the listed added lines are new. With `--map`, a JSON object `{ "base", "role", "ranges", "entries" }` whose `base` and `role` must match the arguments and whose `entries` are `{ "deleted", "carriers", "where" }` (all required), a base line may also be deleted when it is a list item inside `ranges` and its entry names the carrier lines, still in the core definition, that state the same rule; the reviewer judges each pair. The bare array form of BASE-079-T2 is accepted only for `qa` at `47ead24`. ADR-0005 records the method.
+- **Services:** `ai sync` exports the definitions and their reference files to every service with `ai: inherit` and Claude enabled, as generated files in `src/<name>/.claude/agents/`, checked by `doctor`. Services do not yet get the state-machine doc or the task templates (follow-up).
 - **Task state:** `.ai/tasks/` is git-ignored in the root and in services created by `service new`.
-- **Upgrading a project created with ≤ 0.8.0:** copy `.claude/agents/*.md` and `docs/task-state-machine.md` from a fresh `init`, add `.ai/tasks/` to `.gitignore`, and delete any hand-made copies of the definitions in services before running `ai sync`.
+- **Upgrading a project created with ≤ 0.8.1:** copy `.claude/agents/*.md`, the `.claude/agents/<role>/` directories and `docs/task-state-machine.md` from a fresh `init`, add `.ai/tasks/` to `.gitignore`, and delete any hand-made copies of the definitions in services before running `ai sync`.
 
 ---
 
@@ -167,7 +173,7 @@ base-ai dev status
 | Assistant / Platform | Generated File(s) |
 |----------------------|-------------------|
 | **Google Antigravity™ / Gemini™** | `AGENTS.md`, `.agents/skills/` |
-| **Anthropic Claude Code™** | `CLAUDE.md`, `.claude/commands/`, `.claude/agents/` |
+| **Anthropic Claude Code™** | `CLAUDE.md`, `.claude/commands/`, `.claude/agents/` (with `.claude/agents/<role>/` reference files) |
 | **Cursor™** | `.cursor/rules/*.mdc` |
 | **GitHub Copilot™** | `.github/copilot-instructions.md`, `.github/prompts/` |
 | **OpenAI Codex™ / ChatGPT™** | `AGENTS.md` |
@@ -227,6 +233,10 @@ flowchart LR
 - [x] **[#23](https://github.com/carlos17031691/base-ai/issues/23) Interactive CLI Wizard (`base-ai wizard`):** Zero-dependency interactive TUI for scaffolding new projects and services with guided selection of cloud provider, IaC tool, and CI/CD target.
 - [x] **[#26](https://github.com/carlos17031691/base-ai/issues/26) Deterministic AI Evaluation Suite (`base-ai eval`):** YAML-driven eval runner with deterministic assertions (exact, contains, regex, gte/lte, json_schema), context search quality evals, optional LLM-as-judge via `EVAL_LLM_URL`, SSRF protection, and CI Markdown reports.
 - [x] **[#27](https://github.com/carlos17031691/base-ai/issues/27) Multi-Service Local Dev Mesh (`base-ai dev`):** Dynamic Docker Compose generation from `services.yaml` with per-service port mapping, environment variables, infrastructure dependencies (Redis, Postgres, etc.), hot-reload volume mounts, service name validation, and image reference security checks.
+
+
+### 🟡 In progress
+- [ ] **[#79](https://github.com/carlos17031691/base-ai/issues/79) Token optimisation of agent definitions and pipeline runs.** Done in 0.9.0: per-definition budgets in `ai stats`, a `tools:` list per role, and reference files with a mechanical relocation check. Measured turn-1 context saved per turn: about 27k tokens for `reviewer` and `planner`, 6.7k for `qa`, 4k for `supervisor` and 1.5k for `improvement`. Next: mechanical checks in code (#71), fewer rounds (#72), model tiering and section-level retrieval.
 
 ---
 

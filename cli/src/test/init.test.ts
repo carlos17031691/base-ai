@@ -27,7 +27,11 @@ test("init carries the pipeline: role definitions, state-machine doc, task templ
   const tpl = templateRoot();
   const roles = readdirSync(join(tpl, ".claude/agents")).filter((f) => f.endsWith(".md")).sort();
   assert.deepEqual(roles, ["implementer.md", "improvement.md", "planner.md", "qa.md", "reviewer.md", "supervisor.md"]);
-  for (const f of [...roles.map((r) => `.claude/agents/${r}`), "docs/task-state-machine.md"]) {
+  // Reference files of a role (`.claude/agents/<role>/<name>.md`, BASE-079-T2), when the template has any.
+  const refs = readdirSync(join(tpl, ".claude/agents"), { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .flatMap((e) => readdirSync(join(tpl, ".claude/agents", e.name)).filter((f) => f.endsWith(".md")).map((f) => `.claude/agents/${e.name}/${f}`));
+  for (const f of [...roles.map((r) => `.claude/agents/${r}`), ...refs, "docs/task-state-machine.md"]) {
     assert.ok(readFileSync(join(dir, f)).equals(readFileSync(join(tpl, f))), `${f} byte-identical`);
   }
   for (const f of readdirSync(join(tpl, "templates/task"))) assert.ok(existsSync(join(dir, "templates/task", f)), f);

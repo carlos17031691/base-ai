@@ -46,10 +46,14 @@ export const exporters: Record<Agent, Exporter> = {
     md("CLAUDE.md", src.rules + skillIndex(forAgent(src, "claude"))),
     ...forAgent(src, "claude").map((s) => md(`.claude/commands/${s.id}.md`, s.body, { description: s.description })),
     // Frontmatter kept byte for byte (Claude Code parses it), then the header after it.
-    ...src.roles.map((r) => ({
-      path: `.claude/agents/${r.id}.md`,
-      content: `${r.frontmatter}${AGENT_HEADER}\n\n${r.body.trim()}\n`,
-    })),
+    ...src.roles.flatMap((r) => [
+      { path: `.claude/agents/${r.id}.md`, content: `${r.frontmatter}${AGENT_HEADER}\n\n${r.body.trim()}\n` },
+      // Reference files have no frontmatter: the header comes first.
+      ...r.references.map((ref) => ({
+        path: `.claude/agents/${r.id}/${ref.name}`,
+        content: `${AGENT_HEADER}\n\n${ref.body.trim()}\n`,
+      })),
+    ]),
   ],
   cursor: (src) => [
     md(".cursor/rules/base-ai.mdc", src.rules, { description: "Global project rules", alwaysApply: true }),
