@@ -5,8 +5,10 @@ import {
   fenceMask,
   markerOffsets,
   maskCodeSpans,
+  nextActor,
   parseStatus,
   renderText,
+  type NextActorInput,
   type CheckReport,
   type FileRead,
   type TaskInput,
@@ -577,4 +579,92 @@ test("K18 with an absent file fails on events, fails on an unreadable file, and 
   const unlocked = checkTask(input({}, status({ plan_locked: false })));
   assert.match(check(unlocked, "K18").detail, /depends on K6/);
   assert.match(renderText(checkTask(input())), /decisions: absent; events: none; covering: -; acknowledging: -/);
+});
+
+// ---- facts.nextActor (BASE-101-D0) ----
+
+const KEYS = [
+  "status.parse", "status.ticket", "plan.steps", "state", "transitions.order", "lock", "completion", "review.present", "review.consistency",
+  "review.binding", "review.verdict", "qa.present", "qa.consistency", "qa.binding", "qa.verdict", "register.keys", "decisions.format", "decisions.covers",
+];
+type St = "pass" | "fail" | "skip";
+const checksWith = (over: Record<string, St> = {}) =>
+  KEYS.map((key, i) => ({ id: `K${i + 1}`, key, source: "x", status: over[`K${i + 1}`] ?? ("pass" as St), detail: "" }));
+const na = (over: Partial<NextActorInput> = {}, st: Record<string, St> = {}) =>
+  nextActor({ checks: checksWith(st), state: "completed", planLocked: true, reviewEntries: 1, qaEntries: 1, resetExists: false, ownTicket: false, keys: 0, ...over });
+const UNSTARTED: Record<string, St> = { K4: "fail", K6: "fail", K7: "fail", K8: "fail", K9: "skip", K10: "skip", K11: "skip", K12: "fail", K13: "skip", K14: "skip", K15: "skip", K18: "skip" };
+
+test("nextActor rows 1–3: pending — planner without a draft, human for approval, implementer once locked", () => {
+  assert.deepEqual(na({ state: "pending", planLocked: false, reviewEntries: 0, qaEntries: 0 }, { ...UNSTARTED, K3: "fail" }), { role: "planner", reason: "plan not drafted" });
+  assert.deepEqual(na({ state: "pending", planLocked: false, reviewEntries: 0, qaEntries: 0 }, UNSTARTED), { role: "human", reason: "plan approval" });
+  assert.deepEqual(na({ state: "pending", reviewEntries: 0, qaEntries: 0 }, { ...UNSTARTED, K6: "pass", K18: "pass" }), { role: "implementer", reason: "plan locked; claim it" });
+});
+
+test("nextActor rows 4–5: in_progress is the implementer, blocked is the human", () => {
+  assert.deepEqual(na({ state: "in_progress", reviewEntries: 0, qaEntries: 0 }, { ...UNSTARTED, K6: "pass", K18: "pass" }), { role: "implementer", reason: "in progress" });
+  assert.deepEqual(na({ state: "blocked", reviewEntries: 0, qaEntries: 0 }, { ...UNSTARTED, K6: "pass", K18: "pass" }), { role: "human", reason: "blocked" });
+  assert.deepEqual(na({ state: "blocked", planLocked: false, reviewEntries: 0, qaEntries: 0 }, UNSTARTED), { role: "human", reason: "blocked" }, "K6 is progress while blocked and unlocked");
+});
+
+test("nextActor rows 6–8: review missing, not bound (round = reviewer entries + 1), changes_requested is a human send-back", () => {
+  assert.deepEqual(na({ reviewEntries: 0, qaEntries: 0 }, { K8: "fail", K9: "skip", K10: "skip", K11: "skip", K12: "fail", K13: "skip", K14: "skip", K15: "skip" }), {
+    role: "reviewer",
+    round: 1,
+    reason: "no review round",
+  });
+  assert.deepEqual(na({ reviewEntries: 1 }, { K10: "fail", K11: "skip" }), { role: "reviewer", round: 2, reason: "review not bound to latest completion" });
+  assert.deepEqual(na({ reviewEntries: 2 }, { K10: "fail" }), { role: "reviewer", round: 3, reason: "review not bound to latest completion" });
+  assert.deepEqual(na({ reviewEntries: 2 }, { K11: "fail" }), { role: "human", reason: "send-back decision: review round 2 changes_requested" });
+});
+
+test("nextActor rows 9–12: QA after a reset, QA missing, not bound (round = counted entries + 1), QA fail is a human send-back", () => {
+  const noQa = { K12: "fail", K13: "skip", K14: "skip", K15: "skip" } as Record<string, St>;
+  assert.deepEqual(na({ qaEntries: 0, resetExists: true }, noQa), { role: "qa", round: 1, reason: "no QA round since the QA rounds reset" });
+  assert.deepEqual(na({ qaEntries: 0 }, noQa), { role: "qa", round: 1, reason: "no QA round" });
+  assert.deepEqual(na({ qaEntries: 1 }, { K14: "fail", K15: "skip" }), { role: "qa", round: 2, reason: "QA not bound to latest completion" });
+  assert.deepEqual(na({ qaEntries: 1 }, { K15: "fail" }), { role: "human", reason: "send-back decision: QA round 1 fail" });
+});
+
+test("nextActor rows 13–15: own ticket goes to the human; supervisor with and without keys; validated is none", () => {
+  assert.deepEqual(na({ ownTicket: true }), { role: "human", reason: "supervisor own ticket: the human decides" });
+  assert.deepEqual(na(), { role: "supervisor", reason: "review approved and QA pass for latest completion" });
+  assert.deepEqual(na({ keys: 3 }), { role: "supervisor", reason: "review approved and QA pass for latest completion; register 3 key(s) first" });
+  assert.deepEqual(na({ state: "validated" }), { role: "none", reason: "validated; improvement optional, then the human's PR" });
+  assert.deepEqual(na({ state: "weird" }), { role: "human", reason: "no rule matched" });
+});
+
+test("nextActor precedence: the first integrity failure in K order names the human, progress failures do not", () => {
+  assert.deepEqual(na({}, { K5: "fail", K18: "fail" }), { role: "human", reason: "check K5 transitions.order failed" });
+  assert.deepEqual(na({}, { K18: "fail" }), { role: "human", reason: "check K18 decisions.covers failed" });
+  assert.deepEqual(na({ state: null }, { K1: "fail" }), { role: "human", reason: "check K1 status.parse failed" });
+  assert.equal(na({ reviewEntries: 1 }, { K8: "fail" }).reason, "check K8 review.present failed", "a reviewer entry with a null verdict");
+  assert.equal(na({ qaEntries: 1 }, { K12: "fail" }).reason, "check K12 qa.present failed");
+  assert.equal(na({ qaEntries: 0, resetExists: true }, { K12: "fail", K13: "fail" }).reason, "check K13 qa.consistency failed", "a filled report after a reset");
+  assert.equal(na({}, { K7: "fail" }).reason, "check K7 completion failed", "no completion in completed");
+  assert.equal(na({ state: "in_progress" }, { K3: "fail" }).reason, "check K3 plan.steps failed", "K3 once the plan is locked");
+  assert.equal(na({ state: "pending" }, { K6: "fail" }).reason, "check K6 lock failed", "K6 with plan_locked true");
+  for (const id of ["K2", "K9", "K16", "K17"]) assert.equal(na({}, { [id]: "fail" }).role, "human", id);
+});
+
+test("nextActor end to end: a fresh pending task, a locked one, the full pass, and K18 in checkTask", () => {
+  const init = [{ from: null, to: "pending", agent: "planner", timestamp: "2026-01-01T00:00:00Z", note: "task initialized" }];
+  const fresh = { review: { kind: "missing" } as FileRead, qa: { kind: "missing" } as FileRead };
+  const draft = checkTask(input({ ...fresh, plan: ok("# Plan\n\n## Steps\n\n1. \n") }, status({ state: "pending", plan_locked: false, checklist: { tests_pass: false, lint_pass: false, types_pass: false, review_verdict: null, qa_verdict: null } }, init)));
+  assert.deepEqual(draft.facts.nextActor, { role: "planner", reason: "plan not drafted" });
+  const ready = checkTask(input(fresh, status({ state: "pending", plan_locked: false, checklist: { tests_pass: false, lint_pass: false, types_pass: false, review_verdict: null, qa_verdict: null } }, init)));
+  assert.deepEqual(ready.facts.nextActor, { role: "human", reason: "plan approval" });
+  assert.deepEqual(checkTask(input()).facts.nextActor, { role: "supervisor", reason: "review approved and QA pass for latest completion; register 2 key(s) first" });
+  const human = { from: "completed", to: "completed", agent: "human", timestamp: "2026-01-01T00:06:00Z", note: "human decided something" };
+  assert.deepEqual(checkTask(input({}, status({}, [...baseTransitions(), human]))).facts.nextActor, { role: "human", reason: "check K18 decisions.covers failed" });
+  assert.deepEqual(checkTask(input({ status: { kind: "missing" } })).facts.nextActor.reason, "check K1 status.parse failed");
+});
+
+test("the next: line, with and without a round; note and report text never reach the reason or the output", () => {
+  assert.match(renderText(checkTask(input())), /\n {2}next: supervisor — review approved and QA pass for latest completion; register 2 key\(s\) first\n/);
+  const t = baseTransitions().slice(0, 5).map((e) => ({ ...e, note: `${e.note} SENTINEL-NOTE` }));
+  const r = checkTask(input({ review: ok(`${REVIEW}\nSENTINEL-REPORT\n`), qa: { kind: "missing" } }, status({ checklist: { tests_pass: true, lint_pass: false, types_pass: true, review_verdict: "approved", qa_verdict: null } }, t)));
+  assert.deepEqual(r.facts.nextActor, { role: "qa", round: 1, reason: "no QA round" });
+  const text = renderText(r);
+  assert.match(text, /\n {2}next: qa round 1 — no QA round\n/);
+  assert.doesNotMatch(text + r.facts.nextActor.reason, /SENTINEL/);
 });
