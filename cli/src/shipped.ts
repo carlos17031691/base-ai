@@ -23,8 +23,10 @@ export function isShippedPath(rel: string): boolean {
 
   if (p === ".claude" || p === ".claude/agents") return true;
   if (p.startsWith(".claude/agents/")) {
-    const name = p.slice(".claude/agents/".length);
-    return !name.includes("/") && name.endsWith(".md");
+    const parts = p.slice(".claude/agents/".length).split("/");
+    // A definition `<role>.md`, a reference directory `<role>` (no extension) and its `<role>/<name>.md` files.
+    if (parts.length === 1) return parts[0].endsWith(".md") || !parts[0].includes(".");
+    return parts.length === 2 && !parts[0].includes(".") && parts[1].endsWith(".md");
   }
 
   if (p === "docs" || p.startsWith("docs/")) {

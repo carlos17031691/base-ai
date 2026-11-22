@@ -17,8 +17,9 @@ const USAGE = `base-ai <command> [--root <dir>]
 Commands:
   init <dir> [--ci none|github|gitlab]              Create a new project from the base-ai template
   ai sync                                           Export .ai/ to every agent's format and refresh context index
-  ai stats [--max-tokens N] [--ci]                   Report token footprint (context, skills, role definitions); fails if --max-tokens
-                                                     or a budgets.definitions entry of .ai/config.yaml is exceeded; --ci outputs Markdown
+  ai stats [--max-tokens N] [--ci]                   Report token footprint (context, skills, role definitions and their reference files);
+                                                     fails if --max-tokens or a budgets.definitions / budgets.definition_totals entry
+                                                     of .ai/config.yaml is exceeded; --ci outputs Markdown
   doctor                                            Validate services.yaml and fail if AI artefacts are out of date
   context index                                     Build/refresh .ai/context-index.json across root and src/<name>
   context search <query> [--scope s] [--top k]      Retrieve ranked chunks (ADRs, RFCs, runbooks, contracts, memory)
@@ -86,10 +87,21 @@ function main(argv: string[]): number {
         console.log(`  - ${s.name.padEnd(16)} ~${String(s.estimatedTokens).padStart(4)} tokens (${s.chars} chars)`);
       }
       if (st.definitions.length > 0) {
-        console.log(`\nRole definitions (${st.definitions.length}, each loaded whole by its agent run): ~${st.definitionsTotalTokens} tokens total\n`);
+        console.log(
+          `\nRole definitions (${st.definitions.length}, each loaded whole by its agent run): ~${st.definitionsTotalTokens} tokens total` +
+            (st.definitionsWithReferencesTokens > st.definitionsTotalTokens ? `, ~${st.definitionsWithReferencesTokens} with reference files` : "") +
+            "\n",
+        );
         for (const d of st.definitions) {
           const budget = st.definitionBudgets?.[d.name];
           console.log(`  - ${d.name.padEnd(16)} ~${String(d.estimatedTokens).padStart(5)} tokens (${d.chars} chars)${budget === undefined ? "" : ` [budget: ${budget}]`}`);
+          for (const ref of d.references) {
+            console.log(`      ↳ ${ref.name.padEnd(28)} ~${String(ref.estimatedTokens).padStart(5)} tokens (${ref.chars} chars, read when its case occurs)`);
+          }
+          if (d.references.length > 0) {
+            const total = st.definitionTotals?.[d.name];
+            console.log(`      = with reference files         ~${String(d.totalTokens).padStart(5)} tokens${total === undefined ? "" : ` [budget: ${total}]`}`);
+          }
         }
       }
     }

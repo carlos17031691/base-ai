@@ -139,8 +139,9 @@ base-ai doctor
 base-ai wizard
 
 # 9. Token budget guardrail in CI (exit 1 on violations)
-#    Also reports each role definition in .claude/agents/ (chars, estimated tokens, total)
-#    and fails when one exceeds its budget in .ai/config.yaml (budgets.definitions)
+#    Also reports each role definition in .claude/agents/ and its reference files in
+#    .claude/agents/<role>/ (chars, estimated tokens, totals) and fails when one exceeds its
+#    budget in .ai/config.yaml (budgets.definitions, budgets.definition_totals)
 base-ai ai stats --max-tokens 5000 --ci
 
 # 10. Run AI eval suites (deterministic + LLM-as-judge)
@@ -155,11 +156,13 @@ base-ai dev status
 
 ### 🧑‍🤝‍🧑 Multi-agent pipeline
 
-- **New projects:** `init` ships the six role definitions in `.claude/agents/` (`planner`, `implementer`, `reviewer`, `qa`, `supervisor`, `improvement`), the task state machine in `docs/task-state-machine.md` and the task templates in `templates/task/`. The root `.claude/agents/*.md` files are editable source (see ADR-0004). Every role definition carries a `tools:` list in its frontmatter, so each role gets only the tools it names (least privilege, and less context per run).
-- **Definition budgets:** `ai stats` (plain and `--ci`) measures each role definition as a whole file, frontmatter included (chars and estimated tokens, plus the total), and enforces `budgets.definitions` in `.ai/config.yaml`, a map of role to a maximum number of estimated tokens. It exits 1, naming the role and both numbers, when a definition is above its budget or has no entry in the map; this applies with or without `--max-tokens`. A project with no `budgets` key gets the report and no violation. To raise a budget, change the role's value in `.ai/config.yaml` through a PR whose approved plan says so.
-- **Services:** `ai sync` exports the definitions to every service with `ai: inherit` and Claude enabled, as generated files in `src/<name>/.claude/agents/`, checked by `doctor`. Services do not yet get the state-machine doc or the task templates (follow-up).
+- **New projects:** `init` ships the six role definitions in `.claude/agents/` (`planner`, `implementer`, `reviewer`, `qa`, `supervisor`, `improvement`), their reference files in `.claude/agents/<role>/`, the task state machine in `docs/task-state-machine.md` and the task templates in `templates/task/`. The root `.claude/agents/*.md` and `.claude/agents/<role>/*.md` files are editable source (see ADR-0004 and ADR-0005). Every role definition carries a `tools:` list in its frontmatter, so each role gets only the tools it names (least privilege, and less context per run).
+- **Reference files:** a definition may move passages that a run needs only in a given case into reference files, `.claude/agents/<role>/<name>.md` (no frontmatter, one level deep). They are part of that definition and bind exactly as it does; the definition names each one as `.claude/agents/<role>/<name>.md` and says when to read it. `ai stats` and `ai sync` fail, naming the path, on a reference file its definition does not name and on a directory under `.claude/agents/` with no definition. `qa` has three: `.claude/agents/qa/halt.md`, `execution-anomalies.md` and `base-choice.md`.
+- **Definition budgets:** `ai stats` (plain and `--ci`) measures each role definition as a whole file, frontmatter included, and each of its reference files (chars and estimated tokens; the definition total with its reference files; the sums over all roles). It enforces two maps of role to a maximum number of estimated tokens in `.ai/config.yaml`: `budgets.definitions` (the definition file alone) and `budgets.definition_totals` (the definition plus its reference files; a role with reference files and no total is held to its `definitions` value), so text moved into a reference file still counts. It exits 1, naming the role and both numbers, when a definition or a total is above its budget or a definition has no entry in `budgets.definitions`; this applies with or without `--max-tokens`. A project with no `budgets` key gets the report and no violation. The `qa` budgets are 14,250 for `qa.md` (down from 19,750) and 18,000 with its reference files, each the measured size rounded up to the next 250. To raise a budget, change the role's value in `.ai/config.yaml` through a PR whose approved plan says so.
+- **Slimming a definition without weakening it:** `cd cli && npm run check:relocation -- <base-commit> <role> [--map <file>]` compares the definition and its reference files with the definition at a base commit and writes nothing. Without `--map` every base line must still be present, in the core or a reference file, in its original order; only the listed added lines are new. With `--map`, a JSON array of `{ "deleted", "carriers", "where" }` entries, a base line may also be deleted when it is a list item of the role's allowed ranges and its map entry names the carrier lines, still in the core definition, that state the same rule; the reviewer judges each pair. ADR-0005 records the method.
+- **Services:** `ai sync` exports the definitions and their reference files to every service with `ai: inherit` and Claude enabled, as generated files in `src/<name>/.claude/agents/`, checked by `doctor`. Services do not yet get the state-machine doc or the task templates (follow-up).
 - **Task state:** `.ai/tasks/` is git-ignored in the root and in services created by `service new`.
-- **Upgrading a project created with ≤ 0.8.0:** copy `.claude/agents/*.md` and `docs/task-state-machine.md` from a fresh `init`, add `.ai/tasks/` to `.gitignore`, and delete any hand-made copies of the definitions in services before running `ai sync`.
+- **Upgrading a project created with ≤ 0.8.0:** copy `.claude/agents/*.md`, the `.claude/agents/<role>/` directories and `docs/task-state-machine.md` from a fresh `init`, add `.ai/tasks/` to `.gitignore`, and delete any hand-made copies of the definitions in services before running `ai sync`.
 
 ---
 
@@ -170,7 +173,7 @@ base-ai dev status
 | Assistant / Platform | Generated File(s) |
 |----------------------|-------------------|
 | **Google Antigravity™ / Gemini™** | `AGENTS.md`, `.agents/skills/` |
-| **Anthropic Claude Code™** | `CLAUDE.md`, `.claude/commands/`, `.claude/agents/` |
+| **Anthropic Claude Code™** | `CLAUDE.md`, `.claude/commands/`, `.claude/agents/` (with `.claude/agents/<role>/` reference files) |
 | **Cursor™** | `.cursor/rules/*.mdc` |
 | **GitHub Copilot™** | `.github/copilot-instructions.md`, `.github/prompts/` |
 | **OpenAI Codex™ / ChatGPT™** | `AGENTS.md` |
