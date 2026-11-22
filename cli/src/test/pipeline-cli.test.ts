@@ -150,3 +150,17 @@ test("pipeline debt: zero keys exit 0 with no command; keys outside a git reposi
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("pipeline check --json carries facts.nextActor with schema 1", () => {
+  const root = mkdtempSync(join(tmpdir(), "pc-"));
+  try {
+    writeTask(root, "TK-2", files);
+    const r = run(["pipeline", "check", ".ai/tasks/TK-2", "--root", root, "--json"]);
+    const j = JSON.parse(r.stdout);
+    assert.equal(j.schema, 1);
+    assert.deepEqual(Object.keys(j.facts.nextActor).sort(), ["reason", "role"]);
+    assert.equal(j.facts.nextActor.role, "supervisor");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

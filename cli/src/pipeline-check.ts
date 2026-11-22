@@ -58,6 +58,28 @@ export interface DecisionFacts {
   acknowledging: string[];
 }
 
+export type NextRole = "planner" | "implementer" | "reviewer" | "qa" | "supervisor" | "human" | "none";
+/** Who acts next (BASE-101-D0), mirroring the "Who acts next" table of `.ai/skills/pipeline/skill.md`. */
+export interface NextActor {
+  role: NextRole;
+  /** Present only for reviewer and qa. */
+  round?: number;
+  /** A fixed template filled with check ids, numbers and state names only. */
+  reason: string;
+}
+
+export interface NextActorInput {
+  checks: CheckResult[];
+  state: string | null;
+  planLocked: boolean;
+  /** All reviewer entries, and QA entries after the latest reset, as counted for K9 and K13. */
+  reviewEntries: number;
+  qaEntries: number;
+  resetExists: boolean;
+  ownTicket: boolean;
+  keys: number;
+}
+
 export interface TaskFacts {
   state: string | null;
   latestCompletion: string | null;
@@ -67,6 +89,7 @@ export interface TaskFacts {
   supervisor_own_ticket: boolean;
   roundHeadingMismatches: string[];
   decisions: DecisionFacts;
+  nextActor: NextActor;
   rule: string;
 }
 
@@ -379,6 +402,68 @@ function coveredBy(b: DecisionBlock): string[] {
 const fileProblem = (f: FileRead, name: string) =>
   f.kind === "missing" ? `${name} is missing` : f.kind === "error" ? `${name}: ${f.reason}` : "";
 
+/** A failing check that means "work is still to do" rather than "the task is malformed" (plan H1). */
+function isProgress(id: string, i: NextActorInput, entries: { review: boolean; qa: boolean }): boolean {
+  const pendingOrBlocked = i.state === "pending" || i.state === "blocked";
+  switch (id) {
+    case "K3":
+      return i.state === "pending" && !i.planLocked;
+    case "K4":
+    case "K10":
+    case "K11":
+    case "K14":
+    case "K15":
+      return true;
+    case "K6":
+      return !i.planLocked && pendingOrBlocked;
+    case "K7":
+      return pendingOrBlocked || i.state === "in_progress";
+    case "K8":
+      return !entries.review;
+    case "K12":
+      return !entries.qa;
+    default:
+      return false;
+  }
+}
+
+/** Pure rule table: integrity failures first (step A), then by state (step B). */
+export function nextActor(i: NextActorInput): NextActor {
+  const entries = { review: i.reviewEntries > 0, qa: i.qaEntries > 0 };
+  const integrity = i.checks.find((c) => c.status === "fail" && !isProgress(c.id, i, entries));
+  if (integrity) return { role: "human", reason: `check ${integrity.id} ${integrity.key} failed` };
+  const status = (id: string) => i.checks.find((c) => c.id === id)?.status;
+  const k3 = status("K3") === "pass";
+  switch (i.state) {
+    case "pending":
+      if (i.planLocked) return { role: "implementer", reason: "plan locked; claim it" };
+      return k3 ? { role: "human", reason: "plan approval" } : { role: "planner", reason: "plan not drafted" };
+    case "in_progress":
+      return { role: "implementer", reason: "in progress" };
+    case "blocked":
+      return { role: "human", reason: "blocked" };
+    case "validated":
+      return { role: "none", reason: "validated; improvement optional, then the human's PR" };
+    case "completed":
+      if (!entries.review) return { role: "reviewer", round: 1, reason: "no review round" };
+      if (status("K10") !== "pass") return { role: "reviewer", round: i.reviewEntries + 1, reason: "review not bound to latest completion" };
+      if (status("K11") === "fail") return { role: "human", reason: `send-back decision: review round ${i.reviewEntries} changes_requested` };
+      if (!entries.qa) {
+        return { role: "qa", round: 1, reason: i.resetExists ? "no QA round since the QA rounds reset" : "no QA round" };
+      }
+      if (status("K14") !== "pass") return { role: "qa", round: i.qaEntries + 1, reason: "QA not bound to latest completion" };
+      if (status("K15") === "fail") return { role: "human", reason: `send-back decision: QA round ${i.qaEntries} fail` };
+      if (i.ownTicket) return { role: "human", reason: "supervisor own ticket: the human decides" };
+      return {
+        role: "supervisor",
+        reason: `review approved and QA pass for latest completion${i.keys ? `; register ${i.keys} key(s) first` : ""}`,
+      };
+    default:
+      // Unreachable once K1 passes (parseStatus admits only the five states); kept for type safety.
+      return { role: "human", reason: "no rule matched" };
+  }
+}
+
 /** Runs K1–K18 on one task directory. Never throws on malformed input. */
 export function checkTask(input: TaskInput): CheckReport {
   const results = new Map<string, CheckResult>();
@@ -391,6 +476,7 @@ export function checkTask(input: TaskInput): CheckReport {
     supervisor_own_ticket: false,
     roundHeadingMismatches: [],
     decisions: { present: false, blocks: 0, events: [], covering: [], acknowledging: [] },
+    nextActor: { role: "human", reason: "" },
     rule: RULE,
   };
   let keys: RegistrationKey[] = [];
@@ -657,6 +743,16 @@ export function checkTask(input: TaskInput): CheckReport {
 
   const order = Array.from({ length: 18 }, (_, i) => `K${i + 1}`);
   const checks = order.map((id) => results.get(id) as CheckResult);
+  facts.nextActor = nextActor({
+    checks,
+    state: facts.state,
+    planLocked: st?.plan_locked ?? false,
+    reviewEntries: reviewerIdx.length,
+    qaEntries: qaIdx.length,
+    resetExists: reset >= 0,
+    ownTicket: facts.supervisor_own_ticket,
+    keys: keys.length,
+  });
   return {
     schema: 1,
     rule: RULE,
@@ -690,6 +786,7 @@ export function renderText(r: CheckReport): string {
     `  qa: ${f.qa.rounds} round(s), verdict ${f.qa.verdict ?? "-"}, entry ${f.qa.entry ?? "-"}`,
     `  qa resets: ${f.resets}`,
     `  supervisor_own_ticket: ${f.supervisor_own_ticket}`,
+    `  next: ${f.nextActor.role}${f.nextActor.round === undefined ? "" : ` round ${f.nextActor.round}`} — ${f.nextActor.reason}`,
     `  decisions: ${f.decisions.present ? `${f.decisions.blocks} block(s)` : "absent"}; events: ${
       f.decisions.events.map((e) => `${e.timestamp} (${e.kind})`).join(", ") || "none"
     }; covering: ${f.decisions.covering.join(", ") || "-"}; acknowledging: ${f.decisions.acknowledging.join(", ") || "-"}`,
