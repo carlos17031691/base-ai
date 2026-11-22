@@ -312,8 +312,12 @@ export function recordCost(r: Counters & { model: string }, pricing: Pricing): n
 /** The fields of a usage.jsonl line that a report reads. */
 export type ReportRecord = Counters & { agent: string; model: string; messages: number };
 
+/** A usage.jsonl line as read: the report fields plus `ts` when it is a valid UTC timestamp, else null (BASE-101-D1). */
+export type UsageLine = ReportRecord & { ts: string | null };
+const RECORD_TS = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/;
+
 /** One usage.jsonl line as a record, or null when it is not one (the line is skipped and counted). */
-export function parseUsageLine(line: string): ReportRecord | null {
+export function parseUsageLine(line: string): UsageLine | null {
   let r: unknown;
   try {
     r = JSON.parse(line);
@@ -324,6 +328,7 @@ export function parseUsageLine(line: string): ReportRecord | null {
   if (!COUNTERS.every((c) => isCount(r[c])) || !isCount(r.messages)) return null;
   const n = (k: string) => r[k] as number;
   return {
+    ts: typeof r.ts === "string" && RECORD_TS.test(r.ts) ? r.ts : null,
     agent: r.agent,
     model: r.model,
     messages: n("messages"),

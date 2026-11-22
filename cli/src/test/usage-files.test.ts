@@ -7,7 +7,7 @@ import { dirname, join } from "node:path";
 import { PassThrough } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { EventEmitter } from "node:events";
-import { appendLines, guardHookProcess, readBranch, readStdin, readTranscript, readUsageReport, runUsageRecord } from "../usage-files.js";
+import { appendLines, guardHookProcess, readBranch, readStdin, readTranscript, readUsageReport, readUsageText, runUsageRecord } from "../usage-files.js";
 import { AGENT_LINES, MAIN_LINES, PAYLOADS } from "./usage-fixtures.js";
 
 const CLI = join(dirname(fileURLToPath(import.meta.url)), "..", "index.js");
@@ -433,6 +433,23 @@ test("L6 flag before the command: --root . usage record from a deleted working d
     const r = spawnSync("/bin/sh", ["-c", `cd "${gone}" && rmdir "${gone}" && exec "${process.execPath}" "${CLI}" --root . usage record`], { input: "{}", encoding: "utf8" });
     assert.deepEqual([r.status, r.stdout], [0, ""]);
     assert.match(r.stderr, /^base-ai usage: internal error; nothing written\n$/);
+  } finally {
+    b.done();
+  }
+});
+
+test("readUsageText: the text, \"\" for a missing file, and a throw on a symlink or a missing task directory (BASE-101-D1)", () => {
+  const b = sandbox();
+  try {
+    b.task("T-1");
+    assert.equal(readUsageText(b.root, ".ai/tasks/T-1"), "");
+    const file = join(b.root, ".ai", "tasks", "T-1", "usage.jsonl");
+    writeFileSync(file, `${REC()}\n`);
+    assert.equal(readUsageText(b.root, ".ai/tasks/T-1"), `${REC()}\n`);
+    b.task("T-2");
+    symlinkSync(file, join(b.root, ".ai", "tasks", "T-2", "usage.jsonl"));
+    assert.throws(() => readUsageText(b.root, ".ai/tasks/T-2"), /^Error: \.ai\/tasks\/T-2\/usage\.jsonl is not a regular file/);
+    assert.throws(() => readUsageText(b.root, ".ai/tasks/NOPE"), /task directory not found/);
   } finally {
     b.done();
   }

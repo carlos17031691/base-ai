@@ -237,6 +237,14 @@ export function guardHookProcess(proc: HookProcess, stderr: (line: string) => vo
  * or a usage file that cannot be read safely throws.
  */
 export function readUsageReport(root: string, taskDir: string, pricing: Pricing): UsageReport {
+  return buildUsageReport(basename(resolve(root, taskDir)), readUsageText(root, taskDir), pricing);
+}
+
+/**
+ * The text of `<task-dir>/usage.jsonl` through the bounded, O_NOFOLLOW reader; "" when the file is missing.
+ * Throws when the task directory is missing or the file cannot be read safely (BASE-101-D1 reuses it).
+ */
+export function readUsageText(root: string, taskDir: string): string {
   const dir = resolve(root, taskDir);
   let isDir = false;
   try {
@@ -255,5 +263,5 @@ export function readUsageReport(root: string, taskDir: string, pricing: Pricing)
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
   }
-  return buildUsageReport(basename(dir), text, pricing);
+  return text;
 }
