@@ -71,7 +71,7 @@ Before writing a single word of the plan:
 1. Read the ticket description (provided by the user or in `.ai/tasks/<ticket-id>/`)
 2. Read every file listed in the ticket's context
 3. Read `CLAUDE.md` section 2 (isolation boundaries) and section 3 (git workflow)
-4. Identify all files that will need to change — be conservative and exhaustive
+4. Identify all files that will need to change — be conservative and exhaustive. When the change rewrites a rule, find every other statement of it (definitions, docs, skills): plan an edit for each, or say why it stays
 
 ### Step 3 — Write plan.md
 
@@ -81,7 +81,12 @@ Fill `templates/task/plan.md` with:
 - **Scope:** explicit in-scope and out-of-scope items (YAGNI — no future-proofing)
 - **Steps:** ordered, numbered, each referencing the responsible agent role
 - **Files to touch:** every file the implementer may create or modify — anything not listed here requires human approval before touching
-- **Acceptance criteria:** verbatim from the ticket, in Gherkin if possible
+- **Acceptance criteria:** verbatim from the ticket, in Gherkin if possible. Before Step 4, check that each one:
+  - can be met within the plan's scope and "Files to touch", and still after a send-back;
+  - agrees with every other section of the plan and with the known state of what it checks;
+  - names, where it expects an agent's or skill's output to contain an item, the deliverable text that instructs it;
+  - is verifiable by QA before merge with one inline command from the "Commands" list of `.claude/agents/qa.md`, needing no file written for QA, no network and no credentials. A post-merge, network or credential check goes under "Post-merge verification", with human or coordinator evidence, never in the criteria.
+  Revise a criterion that fails, or list it under "Risks & open questions"
 - **Risks & open questions:** anything that must NOT be decided by the implementer alone
 
 ### Step 4 — Ask for human approval
