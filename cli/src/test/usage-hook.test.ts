@@ -106,3 +106,11 @@ test("review r1 L1: merge also drops a generated hook left under another event, 
   assert.equal(hookState(json(before), "claude-code", CMD), "stale");
   assert.equal(hookState(merged, "claude-code", CMD), "ok");
 });
+
+test("review r2 L6: re-merging keeps SubagentStop and Stop where they were among the user's hook events", () => {
+  const before = { hooks: { Stop: [gen(OLD)], PreToolUse: [userPre], SubagentStop: [gen(OLD)] } };
+  const after = JSON.parse(mergeHook(json(before), CMD));
+  assert.deepEqual(Object.keys(after.hooks), ["Stop", "PreToolUse", "SubagentStop"]);
+  assert.deepEqual(after.hooks.Stop, [gen()]);
+  assert.deepEqual(after.hooks.SubagentStop, [gen()]);
+});

@@ -84,13 +84,14 @@ const serialize = (obj: Json) => JSON.stringify(obj, null, 2) + "\n";
  * Drops generated hook objects from every event, and the event arrays that removal emptied, so a generated hook
  * left under another event is cleaned too (the doctor reports it as stale).
  */
-function stripGenerated(hooks: Json): number {
+function stripGenerated(hooks: Json, keep: ReadonlySet<string> = new Set()): number {
   let removed = 0;
   for (const [event, value] of Object.entries(hooks)) {
     const r = withoutGenerated(value as unknown[]);
     if (r.removed === 0) continue;
     removed += r.removed;
-    if (r.groups.length > 0) hooks[event] = r.groups;
+    // An event about to get the fresh group keeps its array, and so its position among the user's keys.
+    if (r.groups.length > 0 || keep.has(event)) hooks[event] = r.groups;
     else delete hooks[event];
   }
   return removed;
@@ -100,7 +101,7 @@ function stripGenerated(hooks: Json): number {
 export function mergeHook(text: string | null, command: string): string {
   const settings = text === null ? {} : parseSettings(text);
   const hooks: Json = isObj(settings.hooks) ? { ...settings.hooks } : {};
-  stripGenerated(hooks);
+  stripGenerated(hooks, new Set(HOOK_EVENTS));
   for (const event of HOOK_EVENTS) {
     hooks[event] = [...((hooks[event] as unknown[] | undefined) ?? []), { hooks: [{ type: "command", command }] }];
   }
