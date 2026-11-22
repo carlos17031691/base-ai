@@ -13,6 +13,8 @@ import { runWizard } from "./wizard.js";
 import { devUp, devStop, devStatus } from "./dev.js";
 import { checkTask, renderText } from "./pipeline-check.js";
 import { loadTask } from "./pipeline-files.js";
+import { spawnRunner } from "./pipeline-gh.js";
+import { checkRegistration, renderDebt } from "./pipeline-registration.js";
 
 const USAGE = `base-ai <command> [--root <dir>]
 
@@ -38,7 +40,10 @@ Commands:
   mcp                                               Start Model Context Protocol (MCP) server over stdio for AI agents
   wizard                                            Interactive guided setup for new projects and services
   pipeline check <task-dir> [--json]                Verify a pipeline task directory deterministically (status, lock,
-                                                     rounds, verdict binding, To register keys); exits 1 naming each failed check
+                                                     rounds, verdict binding, decisions.md coverage, To register keys); exits 1
+                                                     naming each failed check. Offline.
+  pipeline debt <task-dir> [--issues n,…] [--json]  Check each To register key against GitHub issues (opt-in network, gh);
+                                                     exit 0 registered, 1 missing, 2 could not check
 `;
 
 // Flags that never take a value, so `--json <task-dir>` keeps the path positional.
@@ -262,6 +267,26 @@ function main(argv: string[]): number {
     if (result.skipped.length) console.log(`  skipped (no Dockerfile): ${result.skipped.join(", ")}`);
     return 0;
   }
+  if (cmd === "pipeline" && sub === "debt") {
+    const usage = "usage: base-ai pipeline debt <task-dir> [--issues <n,…>] [--json] [--root <dir>]";
+    const dir = rest[0];
+    const issuesArg = flags.issues;
+    if (!dir || (issuesArg !== undefined && !/^[1-9]\d*(,[1-9]\d*)*$/.test(str(issuesArg) ?? ""))) {
+      console.error(usage);
+      return 1;
+    }
+    const report = checkTask(loadTask(root, dir));
+    const k16 = report.checks.find((c) => c.id === "K16");
+    if (k16?.status !== "pass") {
+      console.error(`keys not computed: K16 ${k16?.status ?? "missing"}`);
+      return 1;
+    }
+    const issues = issuesArg === undefined ? [] : (str(issuesArg) as string).split(",").map(Number);
+    const debt = checkRegistration(report, issues, spawnRunner());
+    console.log(flags.json === true ? JSON.stringify(debt, null, 2) : renderDebt(debt));
+    return debt.outcome === "registered" ? 0 : debt.outcome === "missing" ? 1 : 2;
+  }
+
   if (cmd === "pipeline" && sub === "check") {
     const dir = rest[0];
     if (!dir) {

@@ -3,10 +3,11 @@
  *
  * Pure domain logic: it receives the raw contents of the task files and computes the
  * mechanical facts the supervisor otherwise re-derives in prose (supervisor.md C1–C4,
- * C6–C13 and the C16 marker count). No I/O here; see pipeline-files.ts.
+ * C6–C13, the C15 decisions.md coverage (BASE-071-P2) and the C16 marker count).
+ * No I/O here; see pipeline-files.ts.
  */
 
-export const RULE = "supervisor.md@8381e71";
+export const RULE = "supervisor.md@682c6e4";
 export const MAX_FILE_BYTES = 2 * 1024 * 1024;
 
 /** A task file as read by the I/O layer, which never throws. */
@@ -24,6 +25,8 @@ export interface TaskInput {
   plan: FileRead;
   review: FileRead;
   qa: FileRead;
+  /** decisions.md; absent when not given. */
+  decisions?: FileRead;
 }
 
 export type CheckStatus = "pass" | "fail" | "skip";
@@ -42,6 +45,19 @@ export interface RegistrationKey {
   line: number;
 }
 
+export type DecisionEventKind = "human" | "unblock" | "reentry";
+
+export interface DecisionFacts {
+  present: boolean;
+  blocks: number;
+  /** Post-lock events that a decision must cover (supervisor.md C15). */
+  events: { timestamp: string; kind: DecisionEventKind }[];
+  /** Blocks that cover at least one event. */
+  covering: string[];
+  /** Steering acknowledgement blocks, on structure only (no C17 judgement). */
+  acknowledging: string[];
+}
+
 export interface TaskFacts {
   state: string | null;
   latestCompletion: string | null;
@@ -50,6 +66,7 @@ export interface TaskFacts {
   resets: number;
   supervisor_own_ticket: boolean;
   roundHeadingMismatches: string[];
+  decisions: DecisionFacts;
   rule: string;
 }
 
@@ -290,10 +307,79 @@ function sectionLines(text: string, heading: RegExp): string[] {
   return out;
 }
 
+const DECISION_LABELS = ["Decided by", "Decided", "Recorded by", "Covers", "Decision", "Affects"];
+const LABEL_ALT = DECISION_LABELS.join("|");
+// A field line: column 0, an optional list marker, then `Label:` or `**Label:**` (H1).
+const FIELD_LINE = new RegExp(`^(?:[-*] )?(?:\\*\\*(${LABEL_ALT}):\\*\\*|(${LABEL_ALT}):)(.*)$`);
+// A timestamp and at most one parenthesised annotation (which may contain commas but no parentheses).
+const COVERS_ITEM = new RegExp(`^(${TS_IN_TEXT})(?:\\s*\\([^()]*\\))?$`);
+
+interface DecisionBlock {
+  id: string;
+  fields: Map<string, string[]>;
+}
+
+/** Parses decisions.md into `## D<n>` blocks; fenced lines are ignored. */
+function parseDecisions(text: string): { blocks: DecisionBlock[]; badHeadings: number[] } {
+  const { lines, inFence } = fenceMask(text);
+  const blocks: DecisionBlock[] = [];
+  const badHeadings: number[] = [];
+  let current: DecisionBlock | undefined;
+  lines.forEach((line, i) => {
+    if (inFence[i]) return;
+    if (line.startsWith("## ")) {
+      const m = /^## D([1-9]\d*)\s*$/.exec(line);
+      if (!m) {
+        badHeadings.push(i + 1);
+        current = undefined;
+        return;
+      }
+      current = { id: `D${m[1]}`, fields: new Map() };
+      blocks.push(current);
+      return;
+    }
+    const f = current ? FIELD_LINE.exec(line) : null;
+    if (current && f) {
+      const label = f[1] ?? f[2];
+      current.fields.set(label, [...(current.fields.get(label) ?? []), f[3].trim()]);
+    }
+  });
+  return { blocks, badHeadings };
+}
+
+/** Splits a `Covers:` value on commas outside parentheses. */
+function coversItems(value: string): string[] {
+  const items: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < value.length; i++) {
+    if (value[i] === "(") depth++;
+    else if (value[i] === ")") depth = Math.max(0, depth - 1);
+    else if (value[i] === "," && depth === 0) {
+      items.push(value.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  items.push(value.slice(start).trim());
+  return items;
+}
+
+const isAck = (b: DecisionBlock) => (b.fields.get("Decision")?.[0] ?? "").startsWith("Steering acknowledged:");
+
+/** The counted `Covers:` timestamps of a block: the leading timestamp of each well-formed item. */
+function coveredBy(b: DecisionBlock): string[] {
+  const value = b.fields.get("Covers")?.[0] ?? "";
+  if (value === "none") return [];
+  return coversItems(value).flatMap((item) => {
+    const m = COVERS_ITEM.exec(item);
+    return m ? [m[1]] : [];
+  });
+}
+
 const fileProblem = (f: FileRead, name: string) =>
   f.kind === "missing" ? `${name} is missing` : f.kind === "error" ? `${name}: ${f.reason}` : "";
 
-/** Runs K1–K16 on one task directory. Never throws on malformed input. */
+/** Runs K1–K18 on one task directory. Never throws on malformed input. */
 export function checkTask(input: TaskInput): CheckReport {
   const results = new Map<string, CheckResult>();
   const facts: TaskFacts = {
@@ -304,6 +390,7 @@ export function checkTask(input: TaskInput): CheckReport {
     resets: 0,
     supervisor_own_ticket: false,
     roundHeadingMismatches: [],
+    decisions: { present: false, blocks: 0, events: [], covering: [], acknowledging: [] },
     rule: RULE,
   };
   let keys: RegistrationKey[] = [];
@@ -498,7 +585,77 @@ export function checkTask(input: TaskInput): CheckReport {
   });
   if (results.get("K16")?.status !== "pass") keys = [];
 
-  const order = Array.from({ length: 16 }, (_, i) => `K${i + 1}`);
+  // K17–K18: decisions.md (supervisor.md C15, supervisor/decisions-format.md).
+  const decisionsFile: FileRead = input.decisions ?? { kind: "missing" };
+  const parsed = decisionsFile.kind === "ok" ? parseDecisions(decisionsFile.text) : undefined;
+  facts.decisions.present = decisionsFile.kind === "ok";
+  if (parsed) {
+    facts.decisions.blocks = parsed.blocks.length;
+    facts.decisions.acknowledging = parsed.blocks.filter(isAck).map((b) => b.id);
+  }
+
+  run("K17", "decisions.format", "C15", ["K1"], () => {
+    if (decisionsFile.kind === "missing") return true;
+    if (!parsed) return fileProblem(decisionsFile, "decisions.md");
+    const known = new Set(t.map((e) => e.timestamp));
+    const problems = parsed.badHeadings.map((n) => `line ${n}: a "## " heading that is not ## D<n>`);
+    for (const b of parsed.blocks) {
+      for (const label of DECISION_LABELS) {
+        const values = b.fields.get(label) ?? [];
+        if (values.length === 0) problems.push(`${b.id} ${label}: missing`);
+        else if (values.length > 1) problems.push(`${b.id} ${label}: appears ${values.length} times`);
+        else if (values[0] === "") problems.push(`${b.id} ${label}: empty`);
+      }
+      const covers = b.fields.get("Covers");
+      if (covers?.length !== 1 || covers[0] === "") continue;
+      if (covers[0] === "none") {
+        if (!isAck(b)) problems.push(`${b.id} Covers: none outside a steering acknowledgement block`);
+        continue;
+      }
+      coversItems(covers[0]).forEach((item, k) => {
+        const m = COVERS_ITEM.exec(item);
+        if (!m) problems.push(`${b.id} Covers: item ${k + 1} is not a timestamp with an optional (note)`);
+        else if (!known.has(m[1])) problems.push(`${b.id} Covers: ${m[1]} is not the timestamp of a transitions[] entry`);
+      });
+    }
+    return problems.length ? problems.join("; ") : true;
+  });
+
+  // Events after the lock entry (C15 "Events that must be covered"), derived from structure only.
+  if (st && lock >= 0) {
+    for (let i = lock + 1; i < t.length; i++) {
+      const e = t[i];
+      if (e.agent === "human") facts.decisions.events.push({ timestamp: e.timestamp, kind: "human" });
+      else if (e.agent === "implementer" && e.from === "blocked" && e.to === "in_progress") {
+        facts.decisions.events.push({ timestamp: e.timestamp, kind: "unblock" });
+      } else if (e.agent === "implementer" && e.from === "completed" && e.to === "in_progress") {
+        const prev = t.slice(0, i).map((x) => x.agent === "implementer" && x.to === "completed").lastIndexOf(true);
+        const between = t.slice(prev + 1, i).filter((x) => x.agent === "reviewer" || x.agent === "qa");
+        const latest = between[between.length - 1];
+        const prevTs = prev >= 0 ? t[prev].timestamp : null;
+        // An ordinary send-back: a failing round bound to that previous completion (H4).
+        const ordinary =
+          latest !== undefined &&
+          (latest.agent === "reviewer"
+            ? /^review round \d+: changes_requested\b/.test(latest.note) && REVIEWED.exec(latest.note)?.[1] === prevTs
+            : /^qa round \d+: fail\b/.test(latest.note) && VERIFIED.exec(latest.note)?.[1] === prevTs);
+        if (!ordinary) facts.decisions.events.push({ timestamp: e.timestamp, kind: "reentry" });
+      }
+    }
+  }
+  const coverMap = new Map<string, string[]>();
+  for (const b of parsed?.blocks ?? []) for (const ts of coveredBy(b)) coverMap.set(ts, [...(coverMap.get(ts) ?? []), b.id]);
+  facts.decisions.covering = (parsed?.blocks ?? [])
+    .filter((b) => facts.decisions.events.some((ev) => coverMap.get(ev.timestamp)?.includes(b.id)))
+    .map((b) => b.id);
+
+  run("K18", "decisions.covers", "C15", ["K1", "K6"], () => {
+    if (decisionsFile.kind === "error") return fileProblem(decisionsFile, "decisions.md");
+    const uncovered = facts.decisions.events.filter((ev) => !coverMap.has(ev.timestamp));
+    return uncovered.length ? `uncovered: ${uncovered.map((ev) => `${ev.timestamp} (${ev.kind})`).join(", ")}` : true;
+  });
+
+  const order = Array.from({ length: 18 }, (_, i) => `K${i + 1}`);
   const checks = order.map((id) => results.get(id) as CheckResult);
   return {
     schema: 1,
@@ -533,6 +690,9 @@ export function renderText(r: CheckReport): string {
     `  qa: ${f.qa.rounds} round(s), verdict ${f.qa.verdict ?? "-"}, entry ${f.qa.entry ?? "-"}`,
     `  qa resets: ${f.resets}`,
     `  supervisor_own_ticket: ${f.supervisor_own_ticket}`,
+    `  decisions: ${f.decisions.present ? `${f.decisions.blocks} block(s)` : "absent"}; events: ${
+      f.decisions.events.map((e) => `${e.timestamp} (${e.kind})`).join(", ") || "none"
+    }; covering: ${f.decisions.covering.join(", ") || "-"}; acknowledging: ${f.decisions.acknowledging.join(", ") || "-"}`,
     `  rule: ${f.rule}`,
   );
   for (const m of f.roundHeadingMismatches) out.push(`  note: ${m}`);

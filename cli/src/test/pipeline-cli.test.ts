@@ -111,3 +111,42 @@ test("readBounded reports missing, oversized and directory paths without throwin
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("pipeline check names K17 for a malformed decisions.md", () => {
+  const root = mkdtempSync(join(tmpdir(), "pc-"));
+  try {
+    writeTask(root, "TK-2", { ...files, "decisions.md": "# D\n\n## Notes\n" });
+    const r = run(["pipeline", "check", ".ai/tasks/TK-2", "--root", root]);
+    assert.equal(r.status, 1);
+    assert.match(r.stdout, /✖ K17 decisions\.format — line 3: a "## " heading/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("pipeline debt: zero keys exit 0 with no command; keys outside a git repository halt at T5 (exit 2); bad --issues is a usage error", () => {
+  const root = mkdtempSync(join(tmpdir(), "pc-"));
+  try {
+    writeTask(root, "TK-2", { ...files, "review-report.md": `Round: 1\n${C}\n## Verdict: approved\n` });
+    const none = run(["pipeline", "debt", ".ai/tasks/TK-2", "--root", root, "--json"]);
+    assert.equal(none.status, 0, none.stdout + none.stderr);
+    assert.deepEqual([JSON.parse(none.stdout).outcome, JSON.parse(none.stdout).calls], ["registered", 0]);
+    writeTask(root, "TK-2", files);
+    const halt = run(["pipeline", "debt", ".ai/tasks/TK-2", "--root", root]);
+    assert.equal(halt.status, 2, halt.stdout + halt.stderr);
+    assert.match(halt.stdout, /HALT \(repo -, 0 gh call\(s\)\)/);
+    assert.match(halt.stdout, /halt: T5 /);
+    for (const bad of ["x", "0", "1,,2", "-3"]) {
+      const u = run(["pipeline", "debt", ".ai/tasks/TK-2", "--root", root, "--issues", bad]);
+      assert.equal(u.status, 1, bad);
+      assert.match(u.stderr, /usage: base-ai pipeline debt/);
+    }
+    assert.match(run(["pipeline", "debt"]).stderr, /usage: base-ai pipeline debt/);
+    writeTask(root, "TK-2", { ...files, "status.json": "{" });
+    const notComputed = run(["pipeline", "debt", ".ai/tasks/TK-2", "--root", root]);
+    assert.equal(notComputed.status, 1);
+    assert.match(notComputed.stderr, /keys not computed: K16 skip/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

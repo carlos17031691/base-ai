@@ -65,10 +65,10 @@ const statusOf = (r: CheckReport, id: string) => check(r, id).status;
 test("a consistent task passes every check and computes facts and keys", () => {
   const r = checkTask(input());
   assert.equal(r.ok, true, renderText(r));
-  assert.equal(r.checks.length, 16);
+  assert.equal(r.checks.length, 18);
   assert.ok(r.checks.every((c) => c.status === "pass"));
   assert.equal(r.schema, 1);
-  assert.equal(r.rule, "supervisor.md@8381e71");
+  assert.equal(r.rule, "supervisor.md@682c6e4");
   assert.equal(r.facts.latestCompletion, C);
   assert.deepEqual(r.facts.review, { rounds: 1, verdict: "approved", entry: "2026-01-01T00:04:00Z" });
   assert.deepEqual(r.facts.qa, { rounds: 1, verdict: "pass", entry: "2026-01-01T00:05:00Z" });
@@ -431,9 +431,150 @@ test("renderText prints only computed values: no note or report text", () => {
   const text = renderText(r);
   assert.doesNotMatch(text, /SECRET/);
   assert.doesNotMatch(JSON.stringify(r), /SECRET/);
-  assert.match(text, /^pipeline check TK-1: PASS \(0 failed, 0 skipped of 16\)/);
+  assert.match(text, /^pipeline check TK-1: PASS \(0 failed, 0 skipped of 18\)/);
   const failed = renderText(checkTask(input({ status: { kind: "missing" } })));
-  assert.match(failed, /^pipeline check \(unknown\): FAIL \(1 failed, 14 skipped of 16\)/);
+  assert.match(failed, /^pipeline check \(unknown\): FAIL \(1 failed, 16 skipped of 18\)/);
   assert.match(failed, /✖ K1 status\.parse — status\.json is missing/);
   assert.match(failed, /- K2 status\.ticket — skipped: depends on K1/);
+});
+
+// ---- K17 / K18: decisions.md (BASE-071-P2) ----
+
+const block = (id: string, covers: string, opts: { bold?: boolean; list?: boolean; decision?: string; omit?: string; extra?: string } = {}) => {
+  const fields: [string, string][] = [
+    ["Decided", "2026-01-01T00:09:00Z"],
+    ["Decided by", "human"],
+    ["Recorded by", "coordinator"],
+    ["Covers", covers],
+    ["Decision", opts.decision ?? "the human decided something"],
+    ["Affects", "plan.md"],
+  ];
+  const pre = opts.list === false ? "" : "- ";
+  const lines = fields
+    .filter(([l]) => l !== opts.omit)
+    .map(([l, v]) => (opts.bold ? `${pre}**${l}:** ${v}` : `${pre}${l}: ${v}`));
+  return [`## ${id}`, "", ...lines, ...(opts.extra ? [opts.extra] : []), ""].join("\n");
+};
+const decisions = (...blocks: string[]) => ok(["# Decisions — TK-1", "", ...blocks].join("\n"));
+const LOCK = "2026-01-01T00:01:00Z";
+const REVIEW1 = "2026-01-01T00:04:00Z";
+
+test("K17 accepts plain and bold labels, with or without a list marker, and annotated multi-item Covers", () => {
+  for (const opts of [{}, { bold: true }, { list: false }, { bold: true, list: false }]) {
+    const r = checkTask(input({ decisions: decisions(block("D1", `${LOCK} (the lock, with a comma, inside), ${REVIEW1}`, opts)) }));
+    assert.equal(statusOf(r, "K17"), "pass", `${JSON.stringify(opts)}: ${check(r, "K17").detail}`);
+    assert.equal(r.facts.decisions.blocks, 1);
+  }
+  assert.equal(statusOf(checkTask(input()), "K17"), "pass", "an absent decisions.md passes");
+  assert.equal(checkTask(input()).facts.decisions.present, false);
+});
+
+test("K17 names each format problem by block and field, never echoing values", () => {
+  const cases: [FileRead, RegExp][] = [
+    ...["Decided", "Decided by", "Recorded by", "Covers", "Decision", "Affects"].map(
+      (f): [FileRead, RegExp] => [decisions(block("D1", LOCK, { omit: f })), new RegExp(`D1 ${f}: missing`)],
+    ),
+    [decisions(block("D1", `${LOCK} (one) (two)`)), /D1 Covers: item 1 is not a timestamp/],
+    [decisions(block("D1", LOCK, { extra: "- Covers: " + REVIEW1 })), /D1 Covers: appears 2 times/],
+    [decisions(block("D1", LOCK).replace("- Decided by: human", "- Decided by:")), /D1 Decided by: empty/],
+    [decisions(block("D0", LOCK)), /line 3: a "## " heading that is not ## D<n>/],
+    [decisions(block("D01", LOCK)), /heading that is not/],
+    [decisions("## Notes\n", block("D1", LOCK)), /line 3: a "## " heading/],
+    [decisions(block("D1", "soon")), /D1 Covers: item 1 is not a timestamp with an optional \(note\)/],
+    [decisions(block("D1", `${LOCK}, 2026-01-01T09:09:09Z`)), /D1 Covers: 2026-01-01T09:09:09Z is not the timestamp of a transitions\[\] entry/],
+    [decisions(block("D1", "none")), /D1 Covers: none outside a steering acknowledgement block/],
+    [{ kind: "error", reason: "larger than 2097152 bytes" }, /decisions\.md: larger than/],
+  ];
+  for (const [d, re] of cases) {
+    const r = checkTask(input({ decisions: d }));
+    assert.equal(statusOf(r, "K17"), "fail", String(re));
+    assert.match(check(r, "K17").detail, re);
+    assert.doesNotMatch(check(r, "K17").detail, /the human decided something|coordinator/);
+  }
+  const ack = checkTask(input({ decisions: decisions(block("D1", "none", { decision: "Steering acknowledged: plan.md:3" })) }));
+  assert.equal(statusOf(ack, "K17"), "pass", check(ack, "K17").detail);
+  assert.deepEqual(ack.facts.decisions.acknowledging, ["D1"]);
+  const fenced = checkTask(input({ decisions: decisions("```", "## Notes", "```", block("D1", LOCK)) }));
+  assert.equal(statusOf(fenced, "K17"), "pass", "a heading inside a fence is ignored");
+});
+
+// A human entry and an implementer re-entry after the lock, as status transitions.
+function withEntries(...extra: T[]): T[] {
+  return [...baseTransitions(), ...extra];
+}
+const human = (ts: string, note = "qa rounds reset: x"): T => ({ from: "completed", to: "completed", agent: "human", timestamp: ts, note });
+
+test("K18 events: human entries after the lock (resets included), but not the lock entry itself", () => {
+  const r = checkTask(input({}, status({}, withEntries(human("2026-01-01T00:06:00Z")))));
+  assert.deepEqual(r.facts.decisions.events, [{ timestamp: "2026-01-01T00:06:00Z", kind: "human" }]);
+  assert.match(check(r, "K18").detail, /uncovered: 2026-01-01T00:06:00Z \(human\)/);
+  const covered = checkTask(input({ decisions: decisions(block("D1", "2026-01-01T00:06:00Z (the reset)")) }, status({}, withEntries(human("2026-01-01T00:06:00Z")))));
+  assert.equal(statusOf(covered, "K18"), "pass", check(covered, "K18").detail);
+  assert.deepEqual(covered.facts.decisions.covering, ["D1"]);
+  assert.equal(statusOf(checkTask(input()), "K18"), "pass", "no events, no decisions.md");
+});
+
+test("K18 events: a human entry that is not a reset", () => {
+  const r = checkTask(input({}, status({}, withEntries(human("2026-01-01T00:06:00Z", "human decided a scope change")))));
+  assert.deepEqual(r.facts.decisions.events, [{ timestamp: "2026-01-01T00:06:00Z", kind: "human" }]);
+  assert.equal(r.facts.resets, 0);
+  assert.equal(statusOf(r, "K18"), "fail");
+});
+
+test("K18 events: a blocked → in_progress re-entry", () => {
+  const t = baseTransitions().slice(0, 3);
+  t.push(
+    { from: "in_progress", to: "blocked", agent: "implementer", timestamp: "2026-01-01T00:02:10Z", note: "blocked" },
+    { from: "blocked", to: "in_progress", agent: "implementer", timestamp: "2026-01-01T00:02:20Z", note: "unblocked" },
+    ...baseTransitions().slice(3),
+  );
+  const r = checkTask(input({}, status({}, t)));
+  assert.deepEqual(r.facts.decisions.events, [{ timestamp: "2026-01-01T00:02:20Z", kind: "unblock" }]);
+  assert.equal(statusOf(r, "K18"), "fail");
+});
+
+function reentryAfter(note: string): T[] {
+  const t = baseTransitions().slice(0, 4);
+  t.push(
+    { from: "completed", to: "completed", agent: "reviewer", timestamp: REVIEW1, note },
+    { from: "completed", to: "in_progress", agent: "implementer", timestamp: "2026-01-01T00:04:10Z", note: "re-entry" },
+    { from: "in_progress", to: "completed", agent: "implementer", timestamp: "2026-01-01T00:04:20Z", note: "done" },
+  );
+  return t;
+}
+
+test("K18 events: a re-entry is an ordinary send-back only after a failing round bound to the previous completion (H4)", () => {
+  const ordinary = checkTask(input({}, status({}, reentryAfter(`review round 1: changes_requested; reviewed implementer completion ${C}`))));
+  assert.deepEqual(ordinary.facts.decisions.events, []);
+  const other = checkTask(input({}, status({}, reentryAfter("review round 1: changes_requested; reviewed implementer completion 2026-01-01T00:00:01Z"))));
+  assert.deepEqual(other.facts.decisions.events, [{ timestamp: "2026-01-01T00:04:10Z", kind: "reentry" }]);
+  const t = baseTransitions();
+  t[5].note = `qa round 1: fail; verified implementer completion ${C}`;
+  t.push({ from: "completed", to: "in_progress", agent: "implementer", timestamp: "2026-01-01T00:05:10Z", note: "re-entry" });
+  assert.deepEqual(checkTask(input({}, status({}, t))).facts.decisions.events, [], "a QA fail for the previous completion");
+  const none = baseTransitions().slice(0, 4);
+  none.push({ from: "completed", to: "in_progress", agent: "implementer", timestamp: "2026-01-01T00:03:30Z", note: "re-entry" });
+  assert.deepEqual(checkTask(input({}, status({}, none))).facts.decisions.events, [{ timestamp: "2026-01-01T00:03:30Z", kind: "reentry" }]);
+});
+
+test("K18 catches the BASE-080-G1 shape: a re-entry after an approved review, with D1 covering only the reviewer entry", () => {
+  const t = reentryAfter(`review round 1: approved; reviewed implementer completion ${C}`);
+  const before = checkTask(input({ decisions: decisions(block("D1", `${REVIEW1} (the reviewer round 1 entry)`)) }, status({}, t)));
+  assert.equal(statusOf(before, "K17"), "pass");
+  assert.equal(statusOf(before, "K18"), "fail");
+  assert.match(check(before, "K18").detail, /^uncovered: 2026-01-01T00:04:10Z \(reentry\)$/);
+  assert.deepEqual(before.facts.decisions.covering, []);
+  const fixed = checkTask(input({ decisions: decisions(block("D1", `${REVIEW1} (the reviewer entry), 2026-01-01T00:04:10Z (the re-entry)`)) }, status({}, t)));
+  assert.equal(statusOf(fixed, "K18"), "pass");
+  assert.deepEqual(fixed.facts.decisions.covering, ["D1"]);
+  assert.match(renderText(fixed), /decisions: 1 block\(s\); events: 2026-01-01T00:04:10Z \(reentry\); covering: D1; acknowledging: -/);
+});
+
+test("K18 with an absent file fails on events, fails on an unreadable file, and is skipped when K6 fails", () => {
+  const t = withEntries(human("2026-01-01T00:06:00Z"));
+  assert.match(check(checkTask(input({ decisions: { kind: "missing" } }, status({}, t))), "K18").detail, /uncovered/);
+  assert.match(check(checkTask(input({ decisions: { kind: "error", reason: "is a directory" } })), "K18").detail, /decisions\.md: is a directory/);
+  const unlocked = checkTask(input({}, status({ plan_locked: false })));
+  assert.match(check(unlocked, "K18").detail, /depends on K6/);
+  assert.match(renderText(checkTask(input())), /decisions: absent; events: none; covering: -; acknowledging: -/);
 });
