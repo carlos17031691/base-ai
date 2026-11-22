@@ -80,13 +80,29 @@ function withoutGenerated(groups: unknown[]): { groups: unknown[]; removed: numb
 
 const serialize = (obj: Json) => JSON.stringify(obj, null, 2) + "\n";
 
+/**
+ * Drops generated hook objects from every event, and the event arrays that removal emptied, so a generated hook
+ * left under another event is cleaned too (the doctor reports it as stale).
+ */
+function stripGenerated(hooks: Json): number {
+  let removed = 0;
+  for (const [event, value] of Object.entries(hooks)) {
+    const r = withoutGenerated(value as unknown[]);
+    if (r.removed === 0) continue;
+    removed += r.removed;
+    if (r.groups.length > 0) hooks[event] = r.groups;
+    else delete hooks[event];
+  }
+  return removed;
+}
+
 /** `claude-code`: the settings with exactly one fresh generated group appended to each hook event, all else kept in order. */
 export function mergeHook(text: string | null, command: string): string {
   const settings = text === null ? {} : parseSettings(text);
   const hooks: Json = isObj(settings.hooks) ? { ...settings.hooks } : {};
+  stripGenerated(hooks);
   for (const event of HOOK_EVENTS) {
-    const { groups } = withoutGenerated((hooks[event] as unknown[] | undefined) ?? []);
-    hooks[event] = [...groups, { hooks: [{ type: "command", command }] }];
+    hooks[event] = [...((hooks[event] as unknown[] | undefined) ?? []), { hooks: [{ type: "command", command }] }];
   }
   return serialize({ ...settings, hooks });
 }
@@ -98,18 +114,12 @@ export function mergeHook(text: string | null, command: string): string {
  */
 export function removeHook(text: string | null): string | null {
   if (text === null) return null;
+  // Opted out and nothing of ours in the file: it is the user's alone, so it is not even parsed.
+  if (!text.includes(MARKER)) return text;
   const settings = parseSettings(text);
   if (!isObj(settings.hooks)) return text;
   const hooks: Json = { ...settings.hooks };
-  let removed = 0;
-  for (const [event, value] of Object.entries(hooks)) {
-    const r = withoutGenerated(value as unknown[]);
-    if (r.removed === 0) continue;
-    removed += r.removed;
-    if (r.groups.length > 0) hooks[event] = r.groups;
-    else delete hooks[event];
-  }
-  if (removed === 0) return text;
+  if (stripGenerated(hooks) === 0) return text;
   const next: Json = { ...settings, hooks };
   if (Object.keys(hooks).length === 0) delete next.hooks;
   return Object.keys(next).length === 0 ? null : serialize(next);
@@ -138,6 +148,7 @@ function generatedCommands(settings: Json): Map<string, string[]> {
  */
 export function hookState(text: string | null, hook: UsageHook, command: string): HookState {
   if (text === null) return hook === "none" ? "ok" : "missing";
+  if (hook === "none" && !text.includes(MARKER)) return "ok";
   let settings: Json;
   try {
     settings = parseSettings(text);

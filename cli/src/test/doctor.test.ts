@@ -86,4 +86,11 @@ test("doctor: an enabled usage hook that is missing or stale is reported with ba
   writeFileSync(join(d, ".ai/config.yaml"), "usage:\n  hook: claude-code\n");
   writeFileSync(settings, "[]");
   assert.deepEqual(hookIssues(), ["root: .claude/settings.json is not valid JSON settings (fix it, then run: base-ai ai sync)"]);
+
+  // Review r1 M1: opted out (or no usage key), a user's invalid file with no generated entry is not reported.
+  writeFileSync(settings, "{oops");
+  writeFileSync(join(d, ".ai/config.yaml"), "usage:\n  hook: none\n");
+  assert.deepEqual(runDoctor(d).issues, []);
+  writeFileSync(join(d, ".ai/config.yaml"), "");
+  assert.deepEqual(runDoctor(d).issues, []);
 });

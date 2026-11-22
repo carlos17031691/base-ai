@@ -261,3 +261,25 @@ test("an invalid settings file throws and writes nothing; a bad usage.hook throw
   writeFileSync(join(d, ".ai/config.yaml"), "usage: yes\n");
   assert.throws(() => aiSync(d), /"usage\.hook" must be "claude-code" or "none"/);
 });
+
+test("review r1 M1: opted out or absent usage, a user's invalid settings file is left alone and sync succeeds", () => {
+  for (const cfg of ["usage:\n  hook: none\n", null]) {
+    const d = fixture();
+    if (cfg !== null) writeFileSync(join(d, ".ai/config.yaml"), cfg);
+    mkdirSync(join(d, ".claude"), { recursive: true });
+    writeFileSync(join(d, SETTINGS), "{oops");
+    const res = aiSync(d)[0];
+    assert.ok(![...res.written, ...res.removed, ...res.unchanged].includes(SETTINGS), String(cfg));
+    assert.equal(readFileSync(join(d, SETTINGS), "utf8"), "{oops");
+  }
+});
+
+test("review r1 L4: an invalid settings file throws before any artefact is written", () => {
+  const d = fixture();
+  mkdirSync(join(d, ".claude"), { recursive: true });
+  writeFileSync(join(d, SETTINGS), "{oops");
+  withHook(d, "claude-code");
+  assert.throws(() => aiSync(d), /settings\.json is not valid JSON/);
+  assert.ok(!existsSync(join(d, "AGENTS.md")), "no artefact written");
+  assert.ok(!existsSync(join(d, ".ai/generated.json")), "no lock written");
+});

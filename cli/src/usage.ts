@@ -281,9 +281,13 @@ export function parsePricing(raw: unknown, file: string): Pricing {
   return out;
 }
 
-/** Rounds once to 4 decimals, half away from zero. */
+/**
+ * Rounds once to 4 decimals, half away from zero. The scaled value is first cut to 15 significant digits, so a
+ * decimal tie stored just below .5 in binary (1.00005 × 1e4 = 10000.499999999998) still rounds up at any size.
+ */
 export function round4(x: number): number {
-  return (Math.sign(x) * Math.round((Math.abs(x) + Number.EPSILON) * 1e4)) / 1e4;
+  const scaled = Number((Math.abs(x) * 1e4).toPrecision(15));
+  return (Math.sign(x) * Math.round(scaled)) / 1e4;
 }
 
 type Counters = Pick<UsageRecord, (typeof COUNTERS)[number]>;
@@ -412,7 +416,8 @@ const counters = (t: Counters) =>
 export function renderUsageReport(r: UsageReport): string {
   const skipped = r.skipped_lines > 0 ? ` (${r.skipped_lines} unreadable line${r.skipped_lines === 1 ? "" : "s"} skipped)` : "";
   if (r.records === 0) return `usage ${r.ticket}: no usage data${skipped}`;
-  const clean = (s: string) => s.replace(/[\u0000-\u001f\u007f]/g, "?");
+  // C0, DEL, C1 (an 8-bit CSI is U+009B) and the bidi embedding, override and isolate controls.
+  const clean = (s: string) => s.replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, "?");
   const lines = [`usage ${r.ticket}: ${r.records} record${r.records === 1 ? "" : "s"}${skipped}`];
   for (const g of r.groups) lines.push(`  ${clean(g.agent)} / ${clean(g.model)}: ${counters(g)}; ${formatCost(g)}`);
   lines.push(`  total: ${counters(r.total)}; ${formatCost(r.total)}`);

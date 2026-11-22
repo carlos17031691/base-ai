@@ -88,11 +88,12 @@ export function usageHookState(root: string, hook: UsageHook): HookState {
 }
 
 /**
- * Writes or removes the generated usage hook in the root's `.claude/settings.json` (BASE-101-U2), keeping every
- * user key. The file is reported in `res` but never added to the lock. An invalid file throws and nothing is
- * written; with check=true it is only reported as out of date, and the doctor names the problem.
+ * Computes the generated usage hook of the root's `.claude/settings.json` (BASE-101-U2), keeping every user key,
+ * and returns the step that writes or removes it. Computing first means an invalid file throws before `ai sync`
+ * writes any artefact. The file is reported in the result but never added to the lock. With check=true an
+ * invalid file is only reported as out of date, and the doctor names the problem.
  */
-export function syncUsageHook(root: string, hook: UsageHook, check: boolean, res: SyncResult): void {
+export function prepareUsageHook(root: string, hook: UsageHook, check: boolean): (res: SyncResult) => void {
   const abs = join(root, SETTINGS_PATH);
   const current = readText(abs);
   let next: string | null;
@@ -100,26 +101,25 @@ export function syncUsageHook(root: string, hook: UsageHook, check: boolean, res
     next = hook === "claude-code" ? mergeHook(current, usageHookCommand(root)) : removeHook(current);
   } catch (e) {
     if (!(e instanceof SettingsError)) throw e;
-    if (check) {
-      res.written.push(SETTINGS_PATH);
-      return;
-    }
+    if (check) return (res) => void res.written.push(SETTINGS_PATH);
     throw new Error(`${abs} ${e.message}; fix it, then run: base-ai ai sync`);
   }
-  if (next === current) {
-    if (current !== null && hook === "claude-code") res.unchanged.push(SETTINGS_PATH);
-    return;
-  }
-  if (next === null) {
-    res.removed.push(SETTINGS_PATH);
-    if (!check) rmSync(abs);
-    return;
-  }
-  (hook === "claude-code" ? res.written : res.removed).push(SETTINGS_PATH);
-  if (!check) {
-    mkdirSync(dirname(abs), { recursive: true });
-    writeFileSync(abs, next);
-  }
+  return (res) => {
+    if (next === current) {
+      if (current !== null && hook === "claude-code") res.unchanged.push(SETTINGS_PATH);
+      return;
+    }
+    if (next === null) {
+      res.removed.push(SETTINGS_PATH);
+      if (!check) rmSync(abs);
+      return;
+    }
+    (hook === "claude-code" ? res.written : res.removed).push(SETTINGS_PATH);
+    if (!check) {
+      mkdirSync(dirname(abs), { recursive: true });
+      writeFileSync(abs, next);
+    }
+  };
 }
 
 interface ServiceEntry {
@@ -130,9 +130,10 @@ interface ServiceEntry {
 /** ai sync: root + services with ai: inherit present in src/. */
 export function aiSync(root: string, check = false): SyncResult[] {
   const base = loadSource(root);
-  const results = [syncDir(root, base, check)];
   // Services keep their own settings: the hook is written at the root only (H7).
-  syncUsageHook(root, base.usageHook ?? "none", check, results[0]);
+  const applyUsageHook = prepareUsageHook(root, base.usageHook ?? "none", check);
+  const results = [syncDir(root, base, check)];
+  applyUsageHook(results[0]);
 
   const manifest = join(root, "services.yaml");
   if (!existsSync(manifest)) return results;

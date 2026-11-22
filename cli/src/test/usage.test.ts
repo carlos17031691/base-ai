@@ -207,6 +207,12 @@ test("cost is rounded once to 4 decimals, half away from zero", () => {
   assert.equal(round4(0.00004999), 0);
   assert.equal(round4(1.23456), 1.2346);
   assert.equal(round4(-0.00005), -0.0001);
+  // Review r1 L2: decimal ties stored just below .5 in binary still round up above 1 USD and above 1000 USD.
+  assert.equal(round4(1.00005), 1.0001);
+  assert.equal(round4(2.00005), 2.0001);
+  assert.equal(round4(1234.56785), 1234.5679);
+  assert.equal(round4(98765.43215), 98765.4322);
+  assert.equal(round4(2.00004), 2);
   // 7 output tokens at 15 = 0.000105 → 0.0001.
   assert.equal(recordCost(rec({ output_tokens: 7 }), PRICING), 0.0001);
 });
@@ -254,6 +260,9 @@ test("usage report text and lines: corrupt lines are skipped and counted, an emp
   assert.equal(parseUsageLine("[]"), null);
   const ctl = buildUsageReport("T-4", JSON.stringify({ schema: 1, ...rec({ agent: "a\u001b[31m" }) }), {});
   assert.match(renderUsageReport(ctl), /a\?\[31m/);
+  // Review r1 L5: C1 (8-bit CSI) and bidi override and isolate controls are stripped too.
+  const c1 = buildUsageReport("T-5", JSON.stringify({ schema: 1, ...rec({ agent: "a\u009b31m\u202eb\u2066c" }) }), {});
+  assert.match(renderUsageReport(c1), /a\?31m\?b\?c \//);
 });
 
 test("pricing validation: missing key, negative or non-numeric value, unknown key, bad model id", () => {
