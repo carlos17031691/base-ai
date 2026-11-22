@@ -92,6 +92,8 @@ blocked ──(human resolves)──► <previous state>     [human resets manua
 5. `transitions[]` is **append-only** — no agent may remove or modify past entries.
 6. `state: "validated"` requires `checklist.review_verdict === "approved"` AND `checklist.qa_verdict === "pass"`, both for the same latest implementer completion (the latest reviewer and QA entries name it). The full gate list is in `.claude/agents/supervisor.md`.
 
+**Mechanical check.** `base-ai pipeline check <task-dir> [--json] [--root <dir>]` is read-only and exits 0 only when no check fails; a relative `<task-dir>` resolves against `--root`. It applies the rules of `supervisor.md@8381e71` to every directory, older ones included, and runs all 16 checks without stopping at the first failure: K1 `status.parse`, K2 `status.ticket`, K3 `plan.steps`, K4 `state`, K5 `transitions.order`, K6 `lock`, K7 `completion`, K8 `review.present`, K9 `review.consistency`, K10 `review.binding`, K11 `review.verdict`, K12 `qa.present`, K13 `qa.consistency`, K14 `qa.binding`, K15 `qa.verdict`, K16 `register.keys`. A check whose dependency failed is skipped and names it. The round-1 header line may be `Round: 1`, `- Round: 1` or `- **Round:** 1`. An appended round's verdict line is "verdict", an optional short qualifier, a colon, then the word (for example `### Verdict (round 2 — authoritative): approved`). K16 counts a `To register` marker (a table cell that is exactly `To register`, or the literal `**To register**` / `**To register.**`) and prints its key and `file:line`; nothing inside an inline code span or a code fence counts. It does not check registration in GitHub, `decisions.md`, steering or the branch, and no agent reads its output yet (P4).
+
 ## Initializing a task
 
 ```bash
