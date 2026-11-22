@@ -90,8 +90,8 @@ test("two turns of the main session: the second record covers only turn 2", asyn
     await run(b, stopPayload(b));
     const rs = records(usageOf(b, "BASE-071-P1"));
     assert.deepEqual(rs.map((r) => [r.first_message_id, r.last_message_id, r.messages]), [
-      ["msg_011ChHNccQXYG3i2PU6BpSwH", "msg_011ChHNcoFtjW1GgEoaa52VR", 2],
-      ["msg_011ChHNdVkT3T5vUaQoG6TZK", "msg_011ChHNdVkT3T5vUaQoG6TZK", 1],
+      ["msg_main_turn1_a", "msg_main_turn1_b", 2],
+      ["msg_main_turn2_a", "msg_main_turn2_a", 1],
     ]);
   } finally {
     b.done();

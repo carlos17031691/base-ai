@@ -21,7 +21,7 @@ import { AGENT_LINES, MAIN_LINES, PAYLOADS } from "./usage-fixtures.js";
 const jsonl = (lines: readonly unknown[]) => lines.map((l) => JSON.stringify(l)).join("\n") + "\n";
 const clock = () => 0;
 const parse = (text: string) => parseTranscript(text, clock, 1) as Message[];
-const [T1A, T1B, T2] = ["msg_011ChHNccQXYG3i2PU6BpSwH", "msg_011ChHNcoFtjW1GgEoaa52VR", "msg_011ChHNdVkT3T5vUaQoG6TZK"];
+const [T1A, T1B, T2] = ["msg_main_turn1_a", "msg_main_turn1_b", "msg_main_turn2_a"];
 const ctx = { now: Date.UTC(2026, 10, 22, 5, 0, 0, 123), ticket: "TK-1", agent: "coordinator", sessionId: "s1", attribution: "branch" as const };
 const msg = (id: string, model = "m1", n = 1): Message => ({
   id,
@@ -37,7 +37,7 @@ test("P-1 fixtures parse: each message.id once with its counters (max over repea
   assert.deepEqual(main.map((m) => m.id), [T1A, T1B, T2]);
   assert.deepEqual(main[0], { id: T1A, model: "claude-haiku-5-5", input_tokens: 2, cache_creation_input_tokens: 19796, cache_read_input_tokens: 11842, output_tokens: 276 });
   const agent = parse(jsonl(AGENT_LINES));
-  assert.deepEqual(agent.map((m) => [m.id, m.output_tokens]), [["msg_011ChHNck1RGjuD3znU7yeMi", 4]]);
+  assert.deepEqual(agent.map((m) => [m.id, m.output_tokens]), [["msg_agent_1", 4]]);
 });
 
 test("a repeated id takes the maximum of each counter, in order of first appearance", () => {
@@ -91,7 +91,7 @@ test("high-water mark: turn 2 covers only its messages; no new message gives non
   assert.deepEqual([...recorded], [T1B]);
   assert.deepEqual(newMessages(all, recorded).map((m) => m.id), [T2]);
   assert.deepEqual(newMessages(all, new Set([T2])), [], "the hook fires again with no new messages");
-  const subagentIds = recordedIds([JSON.stringify({ session_id: "s1", last_message_id: "msg_011ChHNck1RGjuD3znU7yeMi" })], "s1");
+  const subagentIds = recordedIds([JSON.stringify({ session_id: "s1", last_message_id: "msg_agent_1" })], "s1");
   assert.equal(newMessages(all, subagentIds).length, 3, "an id from the subagent transcript does not move the main mark");
 });
 

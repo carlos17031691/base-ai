@@ -3,15 +3,16 @@
  * (one main-session turn that launched one general-purpose subagent, then a second turn).
  * Stripped: hook payload text values are "", lists and objects are emptied, paths are placeholders;
  * transcript lines keep only type, isSidechain, sessionId, uuid, timestamp and message id/model/role/usage.
- * No prompt or response text is present.
+ * No prompt or response text is present. Ids are replaced by synthetic low-entropy values, keeping their roles
+ * (same session, distinct messages, one id repeated over two lines).
  */
 
 export const PAYLOADS = {
   "stopTurn1": {
-    "session_id": "3b0529f1-247d-40ea-aee7-ee68d800eb4a",
-    "transcript_path": "<projects>/<project>/3b0529f1-247d-40ea-aee7-ee68d800eb4a.jsonl",
+    "session_id": "00000000-0000-4000-8000-000000000001",
+    "transcript_path": "<projects>/<project>/00000000-0000-4000-8000-000000000001.jsonl",
     "cwd": "<cwd>",
-    "prompt_id": "de1d435f-6e17-498f-8620-0cba2a13992c",
+    "prompt_id": "00000000-0000-4000-8000-000000000002",
     "permission_mode": "default",
     "effort": {},
     "hook_event_name": "Stop",
@@ -21,10 +22,10 @@ export const PAYLOADS = {
     "session_crons": []
   },
   "stopTurn2": {
-    "session_id": "3b0529f1-247d-40ea-aee7-ee68d800eb4a",
-    "transcript_path": "<projects>/<project>/3b0529f1-247d-40ea-aee7-ee68d800eb4a.jsonl",
+    "session_id": "00000000-0000-4000-8000-000000000001",
+    "transcript_path": "<projects>/<project>/00000000-0000-4000-8000-000000000001.jsonl",
     "cwd": "<cwd>",
-    "prompt_id": "5169993c-9a0f-4150-ad3b-95659914f860",
+    "prompt_id": "00000000-0000-4000-8000-000000000003",
     "permission_mode": "default",
     "effort": {},
     "hook_event_name": "Stop",
@@ -34,17 +35,17 @@ export const PAYLOADS = {
     "session_crons": []
   },
   "subagentStop": {
-    "session_id": "3b0529f1-247d-40ea-aee7-ee68d800eb4a",
-    "transcript_path": "<projects>/<project>/3b0529f1-247d-40ea-aee7-ee68d800eb4a.jsonl",
+    "session_id": "00000000-0000-4000-8000-000000000001",
+    "transcript_path": "<projects>/<project>/00000000-0000-4000-8000-000000000001.jsonl",
     "cwd": "<cwd>",
-    "prompt_id": "de1d435f-6e17-498f-8620-0cba2a13992c",
+    "prompt_id": "00000000-0000-4000-8000-000000000002",
     "permission_mode": "default",
-    "agent_id": "af031591337d726df",
+    "agent_id": "agent0001",
     "agent_type": "general-purpose",
     "effort": {},
     "hook_event_name": "SubagentStop",
     "stop_hook_active": false,
-    "agent_transcript_path": "<projects>/<project>/3b0529f1-247d-40ea-aee7-ee68d800eb4a/subagents/agent-af031591337d726df.jsonl",
+    "agent_transcript_path": "<projects>/<project>/00000000-0000-4000-8000-000000000001/subagents/agent-agent0001.jsonl",
     "last_assistant_message": "",
     "background_tasks": [],
     "session_crons": []
@@ -56,8 +57,8 @@ export const MAIN_LINES: readonly unknown[] = [
   {
     "type": "user",
     "isSidechain": false,
-    "sessionId": "3b0529f1-247d-40ea-aee7-ee68d800eb4a",
-    "uuid": "803f9953-2a08-4854-91d5-aadcde22fb7a",
+    "sessionId": "00000000-0000-4000-8000-000000000001",
+    "uuid": "00000000-0000-4000-8000-000000000004",
     "timestamp": "2026-11-22T04:57:16.692Z",
     "message": {
       "role": "user"
@@ -66,11 +67,11 @@ export const MAIN_LINES: readonly unknown[] = [
   {
     "type": "assistant",
     "isSidechain": false,
-    "sessionId": "3b0529f1-247d-40ea-aee7-ee68d800eb4a",
-    "uuid": "2860ece8-ab04-4f92-b892-85ab3d69d2b0",
+    "sessionId": "00000000-0000-4000-8000-000000000001",
+    "uuid": "00000000-0000-4000-8000-000000000005",
     "timestamp": "2026-11-22T04:57:18.086Z",
     "message": {
-      "id": "msg_011ChHNccQXYG3i2PU6BpSwH",
+      "id": "msg_main_turn1_a",
       "model": "claude-haiku-5-5",
       "role": "assistant",
       "usage": {
@@ -84,11 +85,11 @@ export const MAIN_LINES: readonly unknown[] = [
   {
     "type": "assistant",
     "isSidechain": false,
-    "sessionId": "3b0529f1-247d-40ea-aee7-ee68d800eb4a",
-    "uuid": "e4becd85-5c73-4b72-9860-834619a860ee",
+    "sessionId": "00000000-0000-4000-8000-000000000001",
+    "uuid": "00000000-0000-4000-8000-000000000006",
     "timestamp": "2026-11-22T04:57:18.468Z",
     "message": {
-      "id": "msg_011ChHNccQXYG3i2PU6BpSwH",
+      "id": "msg_main_turn1_a",
       "model": "claude-haiku-5-5",
       "role": "assistant",
       "usage": {
@@ -102,11 +103,11 @@ export const MAIN_LINES: readonly unknown[] = [
   {
     "type": "assistant",
     "isSidechain": false,
-    "sessionId": "3b0529f1-247d-40ea-aee7-ee68d800eb4a",
-    "uuid": "02514ca3-ce20-4886-b7e2-3108f963c611",
+    "sessionId": "00000000-0000-4000-8000-000000000001",
+    "uuid": "00000000-0000-4000-8000-000000000007",
     "timestamp": "2026-11-22T04:57:19.983Z",
     "message": {
-      "id": "msg_011ChHNcoFtjW1GgEoaa52VR",
+      "id": "msg_main_turn1_b",
       "model": "claude-haiku-5-5",
       "role": "assistant",
       "usage": {
@@ -120,18 +121,18 @@ export const MAIN_LINES: readonly unknown[] = [
   {
     "type": "system",
     "isSidechain": false,
-    "sessionId": "3b0529f1-247d-40ea-aee7-ee68d800eb4a",
-    "uuid": "3f0fb3d9-16c2-4f03-9f58-76781fd19db0",
+    "sessionId": "00000000-0000-4000-8000-000000000001",
+    "uuid": "00000000-0000-4000-8000-000000000008",
     "timestamp": "2026-11-22T04:57:20.010Z"
   },
   {
     "type": "assistant",
     "isSidechain": false,
-    "sessionId": "3b0529f1-247d-40ea-aee7-ee68d800eb4a",
-    "uuid": "099a5a93-3229-41b9-8a23-1fe91ba2f1e6",
+    "sessionId": "00000000-0000-4000-8000-000000000001",
+    "uuid": "00000000-0000-4000-8000-000000000009",
     "timestamp": "2026-11-22T04:57:29.492Z",
     "message": {
-      "id": "msg_011ChHNdVkT3T5vUaQoG6TZK",
+      "id": "msg_main_turn2_a",
       "model": "claude-haiku-5-5",
       "role": "assistant",
       "usage": {
@@ -149,8 +150,8 @@ export const AGENT_LINES: readonly unknown[] = [
   {
     "type": "user",
     "isSidechain": true,
-    "sessionId": "3b0529f1-247d-40ea-aee7-ee68d800eb4a",
-    "uuid": "b8e1ed92-1a3b-47a6-8bd8-5e987d2645c8",
+    "sessionId": "00000000-0000-4000-8000-000000000001",
+    "uuid": "00000000-0000-4000-8000-000000000010",
     "timestamp": "2026-11-22T04:57:18.484Z",
     "message": {
       "role": "user"
@@ -159,11 +160,11 @@ export const AGENT_LINES: readonly unknown[] = [
   {
     "type": "assistant",
     "isSidechain": true,
-    "sessionId": "3b0529f1-247d-40ea-aee7-ee68d800eb4a",
-    "uuid": "116aeac5-9fd5-4d27-856e-6da34ce8b824",
+    "sessionId": "00000000-0000-4000-8000-000000000001",
+    "uuid": "00000000-0000-4000-8000-000000000011",
     "timestamp": "2026-11-22T04:57:19.276Z",
     "message": {
-      "id": "msg_011ChHNck1RGjuD3znU7yeMi",
+      "id": "msg_agent_1",
       "model": "claude-haiku-5-5",
       "role": "assistant",
       "usage": {
