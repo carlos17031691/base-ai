@@ -84,9 +84,19 @@ export interface DeletionEntry {
 /** Inclusive 1-based line ranges of `before` in which list items (`- `) may be deleted. */
 export type LineRange = [number, number];
 
-/** Validates and returns a deletion map read from JSON; throws naming the entry on a malformed one. */
-export function parseDeletionMap(raw: unknown): DeletionEntry[] {
-  if (!Array.isArray(raw)) throw new Error("deletion map: expected a JSON array");
+/**
+ * A deletion map. The object form binds the deletable ranges to the base commit and role they were written for
+ * (BASE-079-T3); the bare array form (BASE-079-T2) has none, and the caller supplies the ranges.
+ */
+export interface DeletionMap {
+  entries: DeletionEntry[];
+  base?: string;
+  role?: string;
+  ranges?: LineRange[];
+}
+
+function parseEntries(raw: unknown): DeletionEntry[] {
+  if (!Array.isArray(raw)) throw new Error("deletion map: expected an array of entries");
   return raw.map((e, i) => {
     const ok =
       typeof e === "object" &&
@@ -94,10 +104,46 @@ export function parseDeletionMap(raw: unknown): DeletionEntry[] {
       typeof (e as DeletionEntry).deleted === "string" &&
       Array.isArray((e as DeletionEntry).carriers) &&
       (e as DeletionEntry).carriers.length > 0 &&
-      (e as DeletionEntry).carriers.every((c) => typeof c === "string" && c.trim() !== "");
-    if (!ok) throw new Error(`deletion map entry ${i}: needs "deleted" (string) and non-empty "carriers" (strings)`);
+      (e as DeletionEntry).carriers.every((c) => typeof c === "string" && c.trim() !== "") &&
+      typeof (e as DeletionEntry).where === "string" &&
+      (e as DeletionEntry).where!.trim() !== "";
+    if (!ok) {
+      throw new Error(`deletion map entry ${i}: needs "deleted" (string), non-empty "carriers" (strings) and non-empty "where"`);
+    }
     return e as DeletionEntry;
   });
+}
+
+/** Validates a deletion map read from JSON (array or object form); throws naming the field or entry. */
+export function parseDeletionMap(raw: unknown): DeletionMap {
+  if (Array.isArray(raw)) return { entries: parseEntries(raw) };
+  if (typeof raw !== "object" || raw === null) throw new Error("deletion map: expected a JSON array or object");
+  const o = raw as Record<string, unknown>;
+  if (typeof o.base !== "string" || !/^[0-9a-f]{7,40}$/.test(o.base)) {
+    throw new Error('deletion map: "base" must be a commit sha of 7 to 40 hex characters');
+  }
+  if (typeof o.role !== "string" || !/^[a-z0-9-]+$/.test(o.role)) throw new Error('deletion map: "role" must be a role name');
+  const ranges = o.ranges;
+  const validRange = (r: unknown): r is LineRange =>
+    Array.isArray(r) && r.length === 2 && r.every((n) => Number.isInteger(n) && n > 0) && r[0] <= r[1];
+  if (!Array.isArray(ranges) || ranges.length === 0 || !ranges.every(validRange)) {
+    throw new Error('deletion map: "ranges" must be a non-empty list of [first, last] line numbers');
+  }
+  return { base: o.base, role: o.role, ranges: ranges as LineRange[], entries: parseEntries(o.entries) };
+}
+
+/**
+ * The deletable ranges for a check: from an object map, after confirming it was written for this base and role;
+ * from `fallback` (the script's per-role constant) for an array map. Throws on a mismatch or when there are none.
+ */
+export function resolveRanges(map: DeletionMap, resolvedBase: string, role: string, fallback?: LineRange[]): LineRange[] {
+  if (map.ranges) {
+    if (!resolvedBase.startsWith(map.base!)) throw new Error(`deletion map was written for base ${map.base}, not ${resolvedBase}`);
+    if (map.role !== role) throw new Error(`deletion map was written for role "${map.role}", not "${role}"`);
+    return map.ranges;
+  }
+  if (!fallback) throw new Error(`no deletion ranges for role "${role}": use the object map form with "base", "role" and "ranges"`);
+  return fallback;
 }
 
 export interface MapProblem {

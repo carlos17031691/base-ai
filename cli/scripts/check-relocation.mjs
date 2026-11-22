@@ -5,10 +5,10 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { checkDeletionMap, compareRelocation, parseDeletionMap } from "../dist/relocation.js";
+import { checkDeletionMap, compareRelocation, parseDeletionMap, resolveRanges } from "../dist/relocation.js";
 
-// Base lines (1-based, inclusive) whose `- ` items may be deleted, per role: BASE-079-T2 plan D1 for qa.md at
-// 47ead24 ("Handling blockers" halt cases and "not halts"; "What you must never do").
+// Ranges for the bare array map form of BASE-079-T2 only (qa.md at 47ead24). Newer maps carry their own
+// "base", "role" and "ranges", which the script checks against its arguments (BASE-079-T3).
 const DELETION_RANGES = { qa: [[536, 566], [579, 624]] };
 
 const args = process.argv.slice(2);
@@ -38,15 +38,18 @@ let carriers = 0;
 let deleted = 0;
 
 if (mapFile) {
-  const ranges = DELETION_RANGES[role];
-  if (!ranges) {
-    console.error(`no deletion ranges defined for role "${role}"`);
-    process.exit(2);
-  }
   const map = parseDeletionMap(JSON.parse(readFileSync(resolve(process.cwd(), mapFile), "utf8")));
-  deleted = map.length;
-  carriers = map.reduce((n, e) => n + e.carriers.length, 0);
-  const problems = checkDeletionMap(before, core.text, result, map, ranges);
+  const resolved = execFileSync("git", ["rev-parse", "--verify", `${commit}^{commit}`], { cwd: repo, encoding: "utf8" }).trim();
+  let ranges;
+  try {
+    ranges = resolveRanges(map, resolved, role, DELETION_RANGES[role]);
+  } catch (e) {
+    console.error(e.message);
+    process.exit(1);
+  }
+  deleted = map.entries.length;
+  carriers = map.entries.reduce((n, e) => n + e.carriers.length, 0);
+  const problems = checkDeletionMap(before, core.text, result, map.entries, ranges);
   for (const p of problems) console.log(`map problem${p.entry === null ? "" : ` (entry ${p.entry})`}: ${p.problem}`);
   if (problems.length) failed = true;
 } else {
