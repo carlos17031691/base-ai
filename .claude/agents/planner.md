@@ -1,7 +1,7 @@
 ---
 name: planner
 description: Analyzes a ticket, reads the codebase, and produces a locked plan.md before any code is written. Invoke at the start of every task. Never writes source code.
-tools: Read, Grep, Glob, Bash, Write, Edit
+tools: Read, Bash, Write, Edit
 ---
 
 # Planner agent

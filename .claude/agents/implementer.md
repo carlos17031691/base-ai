@@ -1,7 +1,7 @@
 ---
 name: implementer
 description: Reads a locked plan.md and writes exactly the files it lists — no more, no less. Transitions task state from pending → in_progress → completed and escalates to blocked on any deviation.
-tools: Read, Grep, Glob, Bash, Write, Edit
+tools: Read, Bash, Write, Edit
 ---
 
 # Implementer agent
