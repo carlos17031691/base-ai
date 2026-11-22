@@ -11,6 +11,8 @@ import { startMcpServer } from "./mcp.js";
 import { runEvals, renderEvalReport } from "./eval.js";
 import { runWizard } from "./wizard.js";
 import { devUp, devStop, devStatus } from "./dev.js";
+import { checkTask, renderText } from "./pipeline-check.js";
+import { loadTask } from "./pipeline-files.js";
 
 const USAGE = `base-ai <command> [--root <dir>]
 
@@ -35,14 +37,20 @@ Commands:
   dev status                                         Show running dev mesh containers
   mcp                                               Start Model Context Protocol (MCP) server over stdio for AI agents
   wizard                                            Interactive guided setup for new projects and services
+  pipeline check <task-dir> [--json]                Verify a pipeline task directory deterministically (status, lock,
+                                                     rounds, verdict binding, To register keys); exits 1 naming each failed check
 `;
+
+// Flags that never take a value, so `--json <task-dir>` keeps the path positional.
+const BOOLEAN_FLAGS = new Set(["json"]);
 
 function parseArgs(argv: string[]) {
   const flags: Record<string, string | true> = {};
   const pos: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a.startsWith("--")) {
+    if (BOOLEAN_FLAGS.has(a.slice(2)) && a.startsWith("--")) flags[a.slice(2)] = true;
+    else if (a.startsWith("--")) {
       const next = argv[i + 1];
       if (next !== undefined && !next.startsWith("--")) flags[a.slice(2)] = argv[++i];
       else flags[a.slice(2)] = true;
@@ -253,6 +261,16 @@ function main(argv: string[]): number {
     console.log(`✔ Dev mesh started: ${result.services.join(", ")}${result.infra.length ? ` + infra: ${result.infra.join(", ")}` : ""}`);
     if (result.skipped.length) console.log(`  skipped (no Dockerfile): ${result.skipped.join(", ")}`);
     return 0;
+  }
+  if (cmd === "pipeline" && sub === "check") {
+    const dir = rest[0];
+    if (!dir) {
+      console.error("usage: base-ai pipeline check <task-dir> [--json] [--root <dir>]");
+      return 1;
+    }
+    const report = checkTask(loadTask(root, dir));
+    console.log(flags.json === true ? JSON.stringify(report, null, 2) : renderText(report));
+    return report.ok ? 0 : 1;
   }
   if (cmd === "wizard") {
     runWizard(root).then((code) => { process.exitCode = code; }).catch((e) => {
