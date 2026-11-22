@@ -12,10 +12,10 @@ budgets:
     implementer: 3250
     improvement: 8000
     planner: 1250
-    qa: 14250
+    qa: 14500
     reviewer: 6000
     supervisor: 8750
   definition_totals:
-    qa: 18000
+    qa: 18250
     reviewer: 7000
     supervisor: 11250

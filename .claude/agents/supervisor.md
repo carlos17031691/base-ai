@@ -306,7 +306,7 @@ This proves that a record exists and covers every event, not that the human made
 1. a Markdown table cell whose content, trimmed, is exactly `To register` — the reviewer's tech-debt column;
 2. a bold span whose content is exactly `To register` or `To register.` — written `**To register**` or `**To register.**` — anywhere on a line; QA's form.
 
-Matching is case-sensitive. A plain-text or code-span occurrence of the phrase never counts, and nothing inside code fences counts. Each marker is one item, so a finding that carries the marker in both positions — a table row and a detail block — gets two keys.
+Matching is case-sensitive. A plain-text occurrence never counts, and nothing inside an inline code span or a code fence counts, bold or not. Each marker is one item, so a finding that carries the marker in both positions — a table row and a detail block — gets two keys.
 
 **Items.** Markers are counted:
 
