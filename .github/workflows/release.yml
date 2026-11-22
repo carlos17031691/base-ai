@@ -39,13 +39,21 @@ jobs:
         working-directory: cli
         run: npm run check:package
 
-      - name: Calculate and bump next version automatically
+      - name: Check release version
         id: versioning
         run: |
           PKG_NAME=$(node -p "require('./cli/package.json').name")
-          REMOTE_VER=$(npm view "$PKG_NAME" version 2>/dev/null || echo "0.1.0")
+          # Fail fast on a registry error: a fallback version would let an unbumped release reach npm publish.
+          if ! REMOTE_VER=$(npm view "$PKG_NAME" version 2>"$RUNNER_TEMP/npm-view.err"); then
+            if grep -q E404 "$RUNNER_TEMP/npm-view.err"; then
+              REMOTE_VER="0.0.0" # never published: any version is greater
+            else
+              echo "::error::npm view $PKG_NAME failed; cannot compare versions. $(head -c 300 "$RUNNER_TEMP/npm-view.err")"
+              exit 1
+            fi
+          fi
           LAST_TAG="v$REMOTE_VER"
-          echo "Published npm version: $REMOTE_VER (last tag: $LAST_TAG)"
+          echo "Published on npm: $REMOTE_VER (last tag: $LAST_TAG)"
 
           if git rev-parse "$LAST_TAG" >/dev/null 2>&1; then
             LOG=$(git log "$LAST_TAG..HEAD" --oneline)
@@ -61,27 +69,16 @@ jobs:
             exit 0
           fi
 
-          if echo "$LOG" | grep -qE "BREAKING CHANGE|!:"; then
-            BUMP="major"
-          elif echo "$LOG" | grep -qE "feat(\(.*\))?:"; then
-            BUMP="minor"
-          else
-            BUMP="patch"
+          # The version is set in the release PR (BASE-080-G1): the branch ruleset blocks any bot push to main,
+          # so CI never bumps it. Numeric major.minor.patch comparison, no dependency.
+          if ! node -e 'const p=v=>v.split(".").map(Number);const[a,b]=[p(process.argv[1]),p(process.argv[2])];for(let i=0;i<3;i++){if(a[i]!==b[i])process.exit(a[i]>b[i]?0:1)}process.exit(1)' "$LOCAL_VER" "$REMOTE_VER"; then
+            echo "::error::cli/package.json version $LOCAL_VER is not greater than published $REMOTE_VER. Bump cli/package.json and cli/package-lock.json in a ticketed PR to development before the release PR."
+            exit 1
           fi
 
-          echo "Determined bump type: $BUMP"
-          cd cli
-          if [ "$LOCAL_VER" != "$REMOTE_VER" ]; then
-            NEW_VER="$LOCAL_VER"
-            echo "Using manual version from package.json: $NEW_VER"
-          else
-            NEW_VER=$(npm version "$BUMP" --no-git-tag-version)
-            NEW_VER="${NEW_VER#v}"
-            echo "Auto-bumped version to: $NEW_VER"
-          fi
-
+          echo "Releasing version from package.json: $LOCAL_VER"
           echo "should_publish=true" >> "$GITHUB_OUTPUT"
-          echo "new_version=$NEW_VER" >> "$GITHUB_OUTPUT"
+          echo "new_version=$LOCAL_VER" >> "$GITHUB_OUTPUT"
 
       - name: Publish to npm with Provenance
         if: steps.versioning.outputs.should_publish == 'true'
@@ -90,26 +87,16 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --provenance --access public
 
-      - name: Create Git Tag, GitHub Release and push version bump
+      - name: Create Git Tag and GitHub Release
         if: steps.versioning.outputs.should_publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           NEW_TAG="v${{ steps.versioning.outputs.new_version }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          
           if ! git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
             git tag "$NEW_TAG"
             git push origin "$NEW_TAG"
             gh release create "$NEW_TAG" --generate-notes --title "$NEW_TAG"
-          fi
-
-          git add cli/package.json cli/package-lock.json
-          if ! git diff --cached --quiet; then
-            git commit -m "chore(release): bump version to ${{ steps.versioning.outputs.new_version }} [skip ci]"
-            git push origin main
-            git push origin main:development || true
           fi
 
       - name: Notificar release en Slack

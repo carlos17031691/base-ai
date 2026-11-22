@@ -226,7 +226,7 @@ flowchart LR
 - [x] **ADR-0002:** Strict Git hooks, branch discipline (`development` staging), and mandatory ticket traceability.
 - [x] **ADR-0003:** Runtime bootstrap, socket binding on `PORT`, `/healthz` + `/readyz`, and graceful `SIGTERM` shutdown.
 - [x] **FinOps & AI Operations:** Multi-model priority cascade (`AI_MODELS`), quota rollover, and JSON schema prompt contracts.
-- [x] **Automated Releases:** Continuous versioning, provenance-backed npm publishing, and GitHub Releases.
+- [x] **Automated Releases:** Version set in `cli/package.json` (and lockfile) before the release PR, then CI publishes it (provenance-backed npm publishing and GitHub Releases).
 - [x] **Dual Quality Gates:** SonarCloud™ SAST ($\ge 80\%$ test coverage, zero vulnerabilities) & CodeRabbit™ AI cognitive review.
 - [x] **PR Review Governance:** Severity-based triage (High/Medium blockers vs. Low tech debt) with mandatory human approval.
 - [x] **Zero Unresolved Discussions:** Strict blocker rule requiring all review comments to be resolved before merge.
