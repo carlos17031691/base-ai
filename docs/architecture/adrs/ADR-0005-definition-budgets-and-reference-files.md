@@ -45,7 +45,7 @@ The size had to come down without changing or weakening any rule, and in a way a
 
 - **Cost:** about 5,500 tokens fewer in every turn of a QA run that does not halt. A halting run also reads `halt.md` (about 2,300 tokens) and saves less.
 - **Operations:** `ai stats` now loads the definitions, so it fails on an invalid definition (no frontmatter, unnamed reference file), as `ai sync` already did. `doctor` covers the exported reference files with no new check.
-- **Security:** no new input surface beyond local Markdown files. Every condition and every "never" of `qa.md` stays in the core, so a safeguard does not depend on a reference file being read.
+- **Security:** no new input surface beyond local Markdown files. Every condition of `qa.md` stays in the core, and each deleted "never" item is mapped to core lines that still state it, so a safeguard does not depend on a reference file being read.
 
 ## 4. Consequences
 

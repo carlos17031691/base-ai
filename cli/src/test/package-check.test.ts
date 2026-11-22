@@ -50,8 +50,8 @@ test("findMissing reports a removed shipped file with its source file", () => {
   ]);
 });
 
-test("findMissing reports a directory with no packed file and exempts only .ai/tasks/", () => {
-  assert.deepEqual(Object.keys(EXEMPT), [".ai/tasks/"]);
+test("findMissing reports a directory with no packed file and exempts .ai/tasks/ and .ai/usage/", () => {
+  assert.deepEqual(Object.keys(EXEMPT), [".ai/tasks/", ".ai/usage/"]);
   const missing = findMissing(src("`templates/service/` and `.ai/tasks/BASE-1/status.json`"), packed);
   assert.deepEqual(missing.map((m) => m.required), ["templates/service/"]);
 });

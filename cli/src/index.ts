@@ -11,6 +11,12 @@ import { startMcpServer } from "./mcp.js";
 import { runEvals, renderEvalReport } from "./eval.js";
 import { runWizard } from "./wizard.js";
 import { devUp, devStop, devStatus } from "./dev.js";
+import { checkTask, renderText } from "./pipeline-check.js";
+import { loadTask } from "./pipeline-files.js";
+import { spawnRunner } from "./pipeline-gh.js";
+import { checkRegistration, renderDebt } from "./pipeline-registration.js";
+import { runUsageRecord } from "./usage-files.js";
+import { stderrLine } from "./usage.js";
 
 const USAGE = `base-ai <command> [--root <dir>]
 
@@ -35,14 +41,25 @@ Commands:
   dev status                                         Show running dev mesh containers
   mcp                                               Start Model Context Protocol (MCP) server over stdio for AI agents
   wizard                                            Interactive guided setup for new projects and services
+  pipeline check <task-dir> [--json]                Verify a pipeline task directory deterministically (status, lock,
+                                                     rounds, verdict binding, decisions.md coverage, To register keys); exits 1
+                                                     naming each failed check. Offline.
+  pipeline debt <task-dir> [--issues n,…] [--json]  Check each To register key against GitHub issues (opt-in network, gh);
+                                                     exit 0 registered, 1 missing, 2 could not check
+  usage record                                      Record a Claude Code turn's tokens from a Stop/SubagentStop hook (stdin) into
+                                                     .ai/tasks/<ticket>/usage.jsonl; always exits 0, nothing on stdout
 `;
+
+// Flags that never take a value, so `--json <task-dir>` keeps the path positional.
+const BOOLEAN_FLAGS = new Set(["json"]);
 
 function parseArgs(argv: string[]) {
   const flags: Record<string, string | true> = {};
   const pos: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a.startsWith("--")) {
+    if (BOOLEAN_FLAGS.has(a.slice(2)) && a.startsWith("--")) flags[a.slice(2)] = true;
+    else if (a.startsWith("--")) {
       const next = argv[i + 1];
       if (next !== undefined && !next.startsWith("--")) flags[a.slice(2)] = argv[++i];
       else flags[a.slice(2)] = true;
@@ -254,6 +271,45 @@ function main(argv: string[]): number {
     if (result.skipped.length) console.log(`  skipped (no Dockerfile): ${result.skipped.join(", ")}`);
     return 0;
   }
+  if (cmd === "usage" && sub === "record") {
+    // A hook must never fail the agent: every path, an internal error included, exits 0.
+    const stderr = (line: string) => process.stderr.write(`${line}\n`);
+    runUsageRecord({ root, stdin: process.stdin, env: process.env, now: Date.now, stderr })
+      .catch(() => stderr(stderrLine("internal")))
+      .finally(() => process.exit(0));
+    return 0;
+  }
+
+  if (cmd === "pipeline" && sub === "debt") {
+    const usage = "usage: base-ai pipeline debt <task-dir> [--issues <n,…>] [--json] [--root <dir>]";
+    const dir = rest[0];
+    const issuesArg = flags.issues;
+    if (!dir || (issuesArg !== undefined && !/^[1-9]\d*(,[1-9]\d*)*$/.test(str(issuesArg) ?? ""))) {
+      console.error(usage);
+      return 1;
+    }
+    const report = checkTask(loadTask(root, dir));
+    const k16 = report.checks.find((c) => c.id === "K16");
+    if (k16?.status !== "pass") {
+      console.error(`keys not computed: K16 ${k16?.status ?? "missing"}`);
+      return 1;
+    }
+    const issues = issuesArg === undefined ? [] : (str(issuesArg) as string).split(",").map(Number);
+    const debt = checkRegistration(report, issues, spawnRunner());
+    console.log(flags.json === true ? JSON.stringify(debt, null, 2) : renderDebt(debt));
+    return debt.outcome === "registered" ? 0 : debt.outcome === "missing" ? 1 : 2;
+  }
+
+  if (cmd === "pipeline" && sub === "check") {
+    const dir = rest[0];
+    if (!dir) {
+      console.error("usage: base-ai pipeline check <task-dir> [--json] [--root <dir>]");
+      return 1;
+    }
+    const report = checkTask(loadTask(root, dir));
+    console.log(flags.json === true ? JSON.stringify(report, null, 2) : renderText(report));
+    return report.ok ? 0 : 1;
+  }
   if (cmd === "wizard") {
     runWizard(root).then((code) => { process.exitCode = code; }).catch((e) => {
       console.error(`✖ ${(e as Error).message}`);
@@ -269,6 +325,12 @@ function main(argv: string[]): number {
 try {
   process.exitCode = main(process.argv.slice(2));
 } catch (e) {
+  const args = process.argv.slice(2);
+  if (args[0] === "usage" && args[1] === "record") {
+    // A synchronous throw before dispatch (e.g. a deleted working directory) must not fail the agent either.
+    process.stderr.write(`${stderrLine("internal")}\n`);
+    process.exit(0);
+  }
   console.error(`✖ ${(e as Error).message}`);
   process.exitCode = 1;
 }
