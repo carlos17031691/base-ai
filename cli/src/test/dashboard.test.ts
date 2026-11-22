@@ -224,14 +224,16 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
     const errs: string[] = [];
     const proc = fakeProc();
     const d = startDashboard({ root: r, port: 0, pricing: {}, out: () => {}, err: (l) => errs.push(l), proc });
+    let s: ReturnType<typeof connect> | undefined;
     try {
       const port = await d.ready;
       // A held keep-alive connection would keep server.close() waiting without the socket tracking.
-      const s = connect(port, "127.0.0.1");
-      await new Promise<void>((res) => s.on("connect", () => res()));
-      s.write(`GET /healthz HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nConnection: keep-alive\r\n\r\n`);
-      await new Promise<void>((res) => s.once("data", () => res()));
-      const closed = new Promise<void>((res) => s.on("close", () => res()));
+      s = connect(port, "127.0.0.1");
+      const sock = s;
+      await new Promise<void>((res) => sock.on("connect", () => res()));
+      sock.write(`GET /healthz HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nConnection: keep-alive\r\n\r\n`);
+      await new Promise<void>((res) => sock.once("data", () => res()));
+      const closed = new Promise<void>((res) => sock.on("close", () => res()));
       proc.emit(signal);
       await d.stopped;
       await closed;
@@ -239,6 +241,9 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
       assert.deepEqual([proc.listenerCount("SIGINT"), proc.listenerCount("SIGTERM")], [0, 0]);
       assert.deepEqual(errs, ["base-ai dashboard: stopped"]);
     } finally {
+      // Review r1 L1: a failed assertion must not leave the server or the socket open and hang the file.
+      s?.destroy();
+      if (d.server.listening) await new Promise((res) => d.server.close(() => res(undefined)));
       rmSync(r, { recursive: true, force: true });
     }
   });
@@ -288,21 +293,52 @@ test("spawned CLI: a busy port, a bad --port and a root without .ai/ each exit 1
   const port = (holder.address() as AddressInfo).port;
   const r = root();
   const bare = realpathSync(mkdtempSync(join(tmpdir(), "dash-bare-")));
+  const children: ReturnType<typeof spawnCli>[] = [];
+  const cli = (args: string[]) => {
+    const c = spawnCli(args);
+    children.push(c);
+    return c;
+  };
   try {
-    const busy = spawnCli(["--root", r, "--port", String(port)]);
+    const busy = cli(["--root", r, "--port", String(port)]);
     assert.equal(await busy.exit, 1);
     assert.match(busy.err(), /port \d+ is in use \(choose another with --port <n>\)/);
 
-    const bad = spawnCli(["--root", r, "--port", "70000"]);
+    const bad = cli(["--root", r, "--port", "70000"]);
     assert.equal(await bad.exit, 1);
     assert.match(bad.err(), /--port must be an integer from 0 to 65535/);
 
-    const none = spawnCli(["--root", bare, "--port", "0"]);
+    const none = cli(["--root", bare, "--port", "0"]);
     assert.equal(await none.exit, 1);
     assert.match(none.err(), /Not a base-ai project/);
   } finally {
+    // Review r1 L1: a child that unexpectedly listens must not outlive a failed assertion.
+    for (const c of children) c.child.kill("SIGKILL");
     await new Promise((res) => holder.close(() => res(undefined)));
     rmSync(r, { recursive: true, force: true });
     rmSync(bare, { recursive: true, force: true });
   }
+});
+
+test("review r1 L2: a malformed request gets 400, and oversized headers 431, with the security headers", async () => {
+  await withServer(async (port) => {
+    const raw = (text: string) =>
+      new Promise<string>((resolve, reject) => {
+        const s = connect(port, "127.0.0.1", () => s.write(text));
+        let out = "";
+        s.on("data", (c) => (out += c));
+        s.on("end", () => resolve(out));
+        s.on("close", () => resolve(out));
+        s.on("error", reject);
+      });
+    for (const [text, status] of [
+      ["NOT A REQUEST\r\n\r\n", "400 Bad Request"],
+      [`GET /healthz HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nX-Big: ${"a".repeat(20_000)}\r\n\r\n`, "431 Request Header Fields Too Large"],
+    ] as const) {
+      const out = await raw(text);
+      assert.match(out, new RegExp(`^HTTP/1\\.1 ${status}\r\n`), status);
+      for (const [k, v] of Object.entries(SECURITY)) assert.ok(out.toLowerCase().includes(`${k}: ${v.toLowerCase()}`), `${status} ${k}`);
+      assert.doesNotMatch(out.toLowerCase(), /access-control-/);
+    }
+  });
 });

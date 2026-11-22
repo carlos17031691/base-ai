@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { isTaskId, listTaskIds, listTasks, taskDetail } from "../dashboard-data.js";
@@ -179,4 +179,48 @@ test("isTaskId accepts ticket-like names and rejects paths, escapes, spaces and 
   for (const bad of ["../../etc", "a/b", "a%2Fb", "", "a b"]) assert.ok(!isTaskId(bad), bad);
   // "." and ".." match the regex, but readdir never lists them, so they never reach a read.
   assert.ok(isTaskId("..") && isTaskId("."));
+});
+
+test("review r1 L3: an unreadable usage.jsonl reports its errno code with a root-relative path, never an absolute one", () => {
+  const b = sandbox();
+  const dir = b.task("TK-1");
+  try {
+    writeFileSync(join(dir, "usage.jsonl"), `${record()}\n`);
+    chmodSync(dir, 0o000); // lstat inside the directory now fails with EACCES
+    const t = listTasks(b.root, PRICING).tasks[0];
+    assert.equal(t.tokens, null);
+    assert.equal(t.usage_error, ".ai/tasks/TK-1/usage.jsonl cannot be read (EACCES)");
+    assert.ok(!(t.usage_error ?? "").includes(b.root));
+  } finally {
+    chmodSync(dir, 0o755);
+    b.done();
+  }
+});
+
+test("review r1 L5: a task whose entry throws gets the internal error fallback; the other tasks are unaffected", () => {
+  const b = sandbox();
+  try {
+    writeFileSync(join(b.task("TK-1"), "usage.jsonl"), `${record({ model: "boom" })}\n`);
+    b.task("TK-2");
+    // A price lookup that throws stands in for any unexpected failure while one entry is built.
+    const pricing = { ...PRICING };
+    Object.defineProperty(pricing, "boom", { enumerable: true, get: () => { throw new Error("boom"); } });
+    const list = listTasks(b.root, pricing);
+    assert.deepEqual(list.tasks[0], {
+      id: "TK-1",
+      ticket: null,
+      state: null,
+      ok: false,
+      problem: "internal error",
+      nextActor: null,
+      review: null,
+      qa: null,
+      updated_at: null,
+      tokens: null,
+      usage_error: null,
+    });
+    assert.deepEqual([list.tasks[1].id, list.tasks[1].ticket, list.tasks[1].state], ["TK-2", "TK-2", "completed"]);
+  } finally {
+    b.done();
+  }
 });

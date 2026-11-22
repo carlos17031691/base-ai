@@ -400,9 +400,9 @@ export interface UsageReport {
   total: UsageTotals;
 }
 
-/** The report of one task's usage.jsonl text. Blank lines are ignored; other unreadable lines are counted. */
-export function buildUsageReport(ticket: string, text: string, pricing: Pricing): UsageReport {
-  const records: ReportRecord[] = [];
+/** The records of a usage.jsonl text in file order. Blank lines are ignored; other unreadable lines are counted. */
+export function parseUsageLines(text: string): { records: UsageLine[]; skipped: number } {
+  const records: UsageLine[] = [];
   let skipped = 0;
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
@@ -410,6 +410,12 @@ export function buildUsageReport(ticket: string, text: string, pricing: Pricing)
     if (r === null) skipped++;
     else records.push(r);
   }
+  return { records, skipped };
+}
+
+/** The report of one task's usage.jsonl text. */
+export function buildUsageReport(ticket: string, text: string, pricing: Pricing): UsageReport {
+  const { records, skipped } = parseUsageLines(text);
   const { groups, total } = summarizeUsage(records, pricing);
   return { schema: 1, ticket, records: records.length, skipped_lines: skipped, groups, total };
 }

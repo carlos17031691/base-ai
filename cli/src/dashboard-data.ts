@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { checkTask, parseStatus, type CheckReport, type NextActor } from "./pipeline-check.js";
 import { loadTask } from "./pipeline-files.js";
 import { readUsageText } from "./usage-files.js";
-import { buildUsageReport, parseUsageLine, recordCost, type Pricing, type UsageLine, type UsageReport, type UsageTotals } from "./usage.js";
+import { buildUsageReport, parseUsageLines, recordCost, type Pricing, type UsageLine, type UsageReport, type UsageTotals } from "./usage.js";
 
 export const TASK_ID = /^[A-Za-z0-9#._-]+$/;
 export const isTaskId = (id: string) => TASK_ID.test(id);
@@ -69,12 +69,16 @@ const updatedAt = (status: Checked["status"]) => {
   return typeof v === "string" ? v : null;
 };
 
-/** The usage text of a task, or the reader's error with the path relative to the root. */
+/**
+ * The usage text of a task, or the reader's error with the path relative to the root. An errno error (for
+ * example EACCES) carries an absolute path in its message, so only its code is kept.
+ */
 function usageText(root: string, id: string): { text: string } | { error: string } {
   try {
     return { text: readUsageText(root, taskPath(id)) };
   } catch (e) {
-    return { error: (e as Error).message };
+    const code = (e as NodeJS.ErrnoException).code;
+    return { error: code === undefined ? (e as Error).message : `${taskPath(id)}/usage.jsonl cannot be read (${code})` };
   }
 }
 
@@ -144,11 +148,8 @@ export function taskDetail(root: string, id: string, pricing: Pricing): TaskDeta
   const usage = usageText(root, id);
   let usageOut: TaskDetail["usage"];
   if ("text" in usage) {
-    const records: (UsageLine & { cost_usd: number | null })[] = [];
-    for (const line of usage.text.split("\n")) {
-      const r = line.trim() ? parseUsageLine(line) : null;
-      if (r !== null) records.push({ ...r, cost_usd: recordCost(r, pricing) });
-    }
+    // The same line rule as the report, so the listed records and the totals never disagree.
+    const records = parseUsageLines(usage.text).records.map((r) => ({ ...r, cost_usd: recordCost(r, pricing) }));
     usageOut = { report: buildUsageReport(id, usage.text, pricing), records };
   } else {
     usageOut = { error: usage.error };

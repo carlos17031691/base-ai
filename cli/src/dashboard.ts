@@ -137,6 +137,17 @@ export function startDashboard(o: DashboardOptions): Dashboard {
   let bound = o.port;
   const handler = createDashboardHandler({ port: () => bound, data: o.data ?? dashboardData(o.root, o.pricing), err: o.err });
   const server = createServer(handler);
+  // Node's default reply to a malformed request carries none of the security headers: send our own.
+  server.on("clientError", (e: NodeJS.ErrnoException, socket: Socket) => {
+    if (!socket.writable) return socket.destroy();
+    const tooLarge = e.code === "HPE_HEADER_OVERFLOW";
+    const body = JSON.stringify({ error: tooLarge ? "request header fields too large" : "bad request" });
+    const head = Object.entries(SECURITY_HEADERS).map(([k, v]) => `${k}: ${v}\r\n`).join("");
+    socket.end(
+      `HTTP/1.1 ${tooLarge ? "431 Request Header Fields Too Large" : "400 Bad Request"}\r\n${head}` +
+        `Content-Type: ${JSON_TYPE}\r\nContent-Length: ${Buffer.byteLength(body)}\r\nConnection: close\r\n\r\n${body}`,
+    );
+  });
   // Tracked by hand: closeAllConnections is missing before Node 18.2, and engines is >=18.
   const sockets = new Set<Socket>();
   server.on("connection", (s: Socket) => {
