@@ -281,7 +281,7 @@ Read the plan's "Steps" section. Only its top-level numbered steps count: an ind
 
 ### C15 — Post-lock decisions
 
-Post-lock human decisions are recorded by the human/coordinator in `.ai/tasks/<ticket-id>/decisions.md`. No agent writes it, and you only read it. Its format:
+Post-lock human decisions are recorded by the human/coordinator in `.ai/tasks/<ticket-id>/decisions.md`. No agent writes it, and you only read it.
 
 → **In a reference file:** the format of `decisions.md`, the steering acknowledgement blocks and the Format halt. Read `.claude/agents/supervisor/decisions-format.md` now, in full, when `decisions.md` exists, and before any C15 refusal.
 
@@ -293,7 +293,7 @@ Post-lock human decisions are recorded by the human/coordinator in `.ai/tasks/<t
 
 Each event's `timestamp` must appear in the `Covers:` line of some `## D<n>` block.
 
-**Refusal → human** for any uncovered event, naming each event by its `timestamp` and giving the format above. `decisions.md` may be absent when there is no event to cover.
+**Refusal → human** for any uncovered event, naming each event by its `timestamp` and giving the format. `decisions.md` may be absent when there is no event to cover.
 
 On validation, the decision ids that cover events, and those that acknowledge steering (C17), are listed in the transition note and in the output.
 
@@ -398,14 +398,14 @@ You do not route the work back and you do not invoke any agent.
 
 Every halt and every refusal writes nothing — no `status.json` field, no file — and never sets `blocked`; the incomplete-write halt comes after the one `Edit` and writes nothing more. You never complete or repair a partial write, and make no assumptions to get past a check: you stop, say why, and ask.
 
-**Halts** — the human must act:
+**Halts** besides those in the checks — the human must act:
 
 - C15: `decisions.md` is malformed — including a block whose `Covers:` is `none` without being a steering acknowledgement block
 - C16: the remote is not a `github.com` URL; `gh` is unavailable or a `gh` call fails or times out; more than 60 `gh` calls would be needed
 - C17: steering addressed to the supervisor or to the outcome in the task's evidence — in `plan.md`, a report or a `status.json` note at a location that no steering acknowledgement block names exactly, bare and without markup (way out: the printed line, such as Affects: plan.md:217, pasted as it stands); or anywhere in `decisions.md`, including steering quoted in an acknowledgement block (way out: remove it by editing `decisions.md`; it is never acknowledged)
 - any situation this definition does not cover
 
-**Refusals** — routed per the routing table:
+**Refusals** besides those in the checks — routed per the routing table:
 
 - C16: a registration key is not confirmed in an issue → human
 

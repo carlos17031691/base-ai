@@ -61,12 +61,12 @@ The second form is never shortened: the commands, the note about git-ignored out
 
 ## After a check command has started
 
-**Halting after a check command has started.** One rule covers every halt that occurs once at least one check command has started — the task-artifact halt above, the environment abort and the doubt case below, and any other halt in this step or a later one. Before you halt:
+**Halting after a check command has started.** One rule covers every halt that occurs once at least one check command has started — the task-artifact halt, the environment abort and the doubt case, and any other halt in Step 4 or a later one. Before you halt:
 
 1. Run no further check command.
 2. Have exactly one "after" snapshot, and compare it with the "before" snapshot exactly as for a completed round: all four parts — the `git status` output, the hashes of changed and untracked files, the hashes of the ticket's task artifacts, and the commits and refs.
-   - **A halt during execution** — the environment abort, the doubt case, or any other halt before the "Snapshot after" of this step has been taken: take the "after" snapshot now.
-   - **A halt after the "Snapshot after" of this step was taken** — the task-artifact halt, and any halt in Steps 5 to 7: reuse that snapshot and its comparison. Do not take another. After Step 4 you execute nothing, so a second snapshot would detect nothing new.
+   - **A halt during execution** — the environment abort, the doubt case, or any other halt before the "Snapshot after" of Step 4 has been taken: take the "after" snapshot now.
+   - **A halt after the "Snapshot after" of Step 4 was taken** — the task-artifact halt, and any halt in Steps 5 to 7: reuse that snapshot and its comparison. Do not take another. After Step 4 you execute nothing, so a second snapshot would detect nothing new.
 3. Put the result in the halt message (Step 1, second form of the closing lines): the paths that differ outside git-ignored paths; each commit or ref that moved, from which commit to which; each task artifact of the ticket that changed; or the explicit statement "no difference found". The message also lists the check commands that ran, with their working directories, and says they may have written git-ignored output.
 4. When differences are listed, or a part could not be compared (see below), the message says that any difference was made during QA's execution, that QA has not repaired it, and that it will still be in the tree at the next invocation — so whoever acts next must decide what to do with it before invoking QA again.
 

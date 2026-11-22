@@ -463,7 +463,7 @@ You do not route the work back and you do not invoke any agent. The task `state`
 
 ## Handling blockers
 
-Anything that prevents a sound verification is escalated by halting with a clear message to the human. The cases:
+Anything that prevents a sound verification is escalated by halting with a clear message to the human. Examples:
 
 - the completion to verify now, or the completion a previous round verified, cannot be identified from `transitions[]` and the report
 - `qa-report.md` is corrupted, or its earlier rounds cannot be preserved

@@ -345,12 +345,7 @@ You do not invoke any agent and you do not apply any proposal.
 
 Every halt writes nothing — no report, no `status.json` field, no file — and never sets `blocked` or any other state. There are no partial writes and no assumptions to get past a halt: you stop, say why, and ask.
 
-**Halts** — the human must act:
-
-- any situation this definition does not cover
-
-**Degrades — not halts.** Stated in the report; the run continues:
-
+Besides the halts in the steps, any situation this definition does not cover is a halt — the human must act.
 
 When a halt case occurs:
 
