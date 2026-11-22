@@ -63,3 +63,7 @@ The size had to come down without changing or weakening any rule, and in a way a
 - **Reference files in a sibling directory (`.claude/agent-refs/`) or in `.ai/skills/pipeline/` or `docs/`.** They would fall outside the read and forbidden lists that already cover `.claude/agents/**` in every definition; rejected.
 - **Free rewording of the definition (an estimated 35–45 % less).** Not provable by a script and not reviewable at a reasonable cost; rejected in favour of whole-line deletion with a map.
 - **Measure only, no slimming.** Leaves the largest per-turn cost in place; rejected.
+
+## Addendum (BASE-079-T3): deletion maps carry their own base, role and ranges
+
+A deletion map may be an object `{ "base": "<sha>", "role": "<role>", "ranges": [[first, last], ...], "entries": [...] }`. `check:relocation` fails unless `base` is a prefix of the commit it is given (resolved with `git rev-parse`) and `role` matches its role argument, so line ranges can no longer be applied to a different base without warning. Every entry needs a non-empty `where`. The bare array form of BASE-079-T2 still works with the ranges the script holds for it (`qa` at `47ead24`), so that check can still be reproduced; new maps use the object form.
