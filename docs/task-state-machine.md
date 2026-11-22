@@ -36,8 +36,13 @@ blocked ──(human resolves)──► <previous state>     [human resets manua
     ├── review-report.md      ← reviewer output; existing content never edited; owners append rounds
     ├── qa-report.md          ← qa output; existing content never edited; owners append rounds
     ├── decisions.md          ← post-lock human decisions; written by the human/coordinator only
-    └── improvement-report.md ← improvement agent output; human reviews before applying
+    ├── improvement-report.md ← improvement agent output; human reviews before applying
+    └── usage.jsonl           ← token usage; written by the usage hook or the coordinator, never by an agent role; versioned
 ```
+
+`usage.jsonl` holds one `UsageRecord` per line, appended by `base-ai usage record`, which runs as a Claude Code `SubagentStop`/`Stop` hook (configured by hand until U2):
+`{"schema":1,"ts","ticket","agent","model","session_id","first_message_id","last_message_id","messages","input_tokens","cache_creation_input_tokens","cache_read_input_tokens","output_tokens","source":"claude-code-hook","attribution"}`.
+Only counters and ids are stored, never prompt or response text. The ticket is `BASE_AI_TICKET` if it names an existing task directory (`attribution: "env"`), else the longest `-`-prefix of the branch's last segment that does (`"branch"`), else the record goes to `.ai/usage/unattributed.jsonl` (git-ignored) with `ticket: null` and `"none"`. Each assistant `message.id` counts once; a record covers only the messages after the session's high-water mark (the latest recorded `last_message_id` in the transcript). `agent` is `coordinator` for `Stop`; for `SubagentStop` it is the subagent type, else the agent of the latest `status.json` transition, else `unknown`. The command always exits 0, prints nothing on stdout and writes one stderr line on failure.
 
 `decisions.md` format — one block per decision; each `Covers:` timestamp is a `transitions[]` entry the decision explains:
 

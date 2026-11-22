@@ -15,6 +15,8 @@ import { checkTask, renderText } from "./pipeline-check.js";
 import { loadTask } from "./pipeline-files.js";
 import { spawnRunner } from "./pipeline-gh.js";
 import { checkRegistration, renderDebt } from "./pipeline-registration.js";
+import { runUsageRecord } from "./usage-files.js";
+import { stderrLine } from "./usage.js";
 
 const USAGE = `base-ai <command> [--root <dir>]
 
@@ -44,6 +46,8 @@ Commands:
                                                      naming each failed check. Offline.
   pipeline debt <task-dir> [--issues n,…] [--json]  Check each To register key against GitHub issues (opt-in network, gh);
                                                      exit 0 registered, 1 missing, 2 could not check
+  usage record                                      Record a Claude Code turn's tokens from a Stop/SubagentStop hook (stdin) into
+                                                     .ai/tasks/<ticket>/usage.jsonl; always exits 0, nothing on stdout
 `;
 
 // Flags that never take a value, so `--json <task-dir>` keeps the path positional.
@@ -267,6 +271,15 @@ function main(argv: string[]): number {
     if (result.skipped.length) console.log(`  skipped (no Dockerfile): ${result.skipped.join(", ")}`);
     return 0;
   }
+  if (cmd === "usage" && sub === "record") {
+    // A hook must never fail the agent: every path, an internal error included, exits 0.
+    const stderr = (line: string) => process.stderr.write(`${line}\n`);
+    runUsageRecord({ root, stdin: process.stdin, env: process.env, now: Date.now, stderr })
+      .catch(() => stderr(stderrLine("internal")))
+      .finally(() => process.exit(0));
+    return 0;
+  }
+
   if (cmd === "pipeline" && sub === "debt") {
     const usage = "usage: base-ai pipeline debt <task-dir> [--issues <n,…>] [--json] [--root <dir>]";
     const dir = rest[0];
@@ -312,6 +325,12 @@ function main(argv: string[]): number {
 try {
   process.exitCode = main(process.argv.slice(2));
 } catch (e) {
+  const args = process.argv.slice(2);
+  if (args[0] === "usage" && args[1] === "record") {
+    // A synchronous throw before dispatch (e.g. a deleted working directory) must not fail the agent either.
+    process.stderr.write(`${stderrLine("internal")}\n`);
+    process.exit(0);
+  }
   console.error(`✖ ${(e as Error).message}`);
   process.exitCode = 1;
 }
