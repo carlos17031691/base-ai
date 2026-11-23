@@ -1,12 +1,14 @@
 /**
  * `base-ai dashboard` (BASE-101-D1, epic #101): a local, read-only `node:http` server over `.ai/tasks/`, bound to
- * 127.0.0.1 only. No network beyond this listener, no write, no CORS. Pages come from memory (dashboard-assets.ts).
+ * 127.0.0.1 only. No network beyond this listener, no write, no CORS. The page, its script and its stylesheet come
+ * from memory (dashboard-assets.ts, BASE-101-D2), so `default-src 'self'` holds with no inline code.
  *
  * Every request is checked in a fixed order: Host (403, against DNS rebinding), method (405), path (404), id (400).
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { INDEX_HTML } from "./dashboard-assets.js";
+import { APP_CSS, APP_JS, INDEX_HTML } from "./dashboard-assets.js";
 import { isTaskId, listTaskIds, listTasks, taskDetail } from "./dashboard-data.js";
+import { DEFAULT_EDITOR_URL } from "./source.js";
 import type { Pricing } from "./usage.js";
 
 export const DEFAULT_PORT = 4747;
@@ -45,6 +47,8 @@ const SECURITY_HEADERS = {
 } as const;
 const JSON_TYPE = "application/json; charset=utf-8";
 const HTML_TYPE = "text/html; charset=utf-8";
+const JS_TYPE = "text/javascript; charset=utf-8";
+const CSS_TYPE = "text/css; charset=utf-8";
 
 function send(req: IncomingMessage, res: ServerResponse, status: number, body: string, type: string, extra: Record<string, string> = {}): void {
   const payload = Buffer.from(body, "utf8");
@@ -78,6 +82,8 @@ export interface HandlerOptions {
   port: () => number;
   data: DashboardData;
   err: (line: string) => void;
+  /** The validated `dashboard.editor_url` template, served by /api/meta (BASE-101-D2 H2). */
+  editorUrl: string;
 }
 
 export function createDashboardHandler(opts: HandlerOptions): (req: IncomingMessage, res: ServerResponse) => void {
@@ -96,6 +102,18 @@ export function createDashboardHandler(opts: HandlerOptions): (req: IncomingMess
       if (path === "/") {
         route = "/";
         return send(req, res, 200, INDEX_HTML, HTML_TYPE);
+      }
+      if (path === "/app.js") {
+        route = "/app.js";
+        return send(req, res, 200, APP_JS, JS_TYPE);
+      }
+      if (path === "/app.css") {
+        route = "/app.css";
+        return send(req, res, 200, APP_CSS, CSS_TYPE);
+      }
+      if (path === "/api/meta") {
+        route = "/api/meta";
+        return sendJson(req, res, 200, { schema: 1, editorUrl: opts.editorUrl });
       }
       if (path === "/healthz") {
         route = "/healthz";
@@ -139,6 +157,8 @@ export interface DashboardOptions {
   out: (line: string) => void;
   err: (line: string) => void;
   proc: DashboardProcess;
+  /** The validated editor link template; defaults to `vscode://file/{path}`. */
+  editorUrl?: string;
   /** Defaults to the task data of `root`; injectable for tests. */
   data?: DashboardData;
 }
@@ -153,7 +173,12 @@ export interface Dashboard {
 
 export function startDashboard(o: DashboardOptions): Dashboard {
   let bound = o.port;
-  const handler = createDashboardHandler({ port: () => bound, data: o.data ?? dashboardData(o.root, o.pricing), err: o.err });
+  const handler = createDashboardHandler({
+    port: () => bound,
+    data: o.data ?? dashboardData(o.root, o.pricing),
+    err: o.err,
+    editorUrl: o.editorUrl ?? DEFAULT_EDITOR_URL,
+  });
   const server = createServer(handler);
   // Node's default reply to a malformed request carries none of the security headers: send our own.
   server.on("clientError", (e: NodeJS.ErrnoException, socket: Socket) => {

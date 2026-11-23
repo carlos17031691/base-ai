@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { isTaskId, listTaskIds, listTasks, taskDetail } from "../dashboard-data.js";
+import { isTaskId, listTaskIds, listTasks, planTitle, taskDetail } from "../dashboard-data.js";
 
 // Every test works in its own temp root: never this repository's .ai/tasks/.
 const C = "2026-01-01T00:03:00Z";
@@ -208,6 +208,7 @@ test("review r1 L5: a task whose entry throws gets the internal error fallback; 
     const list = listTasks(b.root, pricing);
     assert.deepEqual(list.tasks[0], {
       id: "TK-1",
+      title: null,
       ticket: null,
       state: null,
       ok: false,
@@ -223,4 +224,37 @@ test("review r1 L5: a task whose entry throws gets the internal error fallback; 
   } finally {
     b.done();
   }
+});
+
+test("D2 H3: title comes from plan.md's first line, cleaned and cut to 80; files lists the five read files with present", () => {
+  const b = sandbox();
+  try {
+    const dir = b.task("TK-1", { ...files("TK-1"), "plan.md": "# Plan: TK-1 — usage `record` for\u202e agents\n## Steps\n1. **human** — ok\n" });
+    b.task("TK-2");
+    const list = listTasks(b.root, PRICING).tasks;
+    assert.deepEqual(list.map((x) => x.title), ["usage record for agents", null], "a plan line without a title gives null");
+    const d = taskDetail(b.root, "TK-1", PRICING);
+    assert.equal(d.title, "usage record for agents");
+    assert.deepEqual(d.files, [
+      { name: "status.json", path: join(dir, "status.json"), present: true },
+      { name: "plan.md", path: join(dir, "plan.md"), present: true },
+      { name: "review-report.md", path: join(dir, "review-report.md"), present: true },
+      { name: "qa-report.md", path: join(dir, "qa-report.md"), present: false },
+      { name: "decisions.md", path: join(dir, "decisions.md"), present: false },
+    ]);
+    assert.ok(!JSON.stringify(d.files).includes("Steps"), "no file text in files");
+  } finally {
+    b.done();
+  }
+});
+
+test("D2 H3: planTitle rules: missing or unreadable plan, hyphen separator, CRLF, 80-character cut and an empty title", () => {
+  assert.equal(planTitle({ kind: "missing" }), null);
+  assert.equal(planTitle({ kind: "error", reason: "too large" }), null);
+  assert.equal(planTitle({ kind: "ok", text: "# Plan: X-1 - pipeline check\r\nrest" }), "pipeline check");
+  assert.equal(planTitle({ kind: "ok", text: "# Plan: X-1 — \u0007\u0007" }), null);
+  assert.equal(planTitle({ kind: "ok", text: "Plan: X-1 — not a heading" }), null);
+  const long = planTitle({ kind: "ok", text: `# Plan: X-1 — ${"é".repeat(100)}` });
+  assert.equal(Array.from(long ?? "").length, 80);
+  assert.ok((long ?? "").endsWith("…"));
 });

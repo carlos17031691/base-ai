@@ -100,6 +100,33 @@ export function loadUsageConfig(dir: string): UsageConfig {
   return parseUsage(readConfig(cfgPath), cfgPath);
 }
 
+export const DEFAULT_EDITOR_URL = "vscode://file/{path}";
+const FORBIDDEN_SCHEMES = new Set(["javascript", "data", "vbscript", "blob", "file", "http", "https"]);
+
+/**
+ * Validates `dashboard.editor_url` (BASE-101-D2 H2): a string of at most 200 characters, with `{path}` exactly
+ * once, starting with a URL scheme that cannot run script or reach the network. The UI only substitutes the path.
+ */
+export function parseEditorUrl(value: unknown, file: string): string {
+  if (value === undefined || value === null) return DEFAULT_EDITOR_URL;
+  const error = new Error(
+    `${file}: "dashboard.editor_url" must be a string of at most 200 characters with {path} exactly once and an editor scheme such as vscode: (not javascript, data, vbscript, blob, file, http or https)`,
+  );
+  if (typeof value !== "string" || value.length > 200 || value.split("{path}").length !== 2) throw error;
+  const scheme = /^([a-z][a-z0-9+.-]*):/.exec(value);
+  if (scheme === null || FORBIDDEN_SCHEMES.has(scheme[1])) throw error;
+  return value;
+}
+
+/** The `dashboard` config of <dir>/.ai/config.yaml, read once when the dashboard starts. */
+export function loadDashboardConfig(dir: string): { editorUrl: string } {
+  const cfgPath = join(dir, ".ai", "config.yaml");
+  const dashboard = readConfig(cfgPath).dashboard;
+  if (dashboard === undefined || dashboard === null) return { editorUrl: DEFAULT_EDITOR_URL };
+  if (typeof dashboard !== "object" || Array.isArray(dashboard)) throw new Error(`${cfgPath}: "dashboard" must be a mapping`);
+  return { editorUrl: parseEditorUrl((dashboard as Record<string, unknown>).editor_url, cfgPath) };
+}
+
 /** Loads the single AI source from <dir>/.ai. */
 export function loadSource(dir: string): AiSource {
   const ai = join(dir, ".ai");
