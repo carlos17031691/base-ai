@@ -6,7 +6,7 @@ Source of truth: `infra/github/rulesets/protected-branches.json` (ticket BASE-08
 ## What is enforced and why
 
 - **Applied once by the human (D1).** A reviewed JSON file plus one manual `gh api` call. There is no IaC, no apply workflow and no admin token in CI.
-- **Rules on both branches (D2).** A PR is required, with 0 approvals, because the single maintainer cannot approve their own PR. Human approval stays mandatory by process (Gate 5). All conversations must be resolved. The required checks are `cli` (integration 15368) and `SonarCloud Code Analysis` (integration 12526). Force pushes and branch deletion are blocked. The only bypass actor is the admin role (`RepositoryRole` 5) in `pull_request` mode, so direct pushes stay blocked for everyone.
+- **Rules on both branches (D2).** A PR is required, with 0 approvals, because the single maintainer cannot approve their own PR. Human approval stays mandatory by process (Gate 5). All conversations must be resolved. The required checks are `cli` (integration 15368) and `SonarCloud Code Analysis` (integration 12526). The required `cli` check includes the dependency audit step (see `dependency-audit.md`), so that gate is enforced with the ruleset file unchanged. Force pushes and branch deletion are blocked. The only bypass actor is the admin role (`RepositoryRole` 5) in `pull_request` mode, so direct pushes stay blocked for everyone.
 - **No bot push (D3).** `release.yml` only tags, publishes and creates the GitHub Release. It never commits or pushes to a protected branch.
 - **`Contract Testing Gate` is not required.** It is path-filtered and only runs on OpenAPI/proto changes. A required check that never reports would block every other merge.
 
