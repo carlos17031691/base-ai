@@ -1,3 +1,5 @@
 # Require owner review for CI/CD workflow changes (M4 — contract-gate security)
 .github/workflows/ @carlos17031691
 .github/CODEOWNERS @carlos17031691
+.github/dependency-audit-accepted.json @carlos17031691
+templates/service/.github/ @carlos17031691

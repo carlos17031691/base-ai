@@ -29,5 +29,6 @@ Evaluate the design or code diff against defense-in-depth and OWASP principles:
 
 6. **Supply chain & dependencies:**
    - Minimal, well-maintained dependencies; lockfiles committed; no unpinned external scripts in CI.
+   - CI dependency audit (OSV-Scanner + `templates/service/.github/scripts/dependency-audit.cjs`): a High, Critical or unscored advisory in a production dependency fails the build. Upgrade or remove first; accept only with a reviewed entry in `.github/dependency-audit-accepted.json` (`id`, `reason`, `accepted`, `expires`; at most 90 days).
 
 Report findings ordered by severity (**Critical**, **High**, **Medium**, **Low**) with `file:line`, exploit scenario and concrete remediation.

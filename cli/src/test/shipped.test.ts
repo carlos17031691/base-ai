@@ -11,6 +11,8 @@ test("isShippedPath ships the AI source, templates, role definitions and the sta
     "templates",
     "templates/task/plan.md",
     "templates/service/.gitignore",
+    "templates/service/.github/scripts/dependency-audit.cjs",
+    "templates/service/.github/dependency-audit-accepted.json",
     ".claude",
     ".claude/agents",
     ".claude/agents/qa.md",

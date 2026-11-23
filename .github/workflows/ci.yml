@@ -48,6 +48,19 @@ jobs:
         run: node dist/index.js doctor --root ..
       - name: Package ships every referenced file (BASE-046-D1)
         run: npm run check:package
+      - name: Dependency audit (High/Critical, production dependencies)
+        env:
+          OSV_SCANNER_VERSION: "2.7.1"
+          OSV_SCANNER_SHA256: fb7dab19a8bd9bbe5c3189f09d4b7ee1820c9553a23bac202648a56efd2f6ee8
+        run: |
+          curl --fail --silent --show-error --location --output "$RUNNER_TEMP/osv-scanner" "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64"
+          echo "${OSV_SCANNER_SHA256}  $RUNNER_TEMP/osv-scanner" | sha256sum --check --strict
+          chmod +x "$RUNNER_TEMP/osv-scanner"
+          set +e
+          "$RUNNER_TEMP/osv-scanner" scan source --lockfile package-lock.json --format json --output-file "$RUNNER_TEMP/osv-results.json"
+          scanner_exit=$?
+          set -e
+          node ../templates/service/.github/scripts/dependency-audit.cjs --results "$RUNNER_TEMP/osv-results.json" --accepted ../.github/dependency-audit-accepted.json --scanner-exit "$scanner_exit"
       - name: Token Budget Guardrail (BASE-024)
         run: node dist/index.js ai stats --max-tokens 5000 --ci --root .. >> "$GITHUB_STEP_SUMMARY"
       - name: SonarCloud Scan

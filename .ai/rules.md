@@ -40,7 +40,7 @@ Enforced by `.githooks/`:
 
 ## 6. Security by design (`security`)
 - **Zero secrets/PII** in code, tests, logs, memory, prompts or docs; load from env/secret manager.
-- **Validate all untrusted input** (HTTP, webhooks, CLI, files, queues, LLM/tool outputs) at boundaries; enforce least-privilege authn/authz and pin vetted dependencies.
+- **Validate all untrusted input** (HTTP, webhooks, CLI, files, queues, LLM/tool outputs) at boundaries; enforce least-privilege authn/authz and pin vetted dependencies; CI audits production dependencies and blocks on High/Critical advisories (exceptions: reviewed, expiring entries only).
 
 ## 7. Multi-agent pipeline (`pipeline`)
 - **Never let a single agent self-validate its own work.** Use the pipeline: planner → implementer → reviewer → qa → supervisor → improvement.
