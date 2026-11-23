@@ -11,6 +11,7 @@ import {
   checksView,
   filesView,
   headerView,
+  orderQueue,
   queueControlsView,
   queueKey,
   queueListView,
@@ -186,7 +187,9 @@ export async function refresh(ctx: Ctx): Promise<void> {
     showError(ctx, "queue", "");
     const ids = ctx.state.tasks.map((x) => x.id);
     if (ctx.state.q.selected === null || !ids.includes(ctx.state.q.selected)) {
-      const first = ctx.state.tasks.find((x) => x.state !== "validated") ?? ctx.state.tasks[0];
+      // The first card of the queue (plan item 9), in queue order, not API order.
+      const { active, validated } = orderQueue(ctx.state.tasks);
+      const first = active[0] ?? validated[0];
       ctx.state.q.selected = first === undefined ? null : first.id;
     }
   } else {

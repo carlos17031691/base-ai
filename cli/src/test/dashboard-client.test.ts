@@ -269,6 +269,15 @@ test("errors: a failed or non-200 load shows 'cannot load <route> (<status|netwo
   assert.ok((failing.doc.getElementById("files") as FakeEl).text.includes("copy failed"));
 });
 
+test("the first load selects the queue's first card (newest updated_at), not the API's first task", async () => {
+  const later = { ...TASKS.tasks[1], updated_at: "2026-02-01T00:00:00Z" };
+  const { win, calls } = fakeWin({ "/api/tasks": { schema: 1, tasks: [TASKS.tasks[0], later, TASKS.tasks[2]], skipped: 0 } });
+  const ctx = await boot(win);
+  assert.equal(ctx.state.q.selected, "TK-2");
+  assert.equal(calls.at(-1), "/api/tasks/TK-2");
+  assert.equal(ctx.cards[0].getAttribute("aria-current"), "true");
+});
+
 test("a selected task that disappears on refresh falls back to the first active task", async () => {
   const { win } = fakeWin();
   const ctx = await boot(win);
