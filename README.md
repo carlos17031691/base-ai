@@ -84,6 +84,9 @@ Every change in `base-ai` and its services adheres to strict engineering rules:
      - 🚨 **CI / Quality Gate Failures** with direct links to workflow logs.
      - 🚀 **Production Releases** published to npm and GitHub.
    - Strict graceful degradation: skips silently without breaking CI if `SLACK_WEBHOOK_URL` is omitted.
+6. **Dependency Audit:**
+   - CI in this repo and in every generated service fails on a High or Critical advisory in a production dependency (a pinned, checksum-verified OSV-Scanner run plus a zero-dependency policy script). An advisory with no severity score, a scanner error or an invalid exception file fails the build too.
+   - The only exception is a reviewed, expiring entry in `.github/dependency-audit-accepted.json` (`id`, `reason`, `accepted`, `expires`; at most 90 days), merged by Pull Request. Runbook: [`docs/operations/runbooks/dependency-audit.md`](docs/operations/runbooks/dependency-audit.md).
 
 ---
 
@@ -263,6 +266,7 @@ flowchart LR
 ### 🟡 In progress
 - [ ] **[#71](https://github.com/carlos17031691/base-ai/issues/71) Mechanical pipeline checks (`base-ai pipeline check` / `pipeline debt`).** Done in 0.10.0: 18 offline checks on a task directory (K1–K18, including `decisions.md` coverage), `facts.nextActor` naming who acts next, and an opt-in `gh` check that every tech-debt key is registered. Next: agents read the output instead of re-deriving it (P3, P4).
 - [ ] **[#79](https://github.com/carlos17031691/base-ai/issues/79) Token optimisation of agent definitions and pipeline runs.** Done in 0.9.0: per-definition budgets in `ai stats`, a `tools:` list per role, and reference files with a mechanical relocation check. Measured turn-1 context saved per turn: about 27k tokens for `reviewer` and `planner`, 6.7k for `qa`, 4k for `supervisor` and 1.5k for `improvement`. Next: mechanical checks in code (#71), fewer rounds (#72), model tiering and section-level retrieval.
+- [ ] **[#124](https://github.com/carlos17031691/base-ai/issues/124) Mandatory security gate.** Merged, not yet released (ticket A): a dependency audit in the CI of this repo and of every generated service. A pinned, checksum-verified OSV-Scanner run and a zero-dependency policy script fail the build on a High, Critical or unscored advisory in a production dependency; the only exception is a reviewed entry in `.github/dependency-audit-accepted.json` that expires within 90 days. Next: the reviewer's Security section, the supervisor check and the PR rule. CodeQL is deferred.
 
 ---
 
