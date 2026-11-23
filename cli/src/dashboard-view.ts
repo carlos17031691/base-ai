@@ -302,10 +302,13 @@ export function ringView(tasks: TaskEntryView[], selected: TaskEntryView | null,
   for (const a of arcs) {
     if (a.count === 0) continue;
     children.push(s("path", { class: `arc state-${a.state}${a.selected ? " selected" : ""}`, d: arcPath(200, 200, 150, a.start, a.end) }));
+    // Outside the arc, anchored away from the ring so a long label never crosses it.
     const mid = ((a.start + a.end) / 2 - 90) * (Math.PI / 180);
-    const lx = (200 + 178 * Math.cos(mid)).toFixed(1);
-    const ly = (200 + 178 * Math.sin(mid)).toFixed(1);
-    children.push(s("text", { class: `arc-label state-${a.state}`, x: lx, y: ly, "text-anchor": "middle", "dominant-baseline": "middle" }, [t(a.label)]));
+    const cos = Math.cos(mid);
+    const lx = (200 + 176 * cos).toFixed(1);
+    const ly = (200 + 176 * Math.sin(mid)).toFixed(1);
+    const anchor = cos > 0.3 ? "start" : cos < -0.3 ? "end" : "middle";
+    children.push(s("text", { class: `arc-label state-${a.state}`, x: lx, y: ly, "text-anchor": anchor, "dominant-baseline": "middle" }, [t(a.label)]));
   }
   children.push(s("circle", { class: "ring-core", cx: "200", cy: "200", r: "118" }));
   if (selected === null) {
@@ -313,13 +316,13 @@ export function ringView(tasks: TaskEntryView[], selected: TaskEntryView | null,
   } else {
     const actor = detail?.id === selected.id ? detail.facts.nextActor : selected.nextActor;
     children.push(s("text", { class: "core-id", x: "200", y: "188", "text-anchor": "middle" }, [t(clip(selected.id, 22))]));
-    if (selected.title !== null) children.push(s("text", { class: "core-title", x: "200", y: "214", "text-anchor": "middle" }, [t(clip(selected.title, 34))]));
+    if (selected.title !== null) children.push(s("text", { class: "core-title", x: "200", y: "214", "text-anchor": "middle" }, [t(clip(selected.title, 26))]));
     children.push(
       s("text", { class: "core-pill", x: "200", y: "248", "text-anchor": "middle" }, [s("title", {}, [t(actor?.reason ?? "")]), t(ringPill(actor))]),
     );
   }
   const summary = selected === null ? label : `${label}; selected ${selected.id}, ${ringPill(selected.nextActor)}`;
-  return s("svg", { class: "ring", viewBox: "0 0 400 400", role: "img", "aria-label": summary }, children);
+  return s("svg", { class: "ring", viewBox: "-80 0 560 400", role: "img", "aria-label": summary }, children);
 }
 
 /** Timeline rows: state changes as `from → to`, other entries as the note cut to 60 characters. */

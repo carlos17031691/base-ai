@@ -34,7 +34,7 @@ export const INDEX_HTML = `<!doctype html>
 <main class="center">
 <section class="panel ring-panel" data-panel="ring" aria-labelledby="h-ring">
 <h2 id="h-ring" class="sr-only">Pipeline stages</h2>
-<svg id="ring" class="ring" viewBox="0 0 400 400" role="img" aria-label="Pipeline stages"></svg>
+<svg id="ring" class="ring" viewBox="-80 0 560 400" role="img" aria-label="Pipeline stages"></svg>
 <p id="detail-error" class="error" role="status"></p>
 </section>
 <div class="lower">
@@ -167,7 +167,7 @@ h2 .note{font-size:11px;letter-spacing:0;margin-left:6px}
 .pill.actor{color:${c.amber}}
 .group-toggle{width:100%;text-align:right;background:${c.bg};border:1px solid ${c.line};border-radius:6px;padding:6px 10px;color:${c.muted};letter-spacing:.06em}
 .ring-panel{display:flex;flex-direction:column;align-items:center}
-.ring{width:100%;max-width:440px;height:auto}
+.ring{width:100%;max-width:600px;height:auto}
 .ring-track{fill:none;stroke:${c.line};stroke-width:2;stroke-dasharray:2 6}
 .ring-core{fill:none;stroke:${c.cyan};stroke-width:6;filter:drop-shadow(0 0 8px ${c.cyan})}
 .arc{fill:none;stroke-width:14;stroke-linecap:butt;opacity:.55;transition:opacity .3s}
