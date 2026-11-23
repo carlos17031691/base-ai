@@ -23,6 +23,13 @@ budgets:
 # SubagentStop/Stop hook of .claude/settings.json; absent means none. `init` sets none in new projects.
 usage:
   hook: claude-code
+  # This repo's price (BASE-101-D4): Anthropic's official pricing page, 2026-11-23; API-equivalent list prices, not a subscription bill.
+  pricing:
+    claude-opus-5-5:
+      input: 4
+      cache_write: 8 # the 1-hour cache write rate; the 5-minute rate is 5
+      cache_read: 0.2
+      output: 20
   # USD per million tokens, keyed by the exact model id of the records; all four keys are required.
   # No default prices: a model with no entry shows "no price", never 0. Example only; copy your
   # provider's current prices and the model id exactly as the records show it (no aliases, no prefixes):
