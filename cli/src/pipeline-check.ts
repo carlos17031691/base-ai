@@ -8,7 +8,7 @@
  * No I/O here; see pipeline-files.ts.
  */
 
-export const RULE = "supervisor.md@30c10bc";
+export const RULE = "supervisor.md@e2c6781";
 export const MAX_FILE_BYTES = 2 * 1024 * 1024;
 
 /** A task file as read by the I/O layer, which never throws. */
