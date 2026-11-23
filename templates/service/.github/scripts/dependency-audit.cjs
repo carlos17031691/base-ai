@@ -14,10 +14,16 @@ const MIN_REASON = 20;
 const DEV_GROUPS = ["dev"];
 const ENTRY_KEYS = ["accepted", "expires", "id", "reason"];
 
-/** Lockfile-controlled text made safe to print: one line, at most 200 characters, never a workflow command. */
+/**
+ * Lockfile-controlled text made safe to print: one line, at most 200 characters, and never a workflow command.
+ * Both command forms are broken by content (`::` and `##[`), so the result is safe wherever it lands in a line
+ * and whatever whitespace the runner trims.
+ */
 function sanitize(text) {
-  const flat = String(text).replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, " ").slice(0, 200);
-  return flat.startsWith("::") ? ` ${flat}` : flat;
+  const flat = String(text).replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, " ")
+    .replace(/::/g, ": :")
+    .replace(/##\[/g, "## [");
+  return flat.slice(0, 200);
 }
 
 /** Days since the epoch for a real calendar date written as YYYY-MM-DD, or null. */
@@ -74,6 +80,7 @@ function readAccepted(accepted, today) {
  */
 function audit({ scan, accepted, scannerExit, today }) {
   const out = { ok: false, errors: [], blocking: [], accepted: [], reported: [], stale: [] };
+  let groupsRead = 0;
   const list = readAccepted(accepted, today);
   out.errors.push(...list.errors);
   // Entries are applied only when the whole file is valid: a broken file cannot accept anything.
@@ -99,6 +106,7 @@ function audit({ scan, accepted, scannerExit, today }) {
       const groups = pkg.dependency_groups;
       const devOnly = Array.isArray(groups) && groups.length > 0 && groups.every((g) => DEV_GROUPS.includes(g));
       for (const group of pkg.groups) {
+        groupsRead++;
         const ids = [group?.ids, group?.aliases].flatMap((v) => (Array.isArray(v) ? v.filter((x) => typeof x === "string") : []));
         const raw = group?.max_severity;
         const score = typeof raw === "number" ? raw : typeof raw === "string" && raw.trim() !== "" ? Number(raw) : NaN;
@@ -111,6 +119,10 @@ function audit({ scan, accepted, scannerExit, today }) {
           severity: Number.isFinite(score) ? score : null,
           why: "",
         };
+        // Every entry naming this advisory is in use, whatever the finding's bucket, so none is called stale.
+        const lower = ids.map((x) => x.toLowerCase());
+        const matching = entries.filter((e) => lower.includes(e.key));
+        for (const e of matching) used.add(e.key);
         if (devOnly) {
           out.reported.push({ ...finding, why: "dev-only" });
           continue;
@@ -120,15 +132,16 @@ function audit({ scan, accepted, scannerExit, today }) {
           continue;
         }
         const why = finding.severity === null ? "unscored" : "high-or-critical";
-        const lower = ids.map((x) => x.toLowerCase());
-        const entry = entries.find((e) => lower.includes(e.key));
-        if (entry !== undefined) used.add(entry.key);
+        // An unexpired entry wins over an expired one for the same advisory.
+        const entry = matching.find((e) => !e.expired) ?? matching[0];
         if (entry === undefined) out.blocking.push({ ...finding, why });
         else if (entry.expired) out.blocking.push({ ...finding, why: "acceptance-expired" });
         else out.accepted.push({ ...finding, why, reason: entry.reason, expires: entry.expires });
       }
     }
   }
+  // The scanner said "vulnerabilities found" and none could be read: its output is not in the shape read here.
+  if (scannerExit === 1 && groupsRead === 0) out.errors.push("scanner reported vulnerabilities (exit status 1) but none could be read from its results");
   out.stale = entries.filter((e) => !used.has(e.key)).map((e) => e.id);
   out.ok = out.errors.length === 0 && out.blocking.length === 0;
   return out;
@@ -160,7 +173,7 @@ function renderText(r, acceptedPath) {
 const cell = (text) => sanitize(text).replace(/[|`<>]/g, (c) => ({ "|": "\\|", "`": "\\`", "<": "&lt;", ">": "&gt;" })[c]);
 
 /** The same content as a Markdown job summary. */
-function renderMarkdown(r) {
+function renderMarkdown(r, acceptedPath) {
   const lines = [`### Dependency audit: ${r.ok ? "PASS" : "FAIL"}`, ""];
   const rows = [
     ...r.blocking.map((f) => ["BLOCKING", f]),
@@ -168,13 +181,18 @@ function renderMarkdown(r) {
     ...r.reported.map((f) => ["reported", f]),
   ];
   if (rows.length > 0) {
-    lines.push("| Status | Advisory | Package | Severity | Why |", "|---|---|---|---|---|");
+    lines.push("| Status | Advisory | Package | Severity | Why | Source | Accepted until: reason |", "|---|---|---|---|---|---|---|");
     for (const [status, f] of rows) {
-      lines.push(`| ${status} | ${cell(f.id)} | ${cell(`${f.package}@${f.version}`)} | ${f.severity === null ? "unscored" : f.severity} | ${cell(f.why)} |`);
+      const until = f.expires === undefined ? "" : `${cell(f.expires)}: ${cell(f.reason)}`;
+      lines.push(`| ${status} | ${cell(f.id)} | ${cell(`${f.package}@${f.version}`)} (${cell(f.ecosystem)}) | ${f.severity === null ? "unscored" : f.severity} | ${cell(f.why)} | ${cell(f.source)} | ${until} |`);
     }
     lines.push("");
   }
+  for (const id of r.stale) lines.push(`- Stale accepted entry (matches no finding, can be removed): ${cell(id)}`);
   for (const e of r.errors) lines.push(`- ERROR: ${cell(e)}`);
+  if (r.blocking.length > 0) {
+    lines.push("", `To fix: upgrade or remove the package. Only when neither is possible, add a reviewed entry (id, reason, accepted, expires; at most ${MAX_ACCEPT_DAYS} days) to ${cell(acceptedPath)} by pull request.`);
+  }
   return `${lines.join("\n")}\n`;
 }
 
@@ -218,7 +236,7 @@ function main(argv) {
   const summary = process.env.GITHUB_STEP_SUMMARY;
   if (summary) {
     try {
-      fs.appendFileSync(summary, renderMarkdown(result));
+      fs.appendFileSync(summary, renderMarkdown(result, opts["--accepted"]));
     } catch (e) {
       // The summary is a convenience; the verdict above does not depend on it.
       console.error(`could not write the job summary: ${sanitize(e && e.message)}`);

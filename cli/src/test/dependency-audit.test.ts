@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
@@ -141,8 +142,11 @@ test("a clean scan passes with empty lists, and an absent accepted file is the e
 test("sanitize: lockfile-controlled text stays on one line, is cut to 200 characters and cannot start a workflow command", () => {
   const nl = String.fromCharCode(10);
   const hostile = `evil${nl}::error::x`;
-  assert.equal(sanitize(hostile), "evil ::error::x");
-  assert.equal(sanitize("::set-output name=x::y"), " ::set-output name=x::y");
+  assert.equal(sanitize(hostile), "evil : :error: :x");
+  assert.equal(sanitize("::set-output name=x::y"), ": :set-output name=x: :y");
+  assert.equal(sanitize("  ::warning::w"), "  : :warning: :w", "leading whitespace does not help");
+  assert.equal(sanitize("a ##[error]b ####[group]"), "a ## [error]b #### [group]");
+  assert.equal(sanitize(":::::"), ": :: ::");
   assert.equal(sanitize("x".repeat(500)).length, 200);
   for (const code of [0, 13, 27, 127, 133, 8232, 8233]) assert.equal(sanitize(`a${String.fromCharCode(code)}b`), "a b", String(code));
   assert.equal(sanitize(42), "42");
@@ -150,14 +154,107 @@ test("sanitize: lockfile-controlled text stays on one line, is cut to 200 charac
   const scan = { results: [{ source: { path: `p${nl}::warning::w` }, packages: [pkg([group("9.8", `GHSA${nl}::error::id`)], undefined, `<b>|\`${nl}::error::name`)] }] };
   const r = run(scan);
   const text: string = renderText(r, ".github/dependency-audit-accepted.json");
-  assert.ok(!text.split(nl).some((line) => line.startsWith("::")), "no output line starts a workflow command");
-  assert.equal(text.split(nl).filter((line) => line.includes("::error::")).length, 1, "the hostile values stay inside their own line");
+  assert.ok(!text.includes("::") && !text.includes("##["), "no workflow command sequence anywhere in the output");
+  assert.equal(text.split(nl).filter((line) => line.includes(": :error: :")).length, 1, "the hostile values stay inside their own line");
   assert.match(text, /dependency audit: FAIL \(1 blocking, 0 error\(s\)\)$/);
   assert.match(text, /\.github\/dependency-audit-accepted\.json by pull request/);
-  const md: string = renderMarkdown(r);
+  const md: string = renderMarkdown(r, ".github/dependency-audit-accepted.json");
   assert.ok(md.includes("&lt;b&gt;\\|\\`") && !md.includes("<b>"), "Markdown cells are escaped");
+  assert.ok(!md.includes("::") && !md.includes("##["));
   assert.match(renderText(run({ results: [] }, [], 0), "x"), /^dependency audit: PASS$/);
-  assert.match(renderMarkdown(run({ results: [] }, [], 0)), /^### Dependency audit: PASS/);
+  assert.match(renderMarkdown(run({ results: [] }, [], 0), "x"), /^### Dependency audit: PASS/);
+});
+
+test("the job summary carries the same content as the log: source, ecosystem, accepted reason and expiry, stale entries and the fix hint", () => {
+  const scan = scanOf(pkg([group("7.2"), group("8.1", "GHSA-r5fr-rjxr-66jc", "CVE-2026-4800")]));
+  const r = run(scan, [entry(), entry({ id: "GHSA-aaaa-bbbb-cccc" })]);
+  const path = ".github/dependency-audit-accepted.json";
+  const text: string = renderText(r, path);
+  const md: string = renderMarkdown(r, path);
+  for (const piece of ["package-lock.json", "(npm)", "2026-12-01", entry().reason, "GHSA-aaaa-bbbb-cccc", "matches no finding", "To fix: upgrade or remove the package", path, "GHSA-r5fr-rjxr-66jc", "lodash@4.17.20"]) {
+    assert.ok(text.includes(piece), `log: ${piece}`);
+    assert.ok(md.includes(piece), `summary: ${piece}`);
+  }
+  const err: string = renderMarkdown(run(null, [], 127), path);
+  assert.ok(err.includes("- ERROR: scanner failed") && err.includes("### Dependency audit: FAIL"));
+});
+
+test("accepted lookup: an entry for a dev-only or below-High advisory is not stale, and an unexpired entry wins over an expired one for the same advisory", () => {
+  const dev = run(scanOf(pkg([group("9.8")], ["dev"])), [entry()]);
+  assert.deepEqual([dev.ok, dev.stale, whys(dev.reported)], [true, [], ["dev-only"]]);
+  const low = run(scanOf(pkg([group("5.3")])), [entry()]);
+  assert.deepEqual([low.ok, low.stale, whys(low.reported)], [true, [], ["below-high"]]);
+  const expired = entry({ accepted: "2026-10-01", expires: "2026-11-22" });
+  const valid = entry({ id: "CVE-2021-23337" });
+  for (const list of [[expired, valid], [valid, expired]]) {
+    const r = run(scanOf(pkg([group("7.2")])), list);
+    assert.deepEqual([r.ok, r.blocking, r.accepted.length, r.stale, r.accepted[0].expires], [true, [], 1, [], "2026-12-01"]);
+  }
+});
+
+test("scanner exit status 1 with no readable finding fails closed", () => {
+  for (const scan of [{ results: [] }, scanOf(), scanOf(pkg([]))]) {
+    const r = run(scan, [], 1);
+    assert.equal(r.ok, false, JSON.stringify(scan));
+    assert.match(r.errors[0], /^scanner reported vulnerabilities \(exit status 1\) but none could be read/);
+  }
+  assert.equal(run(scanOf(pkg([group("5.3")])), [], 1).ok, true, "one reported finding is a readable result");
+});
+
+test("main with real files: missing or broken results fail, an absent accepted file is empty, a broken one fails, and the summary is appended", () => {
+  const dir = mkdtempSync(join(tmpdir(), "dep-audit-"));
+  const file = (name: string, content: string) => {
+    const p = join(dir, name);
+    writeFileSync(p, content);
+    return p;
+  };
+  const logs: string[] = [];
+  const errs: string[] = [];
+  const original = { log: console.log, error: console.error, summary: process.env.GITHUB_STEP_SUMMARY };
+  console.log = (m: string) => void logs.push(m);
+  console.error = (m: string) => void errs.push(m);
+  const call = (results: string, accepted: string, code: string) => {
+    logs.length = 0;
+    return [main(["--results", results, "--accepted", accepted, "--scanner-exit", code]), logs.join("")] as const;
+  };
+  try {
+    delete process.env.GITHUB_STEP_SUMMARY;
+    const clean = file("clean.json", JSON.stringify({ results: [] }));
+    const high = file("high.json", JSON.stringify(scanOf(pkg([group("7.2")]))));
+    const none = join(dir, "absent.json");
+    const today = new Date().toISOString().slice(0, 10);
+    const valid = file("accepted.json", JSON.stringify([entry({ accepted: today, expires: today })]));
+
+    assert.deepEqual([call(clean, none, "0")[0], /dependency audit: PASS$/.test(call(clean, none, "0")[1])], [0, true]);
+    assert.equal(call(high, none, "1")[0], 1);
+    assert.match(call(high, none, "1")[1], /BLOCKING \(1\):/);
+    assert.equal(call(high, valid, "1")[0], 0, "a valid entry read from a file accepts the finding");
+    assert.match(call(none, none, "0")[1], /ERROR: scanner results are missing/);
+    assert.equal(call(none, none, "0")[0], 1, "a missing results file fails");
+    assert.equal(call(file("broken.json", "{ not json"), none, "0")[0], 1, "results that are not JSON fail");
+    const [code, out] = call(clean, file("bad-accepted.json", "[ not json"), "0");
+    assert.equal(code, 1, "an accepted file that is not JSON fails");
+    assert.match(out, /ERROR: accepted file: not valid JSON/);
+    assert.equal(call(clean, dir, "0")[0], 1, "an unreadable accepted path (a directory) fails");
+    assert.equal(call(clean, none, "127")[0], 1);
+
+    const summary = file("summary.md", "before\n");
+    process.env.GITHUB_STEP_SUMMARY = summary;
+    assert.equal(call(high, none, "1")[0], 1);
+    const written = readFileSync(summary, "utf8");
+    assert.ok(written.startsWith("before\n### Dependency audit: FAIL") && written.includes("GHSA-35jh-r3h4-6jhm"), "appended, not overwritten");
+    // A summary that cannot be written is reported and does not change the verdict.
+    process.env.GITHUB_STEP_SUMMARY = dir;
+    errs.length = 0;
+    assert.equal(call(clean, none, "0")[0], 0);
+    assert.ok(errs.length === 1 && errs[0].startsWith("could not write the job summary"));
+  } finally {
+    console.log = original.log;
+    console.error = original.error;
+    if (original.summary === undefined) delete process.env.GITHUB_STEP_SUMMARY;
+    else process.env.GITHUB_STEP_SUMMARY = original.summary;
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("main: a missing, unknown or repeated option, or a non-integer --scanner-exit, exits 1 with a usage line", () => {
@@ -197,6 +294,11 @@ test("the same gate in both workflows: one audit step each, the same pinned vers
     assert.ok(at("curl --fail") === 0, "the download fails on an HTTP error");
     assert.ok(at("sha256sum --check") > 0 && at("sha256sum --check") < at("scan source"), "the checksum is verified before the binary runs");
     assert.ok(at("sha256sum --check") < at("chmod +x"));
+    // The scanner's own ignore file is never an exception path: the scan gets an explicit empty configuration.
+    const scanLine = lines[at("scan source")];
+    assert.ok(at(': > "$RUNNER_TEMP/osv-scanner-empty.toml"') >= 0 && at(': > "$RUNNER_TEMP/osv-scanner-empty.toml"') < at("scan source"));
+    assert.ok(scanLine.includes('scan source --config "$RUNNER_TEMP/osv-scanner-empty.toml" '), scanLine);
+    assert.equal(lines.filter((l) => l.includes("--config")).length, 1);
     assert.ok(at("set +e") === at("scan source") - 1 && at("set -e") === at("scan source") + 2, "only the scan may exit non-zero");
     const last = lines.filter((l) => l !== "").pop() ?? "";
     assert.ok(last.startsWith(`node ${script} `) && last.includes(`--accepted ${accepted} `) && last.endsWith('--scanner-exit "$scanner_exit"'), last);

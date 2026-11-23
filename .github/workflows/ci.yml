@@ -56,8 +56,9 @@ jobs:
           curl --fail --silent --show-error --location --output "$RUNNER_TEMP/osv-scanner" "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64"
           echo "${OSV_SCANNER_SHA256}  $RUNNER_TEMP/osv-scanner" | sha256sum --check --strict
           chmod +x "$RUNNER_TEMP/osv-scanner"
+          : > "$RUNNER_TEMP/osv-scanner-empty.toml" # an explicit empty config: an osv-scanner.toml in the repository is never read
           set +e
-          "$RUNNER_TEMP/osv-scanner" scan source --lockfile package-lock.json --format json --output-file "$RUNNER_TEMP/osv-results.json"
+          "$RUNNER_TEMP/osv-scanner" scan source --config "$RUNNER_TEMP/osv-scanner-empty.toml" --lockfile package-lock.json --format json --output-file "$RUNNER_TEMP/osv-results.json"
           scanner_exit=$?
           set -e
           node ../templates/service/.github/scripts/dependency-audit.cjs --results "$RUNNER_TEMP/osv-results.json" --accepted ../.github/dependency-audit-accepted.json --scanner-exit "$scanner_exit"

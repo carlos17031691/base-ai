@@ -26,6 +26,7 @@ CI runs [OSV-Scanner](https://google.github.io/osv-scanner/) at a pinned version
 2. **What is only reported:** Low and Medium advisories, and advisories in packages used for development only. They are printed in the job log and the job summary and do not fail the build.
 3. **Limits:** an ecosystem whose lockfile records no development group is audited whole (every package counts as production). A language OSV-Scanner does not read is not audited. A repository with no lockfile passes.
 4. **When it fails:** upgrade the package first; if no fixed version exists, remove or replace it; accept the advisory only when neither is possible and the vulnerable code is not reachable.
+   The accepted file below is the only exception path: the scan runs with an explicit empty configuration, so an `osv-scanner.toml` in the repository (the scanner's own ignore file) is never read.
 5. **How to accept an advisory:** add an entry to `.github/dependency-audit-accepted.json`. Each entry has exactly these four keys; `reason` needs at least 20 characters and `expires` is at most 90 days after `accepted`. After `expires` the entry stops applying and the build fails again.
    ```json
    [
