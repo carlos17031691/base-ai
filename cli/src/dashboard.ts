@@ -55,6 +55,24 @@ function send(req: IncomingMessage, res: ServerResponse, status: number, body: s
 const sendJson = (req: IncomingMessage, res: ServerResponse, status: number, body: unknown, extra?: Record<string, string>) =>
   send(req, res, status, JSON.stringify(body), JSON_TYPE, extra);
 
+/**
+ * The raw reply to a request Node could not parse (review r1 L2, r2 L7): the status Node's default reply would
+ * use for the parser error, now with the security headers. Built from constants only, never from the request.
+ */
+export function clientErrorReply(code: string | undefined): string {
+  const [status, error] =
+    code === "ERR_HTTP_REQUEST_TIMEOUT"
+      ? ["408 Request Timeout", "request timeout"]
+      : code === "HPE_HEADER_OVERFLOW"
+        ? ["431 Request Header Fields Too Large", "request header fields too large"]
+        : code === "HPE_CHUNK_EXTENSIONS_OVERFLOW"
+          ? ["413 Payload Too Large", "payload too large"]
+          : ["400 Bad Request", "bad request"];
+  const body = JSON.stringify({ error });
+  const head = Object.entries(SECURITY_HEADERS).map(([k, v]) => `${k}: ${v}\r\n`).join("");
+  return `HTTP/1.1 ${status}\r\n${head}Content-Type: ${JSON_TYPE}\r\nContent-Length: ${Buffer.byteLength(body)}\r\nConnection: close\r\n\r\n${body}`;
+}
+
 export interface HandlerOptions {
   /** The bound port, read per request: the Host check compares against it. */
   port: () => number;
@@ -140,13 +158,7 @@ export function startDashboard(o: DashboardOptions): Dashboard {
   // Node's default reply to a malformed request carries none of the security headers: send our own.
   server.on("clientError", (e: NodeJS.ErrnoException, socket: Socket) => {
     if (!socket.writable) return socket.destroy();
-    const tooLarge = e.code === "HPE_HEADER_OVERFLOW";
-    const body = JSON.stringify({ error: tooLarge ? "request header fields too large" : "bad request" });
-    const head = Object.entries(SECURITY_HEADERS).map(([k, v]) => `${k}: ${v}\r\n`).join("");
-    socket.end(
-      `HTTP/1.1 ${tooLarge ? "431 Request Header Fields Too Large" : "400 Bad Request"}\r\n${head}` +
-        `Content-Type: ${JSON_TYPE}\r\nContent-Length: ${Buffer.byteLength(body)}\r\nConnection: close\r\n\r\n${body}`,
-    );
+    socket.end(clientErrorReply(e.code));
   });
   // Tracked by hand: closeAllConnections is missing before Node 18.2, and engines is >=18.
   const sockets = new Set<Socket>();

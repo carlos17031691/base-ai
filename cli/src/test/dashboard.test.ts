@@ -8,7 +8,7 @@ import { connect, createServer as createNetServer, type AddressInfo } from "node
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DEFAULT_PORT, parsePort, startDashboard, type DashboardData } from "../dashboard.js";
+import { DEFAULT_PORT, clientErrorReply, parsePort, startDashboard, type DashboardData } from "../dashboard.js";
 
 const CLI = join(dirname(fileURLToPath(import.meta.url)), "..", "index.js");
 const SECURITY = {
@@ -329,7 +329,9 @@ test("review r1 L2: a malformed request gets 400, and oversized headers 431, wit
         s.on("data", (c) => (out += c));
         s.on("end", () => resolve(out));
         s.on("close", () => resolve(out));
-        s.on("error", reject);
+        // Review r2 L8: the server may reset a connection whose request it did not finish reading (the 431
+        // case on Linux). Once a whole response head has arrived, that reset is not a failure.
+        s.on("error", (e) => (out.includes("\r\n\r\n") ? resolve(out) : reject(e)));
       });
     for (const [text, status] of [
       ["NOT A REQUEST\r\n\r\n", "400 Bad Request"],
@@ -341,4 +343,22 @@ test("review r1 L2: a malformed request gets 400, and oversized headers 431, wit
       assert.doesNotMatch(out.toLowerCase(), /access-control-/);
     }
   });
+});
+
+test("review r2 L7: clientErrorReply keeps Node's status per parser error, always with the security headers", () => {
+  for (const [code, status, error] of [
+    ["ERR_HTTP_REQUEST_TIMEOUT", "408 Request Timeout", "request timeout"],
+    ["HPE_HEADER_OVERFLOW", "431 Request Header Fields Too Large", "request header fields too large"],
+    ["HPE_CHUNK_EXTENSIONS_OVERFLOW", "413 Payload Too Large", "payload too large"],
+    ["HPE_INVALID_METHOD", "400 Bad Request", "bad request"],
+    [undefined, "400 Bad Request", "bad request"],
+  ] as const) {
+    const reply = clientErrorReply(code);
+    const [head, body] = reply.split("\r\n\r\n");
+    assert.ok(head.startsWith(`HTTP/1.1 ${status}\r\n`), String(code));
+    assert.deepEqual(JSON.parse(body), { error }, String(code));
+    for (const [k, v] of Object.entries(SECURITY)) assert.ok(head.toLowerCase().includes(`${k}: ${v.toLowerCase()}`), `${code} ${k}`);
+    assert.match(head, new RegExp(`\r\nContent-Length: ${Buffer.byteLength(body)}\r\n`));
+    assert.match(head, /\r\nConnection: close$/);
+  }
 });
