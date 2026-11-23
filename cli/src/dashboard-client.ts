@@ -169,6 +169,8 @@ export async function loadDetail(ctx: Ctx): Promise<void> {
     return;
   }
   const r = await loadJson(ctx.win, `/api/tasks/${encodeURIComponent(id)}`);
+  // Review r1 L2: a response for a task that is no longer selected is stale; the newer request renders.
+  if (ctx.state.q.selected !== id) return;
   if (r.ok) {
     ctx.state.detail = r.data as TaskDetailView;
     showError(ctx, "detail", "");

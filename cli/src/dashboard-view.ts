@@ -298,6 +298,8 @@ export function arcPath(cx: number, cy: number, r: number, a0: number, a1: numbe
 export function ringView(tasks: TaskEntryView[], selected: TaskEntryView | null, detail: TaskDetailView | null): VElement {
   const arcs = ringArcs(tasks, selected?.state ?? null);
   const label = arcs.map((a) => a.label).join(", ");
+  // Review r1 L4: one actor for the pill and the aria-label: the detail's when it is the selected task's.
+  const actor = selected === null ? null : detail?.id === selected.id ? detail.facts.nextActor : selected.nextActor;
   const children: VNode[] = [s("circle", { class: "ring-track", cx: "200", cy: "200", r: "150" })];
   for (const a of arcs) {
     if (a.count === 0) continue;
@@ -314,14 +316,13 @@ export function ringView(tasks: TaskEntryView[], selected: TaskEntryView | null,
   if (selected === null) {
     children.push(s("text", { class: "core-id", x: "200", y: "205", "text-anchor": "middle" }, [t(tasks.length === 0 ? "no tasks" : "select a task")]));
   } else {
-    const actor = detail?.id === selected.id ? detail.facts.nextActor : selected.nextActor;
     children.push(s("text", { class: "core-id", x: "200", y: "188", "text-anchor": "middle" }, [t(clip(selected.id, 22))]));
     if (selected.title !== null) children.push(s("text", { class: "core-title", x: "200", y: "214", "text-anchor": "middle" }, [t(clip(selected.title, 26))]));
     children.push(
       s("text", { class: "core-pill", x: "200", y: "244", "text-anchor": "middle" }, [s("title", {}, [t(actor?.reason ?? "")]), t(ringPill(actor))]),
     );
   }
-  const summary = selected === null ? label : `${label}; selected ${selected.id}, ${ringPill(selected.nextActor)}`;
+  const summary = selected === null ? label : `${label}; selected ${selected.id}, ${ringPill(actor)}`;
   return s("svg", { class: "ring", viewBox: "-80 0 560 400", role: "img", "aria-label": summary }, children);
 }
 

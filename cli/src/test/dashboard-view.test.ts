@@ -193,7 +193,11 @@ test("ring: arcs per state with counts, at least 6° when non-zero, BLOCKED only
   const d = detail();
   const svg = ringView(tasks, tasks[0], { ...d, id: "P" });
   assert.ok(texts(svg).includes("NEXT ACTOR: REVIEWER · ROUND 2") && texts(svg).includes("review not bound"), "the pill's title is the reason");
-  assert.match(svg.attrs["aria-label"], /PENDING \(1\).*selected P/);
+  assert.match(svg.attrs["aria-label"], /PENDING \(1\).*selected P, NEXT ACTOR: REVIEWER · ROUND 2$/);
+  // Review r1 L4: the detail's actor wins in both the pill and the aria-label.
+  const fresh = ringView(tasks, tasks[0], { ...d, id: "P", facts: { ...d.facts, nextActor: { role: "qa", round: 1, reason: "no QA round" } } });
+  assert.ok(texts(fresh).includes("NEXT ACTOR: QA · ROUND 1"));
+  assert.match(fresh.attrs["aria-label"], /NEXT ACTOR: QA · ROUND 1$/);
   assert.deepEqual(texts(ringView([], null, null)), ["no tasks"]);
   assert.deepEqual(texts(ringView(tasks, null, null)).slice(-1), ["select a task"]);
   assert.equal(stateLabel(null), "UNKNOWN");

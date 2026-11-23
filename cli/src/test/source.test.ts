@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DEFAULT_EDITOR_URL, loadDashboardConfig, parseEditorUrl } from "../source.js";
+import { DEFAULT_EDITOR_URL, EDITOR_SCHEMES, loadDashboardConfig, parseEditorUrl } from "../source.js";
 
 // BASE-101-D2 H2: `dashboard.editor_url`, read once at start and served by /api/meta.
 const F = "cfg.yaml";
@@ -12,7 +12,7 @@ test("parseEditorUrl: absent gives vscode://file/{path}; editor schemes with {pa
   assert.equal(DEFAULT_EDITOR_URL, "vscode://file/{path}");
   assert.equal(parseEditorUrl(undefined, F), DEFAULT_EDITOR_URL);
   assert.equal(parseEditorUrl(null, F), DEFAULT_EDITOR_URL);
-  for (const ok of ["vscode://file/{path}", "cursor://file/{path}:1", "idea://open?file={path}", "subl://open?url={path}", "x-editor+v2.1://{path}"]) {
+  for (const ok of ["vscode://file/{path}", "cursor://file/{path}:1", "idea://open?file={path}", "subl://open?url={path}", "zed://file{path}"]) {
     assert.equal(parseEditorUrl(ok, F), ok, ok);
   }
 });
@@ -30,6 +30,10 @@ test("parseEditorUrl: script, data, web and file schemes, a missing or repeated 
     "vscode://file/",
     "vscode://{path}/{path}",
     "{path}",
+    "ms-msdt:/id PCWDiagnostic /skip force /param {path}",
+    "search-ms:query={path}",
+    "x-editor+v2.1://{path}",
+    "vscodex://file/{path}",
     " vscode://file/{path}",
     42,
     ["vscode://file/{path}"],
@@ -52,4 +56,9 @@ test("loadDashboardConfig reads .ai/config.yaml once: no file, no key, a value, 
   } finally {
     rmSync(r, { recursive: true, force: true });
   }
+});
+
+test("review r1 L3: only allowlisted editor schemes are accepted, and the error names them", () => {
+  for (const scheme of EDITOR_SCHEMES) assert.equal(parseEditorUrl(`${scheme}://file/{path}`, F), `${scheme}://file/{path}`);
+  assert.throws(() => parseEditorUrl("ms-msdt:{path}", F), /starting with an editor scheme: vscode, vscode-insiders, /);
 });

@@ -278,6 +278,25 @@ test("the first load selects the queue's first card (newest updated_at), not the
   assert.equal(ctx.cards[0].getAttribute("aria-current"), "true");
 });
 
+test("review r1 L2: a detail response for a task that is no longer selected is ignored", async () => {
+  let release: () => void = () => {};
+  const gate = new Promise<void>((r) => (release = r));
+  const { win, doc } = fakeWin();
+  const ctx = await boot(win);
+  const fetch = win.fetch;
+  win.fetch = async (path: string) => {
+    if (path === "/api/tasks/TK-1") await gate;
+    return fetch(path);
+  };
+  const slow = client.loadDetail(ctx);
+  ctx.state.q.selected = "TK-2";
+  await client.loadDetail(ctx);
+  release();
+  await slow;
+  assert.equal(ctx.state.detail?.id, "TK-2", "the late TK-1 response does not replace TK-2");
+  assert.ok((doc.getElementById("files") as FakeEl).text.includes("plan.md"));
+});
+
 test("a selected task that disappears on refresh falls back to the first active task", async () => {
   const { win } = fakeWin();
   const ctx = await boot(win);

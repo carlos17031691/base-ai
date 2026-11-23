@@ -101,20 +101,43 @@ export function loadUsageConfig(dir: string): UsageConfig {
 }
 
 export const DEFAULT_EDITOR_URL = "vscode://file/{path}";
-const FORBIDDEN_SCHEMES = new Set(["javascript", "data", "vbscript", "blob", "file", "http", "https"]);
+/**
+ * Editor URL schemes `dashboard.editor_url` may use (BASE-101-D2 decisions.md D2: an allowlist, not a denylist,
+ * because OS protocol handlers such as ms-msdt: or search-ms: can run code). Adding one is a reviewed code change.
+ */
+export const EDITOR_SCHEMES = [
+  "vscode",
+  "vscode-insiders",
+  "vscodium",
+  "cursor",
+  "windsurf",
+  "zed",
+  "subl",
+  "txmt",
+  "mvim",
+  "idea",
+  "pycharm",
+  "webstorm",
+  "phpstorm",
+  "goland",
+  "rubymine",
+  "clion",
+  "rider",
+  "jetbrains",
+] as const;
 
 /**
- * Validates `dashboard.editor_url` (BASE-101-D2 H2): a string of at most 200 characters, with `{path}` exactly
- * once, starting with a URL scheme that cannot run script or reach the network. The UI only substitutes the path.
+ * Validates `dashboard.editor_url` (BASE-101-D2 H2, D2): a string of at most 200 characters, with `{path}` exactly
+ * once, starting with `<scheme>:` for a scheme in EDITOR_SCHEMES. The UI only substitutes the encoded path.
  */
 export function parseEditorUrl(value: unknown, file: string): string {
   if (value === undefined || value === null) return DEFAULT_EDITOR_URL;
   const error = new Error(
-    `${file}: "dashboard.editor_url" must be a string of at most 200 characters with {path} exactly once and an editor scheme such as vscode: (not javascript, data, vbscript, blob, file, http or https)`,
+    `${file}: "dashboard.editor_url" must be a string of at most 200 characters with {path} exactly once, starting with an editor scheme: ${EDITOR_SCHEMES.join(", ")}`,
   );
   if (typeof value !== "string" || value.length > 200 || value.split("{path}").length !== 2) throw error;
   const scheme = /^([a-z][a-z0-9+.-]*):/.exec(value);
-  if (scheme === null || FORBIDDEN_SCHEMES.has(scheme[1])) throw error;
+  if (scheme === null || !(EDITOR_SCHEMES as readonly string[]).includes(scheme[1])) throw error;
   return value;
 }
 
