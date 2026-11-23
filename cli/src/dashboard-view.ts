@@ -318,7 +318,7 @@ export function ringView(tasks: TaskEntryView[], selected: TaskEntryView | null,
     children.push(s("text", { class: "core-id", x: "200", y: "188", "text-anchor": "middle" }, [t(clip(selected.id, 22))]));
     if (selected.title !== null) children.push(s("text", { class: "core-title", x: "200", y: "214", "text-anchor": "middle" }, [t(clip(selected.title, 26))]));
     children.push(
-      s("text", { class: "core-pill", x: "200", y: "248", "text-anchor": "middle" }, [s("title", {}, [t(actor?.reason ?? "")]), t(ringPill(actor))]),
+      s("text", { class: "core-pill", x: "200", y: "244", "text-anchor": "middle" }, [s("title", {}, [t(actor?.reason ?? "")]), t(ringPill(actor))]),
     );
   }
   const summary = selected === null ? label : `${label}; selected ${selected.id}, ${ringPill(selected.nextActor)}`;

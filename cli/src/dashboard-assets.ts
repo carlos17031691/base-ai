@@ -185,7 +185,7 @@ h2 .note{font-size:11px;letter-spacing:0;margin-left:6px}
 .arc-label.state-other{fill:${c.violet}}
 .core-id{fill:${c.text};font-size:26px;font-weight:600;font-family:ui-monospace,monospace}
 .core-title{fill:${c.muted};font-size:15px}
-.core-pill{fill:${c.amber};font-size:12px;letter-spacing:.06em}
+.core-pill{fill:${c.amber};font-size:11px;letter-spacing:.02em}
 .timeline{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;max-height:320px;overflow:auto}
 .tl-row{display:grid;grid-template-columns:44px 1fr;column-gap:8px;padding:4px 6px;border-radius:6px}
 .tl-row time{grid-row:span 2;color:${c.muted};font-family:ui-monospace,monospace;font-size:12px}
