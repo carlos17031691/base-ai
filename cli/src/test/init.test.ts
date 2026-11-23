@@ -73,6 +73,8 @@ test("init turns the usage hook off in the new project and writes no settings ho
   const cfg = parse(readFileSync(join(dir, ".ai/config.yaml"), "utf8"));
   assert.equal(cfg.usage.hook, "none");
   assert.equal(cfg.usage.pricing, undefined, "D4 H13: no maintainer prices in a new project");
+  // Review r1 L3: only this repo's active price goes; the commented example stays for the new project to copy.
+  assert.match(readFileSync(join(dir, ".ai/config.yaml"), "utf8"), /#   claude-sonnet-4-5-20250929:/);
   assert.equal(cfg.version, 1, "the rest of the config is kept");
   assert.ok(!existsSync(join(dir, ".claude/settings.json")));
 });

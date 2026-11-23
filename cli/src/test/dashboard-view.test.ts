@@ -411,9 +411,9 @@ test("D4 registration panel: per-key status as text, the summary line, the halt 
     { key: "reg TK-1 review r1 i2", file: "review-report.md", line: 11 },
     { key: "reg TK-1 qa r1 i1", file: "qa-report.md", line: 4 },
   ];
-  assert.deepEqual(texts(registrationView([], null, false)), ["no keys to register"]);
-  assert.deepEqual(texts(registrationView(null, null, false)), ["no task selected"], "no detail loaded yet");
-  const fresh = texts(registrationView(keys, null, false));
+  assert.deepEqual(texts(registrationView([], null, "idle")), ["no keys to register"]);
+  assert.deepEqual(texts(registrationView(null, null, "idle")), ["no task selected"], "no detail loaded yet");
+  const fresh = texts(registrationView(keys, null, "idle"));
   assert.ok(fresh.includes("reg TK-1 review r1 i1 · review-report.md:10 · not checked"));
   assert.ok(fresh.includes("not checked yet") && fresh.includes("CHECK REGISTRATION"));
   assert.equal(registrationSummary({ schema: 1, checkedAt: null }), "not checked yet");
@@ -428,30 +428,35 @@ test("D4 registration panel: per-key status as text, the summary line, the halt 
       { key: "reg TK-1 review r1 i2", status: "missing" },
     ],
   };
-  const out = texts(registrationView(keys, result, false));
+  const out = texts(registrationView(keys, result, "idle"));
   assert.ok(out.includes("reg TK-1 review r1 i1 · review-report.md:10 · registered #104 (open)"));
   assert.ok(out.includes("reg TK-1 review r1 i2 · review-report.md:11 · missing"));
   assert.ok(out.includes("reg TK-1 qa r1 i1 · qa-report.md:4 · not checked"), "a key the result lacks");
   assert.ok(out.includes("MISSING · 3 gh call(s) · checked 16:05:09"));
   const closed = { ...result, outcome: "registered" as const, keys: [{ key: "reg TK-1 review r1 i1", status: "registered", issue: 7, state: "closed" }] };
-  assert.ok(texts(registrationView(keys.slice(0, 1), closed, false)).includes("reg TK-1 review r1 i1 · review-report.md:10 · registered #7 (closed)"));
+  assert.ok(texts(registrationView(keys.slice(0, 1), closed, "idle")).includes("reg TK-1 review r1 i1 · review-report.md:10 · registered #7 (closed)"));
   assert.ok(registrationSummary(closed).startsWith("REGISTERED · "));
 
   const halt = { schema: 1 as const, checkedAt: "2026-11-23T16:05:09Z", outcome: "halt" as const, calls: 0, halt: { template: "T6", reason: "missing", text: "gh: command not found" }, keys: [{ key: "reg TK-1 review r1 i1", status: "unchecked" }] };
-  const h = texts(registrationView(keys.slice(0, 1), halt, false));
+  const h = texts(registrationView(keys.slice(0, 1), halt, "idle"));
   assert.ok(h.includes("gh: command not found") && h.includes("reg TK-1 review r1 i1 · review-report.md:10 · unchecked"));
   assert.ok(h.some((x) => x.startsWith("HALT · 0 gh call(s)")));
 
-  const running = registrationView(keys, null, true);
+  const running = registrationView(keys, null, "running");
   const button = all(running).find((n): n is Exclude<VNode, { text: string }> => !("text" in n) && n.tag === "button");
   assert.equal(button?.attrs.disabled, "");
   assert.equal(button?.attrs["data-action"], "registration");
   assert.ok(texts(running).includes("CHECKING…"));
+  // Review r1 L2: while another task's check runs, this task's button is disabled and says why.
+  const busy = registrationView(keys, null, "busy");
+  const busyButton = all(busy).find((n): n is Exclude<VNode, { text: string }> => !("text" in n) && n.tag === "button");
+  assert.equal(busyButton?.attrs.disabled, "");
+  assert.ok(texts(busy).includes("ANOTHER CHECK RUNNING"));
 });
 
 test("D4 registration panel: hostile key or file text stays a text node", () => {
   const evilKey = "<b>reg</b><img src=x onerror=alert(1)>";
-  const v = registrationView([{ key: evilKey, file: "<i>f</i>", line: 1 }], { schema: 1, checkedAt: "2026-11-23T16:05:09Z", outcome: "missing", calls: 1, keys: [{ key: evilKey, status: "missing" }] }, false);
+  const v = registrationView([{ key: evilKey, file: "<i>f</i>", line: 1 }], { schema: 1, checkedAt: "2026-11-23T16:05:09Z", outcome: "missing", calls: 1, keys: [{ key: evilKey, status: "missing" }] }, "idle");
   assert.ok(texts(v).includes(`${evilKey} · <i>f</i>:1 · missing`));
   assert.ok(!all(v).some((n) => !("text" in n) && ["b", "img", "i"].includes(n.tag)), "no element built from the text");
 });

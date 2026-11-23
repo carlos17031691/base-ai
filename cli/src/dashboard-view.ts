@@ -516,9 +516,15 @@ export function registrationSummary(result: RegistrationView | null): string {
 
 /**
  * The registration panel (BASE-101-D4 H6): every To register key with its status, the last check's summary and
- * halt text, and a CHECK REGISTRATION button (absent when the task has no keys). Text nodes only.
+ * halt text, and a CHECK REGISTRATION button (absent when the task has no keys). Text nodes only. `check` is
+ * "running" for this task's own check and "busy" while another task's runs (review r1 L2: one run at a time,
+ * so the button says so instead of doing nothing).
  */
-export function registrationView(keys: { key: string; file: string; line: number }[] | null, result: RegistrationView | null, running: boolean): VElement {
+export function registrationView(
+  keys: { key: string; file: string; line: number }[] | null,
+  result: RegistrationView | null,
+  check: "idle" | "running" | "busy",
+): VElement {
   // Null while no detail is loaded, as every other detail panel: "no keys" would be a claim about an unread task.
   if (keys === null) return h("div", { class: "registration" }, [h("p", { class: "empty" }, [t("no task selected")])]);
   if (keys.length === 0) return h("div", { class: "registration" }, [h("p", { class: "empty" }, [t("no keys to register")])]);
@@ -537,11 +543,9 @@ export function registrationView(keys: { key: string; file: string; line: number
     h("p", { class: `reg-summary reg-outcome-${outcome}` }, [t(registrationSummary(result))]),
   ];
   if (result?.halt !== undefined) children.push(h("p", { class: "reg-halt bad" }, [t(result.halt.text)]));
-  children.push(
-    h("button", running ? { type: "button", class: "reg-check", "data-action": "registration", disabled: "" } : { type: "button", class: "reg-check", "data-action": "registration" }, [
-      t(running ? "CHECKING…" : "CHECK REGISTRATION"),
-    ]),
-  );
+  const attrs: Record<string, string> = { type: "button", class: "reg-check", "data-action": "registration" };
+  if (check !== "idle") attrs.disabled = "";
+  children.push(h("button", attrs, [t(check === "running" ? "CHECKING…" : check === "busy" ? "ANOTHER CHECK RUNNING" : "CHECK REGISTRATION")]));
   return h("div", { class: "registration" }, children);
 }
 

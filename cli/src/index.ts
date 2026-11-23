@@ -49,7 +49,8 @@ Commands:
                                                      naming each failed check. Offline.
   pipeline debt <task-dir> [--issues n,…] [--json]  Check each To register key against GitHub issues (opt-in network, gh);
                                                      exit 0 registered, 1 missing, 2 could not check
-  dashboard [--port N]                              Serve the read-only pipeline HUD and JSON API over .ai/tasks/ on 127.0.0.1 (default port 4747)
+  dashboard [--port N]                              Serve the pipeline HUD and JSON API over .ai/tasks/ on 127.0.0.1 (default port 4747);
+                                                     it reads only, except the opt-in CHECK REGISTRATION (gh)
   usage record                                      Record a Claude Code turn's tokens from a Stop/SubagentStop hook (stdin) into
                                                      .ai/tasks/<ticket>/usage.jsonl; always exits 0, nothing on stdout
   usage report <task-dir> [--json]                  Show a task's recorded tokens per agent and model, with USD cost from

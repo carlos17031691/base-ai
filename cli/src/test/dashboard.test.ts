@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { request, type IncomingHttpHeaders } from "node:http";
 import { connect, createServer as createNetServer, type AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -633,7 +633,7 @@ test("D3 spawned CLI: with an /events stream open, SIGTERM still exits 0", async
 // ---- BASE-101-D4: POST /api/tasks/<id>/registration ----
 // A task whose review marks one key To register (K16 passes); TK-1 from root() stays broken (K16 not computed).
 const C4 = "2026-01-01T00:03:00Z";
-function writeKeyedTask(r: string, id = "TK-2") {
+function writeKeyedTask(r: string, id = "TK-2", review = `Round: 1\n${C4}\n## Verdict: approved\n| L1 | x | To register |\n| L2 | y | To register |\n`) {
   const dir = join(r, ".ai", "tasks", id);
   mkdirSync(dir, { recursive: true });
   const transitions = [
@@ -646,7 +646,7 @@ function writeKeyedTask(r: string, id = "TK-2") {
   ];
   writeFileSync(join(dir, "status.json"), JSON.stringify({ ticket_id: id, state: "completed", plan_locked: true, assignee: null, blocker: null, transitions, checklist: { tests_pass: true, lint_pass: false, types_pass: true, review_verdict: "approved", qa_verdict: "pass" } }));
   writeFileSync(join(dir, "plan.md"), "# Plan\n## Steps\n1. **human** — ok\n");
-  writeFileSync(join(dir, "review-report.md"), `Round: 1\n${C4}\n## Verdict: approved\n| L1 | x | To register |\n| L2 | y | To register |\n`);
+  writeFileSync(join(dir, "review-report.md"), review);
   writeFileSync(join(dir, "qa-report.md"), `Round: 1\nImplementer completion verified: ${C4}\n## Verdict: pass\n`);
 }
 
@@ -881,7 +881,7 @@ test("D4 spawned CLI: SIGTERM during a check kills the stub gh and exits 0 (stub
   const bin = realpathSync(mkdtempSync(join(tmpdir(), "dash-bin-")));
   const marker = join(bin, "started");
   // The stub records that it ran, then sleeps as itself (exec), so the dashboard's SIGKILL reaches the sleeper.
-  writeFileSync(join(bin, "gh"), `#!/bin/sh\necho started > "${marker}"\nexec sleep 30\n`, { mode: 0o755 });
+  writeFileSync(join(bin, "gh"), `#!/bin/sh\necho $$ > "${marker}"\nexec sleep 30\n`, { mode: 0o755 });
   const git = spawn("git", ["init", "-q", r]);
   await new Promise((res) => git.on("exit", res));
   const remote = spawn("git", ["-C", r, "remote", "add", "origin", "https://github.com/acme/repo.git"]);
@@ -906,9 +906,87 @@ test("D4 spawned CLI: SIGTERM during a check kills the stub gh and exits 0 (stub
     assert.equal(await exit, 0, err);
     assert.ok(Date.now() - t0 < 5000, "exited promptly");
     assert.match(err, /base-ai dashboard: stopped/);
+    // Review r1 L3: the stub ran as that pid (exec), and the dashboard's SIGKILL left nothing behind.
+    const pid = Number(readFileSync(marker, "utf8"));
+    await until(() => {
+      try {
+        process.kill(pid, 0);
+        return false;
+      } catch {
+        return true;
+      }
+    }, 2000);
   } finally {
     child.kill("SIGKILL");
     rmSync(r, { recursive: true, force: true });
     rmSync(bin, { recursive: true, force: true });
+  }
+});
+
+test("review r1 L3: zero keys at the route: 200, outcome registered, 0 calls, no runner call", async () => {
+  const g = fakeGh();
+  await withServer(
+    async (port, { root: r }) => {
+      writeKeyedTask(r, "TK-2", `Round: 1\n${C4}\n## Verdict: approved\n`);
+      const res = await get(port, regPath(), POST_OK);
+      const body = JSON.parse(res.body);
+      assert.deepEqual([res.status, body.outcome, body.calls, body.keys], [200, "registered", 0, []]);
+      assert.equal(g.calls.length, 0, "no git or gh call");
+    },
+    undefined,
+    { registration: g.factory },
+  );
+});
+
+test("review r1 L1: a throw while building the reply still answers 500; a run cut short by stop() neither caches nor replies", async () => {
+  const g = fakeGh();
+  let calls = 0;
+  await withKeyed(
+    async (port, { errs }) => {
+      const r = await get(port, regPath(), POST_OK);
+      assert.deepEqual([r.status, JSON.parse(r.body)], [500, { error: "internal error" }]);
+      assert.ok(errs.includes("base-ai dashboard: internal error on /api/tasks/:id/registration"));
+      assert.deepEqual(JSON.parse((await get(port, regPath())).body), { schema: 1, checkedAt: null }, "nothing cached");
+    },
+    {
+      registration: g.factory,
+      // The clock runs inside the success callback: throwing there used to skip the error handler.
+      now: () => {
+        calls++;
+        throw new Error("clock");
+      },
+    },
+  );
+  assert.ok(calls > 0);
+
+  // A run held past stop(), which then fails: with running no longer this run, nothing is logged or sent.
+  let release!: () => void;
+  const hold = new Promise<void>((r) => (release = r));
+  const signals: AbortSignal[] = [];
+  const factory = (signal: AbortSignal): Runner => {
+    signals.push(signal);
+    return async () => {
+      await hold;
+      throw new Error("late failure");
+    };
+  };
+  const r = root();
+  writeKeyedTask(r);
+  const proc = fakeProc();
+  const errs: string[] = [];
+  const d = startDashboard({ root: r, port: 0, pricing: {}, out: () => {}, err: (l) => errs.push(l), proc, registration: factory });
+  try {
+    const port = await d.ready;
+    const pending = get(port, regPath(), POST_OK).catch(() => null);
+    await until(() => signals.length === 1);
+    proc.emit("SIGTERM");
+    await d.stopped;
+    assert.equal(signals[0].aborted, true);
+    release();
+    await pending;
+    await new Promise((res) => setTimeout(res, 20));
+    assert.ok(!errs.some((l) => l.includes("internal error")), errs.join("|"));
+  } finally {
+    rmSync(r, { recursive: true, force: true });
   }
 });

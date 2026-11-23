@@ -324,18 +324,20 @@ export function startDashboard(o: DashboardOptions): Dashboard {
             const abort = new AbortController();
             const run = { abort, deadline: timers.setTimeout(() => abort.abort(), o.registrationDeadlineMs ?? 300_000) };
             running = run;
+            // Review r1 L1: `catch` after `then`, so a throw while building the reply still answers 500; and a run
+            // that `stop()` cut short (running no longer this run) neither caches nor replies.
             void checkRegistration(keys.report, [], factory(abort.signal))
-              .then(
-                (report) => {
-                  const result = registrationResult(report, now().toISOString());
-                  results.set(id, result);
-                  if (!res.writableEnded) sendJson(req, res, 200, result);
-                },
-                () => {
-                  o.err("base-ai dashboard: internal error on /api/tasks/:id/registration");
-                  if (!res.writableEnded) sendJson(req, res, 500, { error: "internal error" });
-                },
-              )
+              .then((report) => {
+                if (running !== run) return;
+                const result = registrationResult(report, now().toISOString());
+                results.set(id, result);
+                if (!res.writableEnded) sendJson(req, res, 200, result);
+              })
+              .catch(() => {
+                if (running !== run) return;
+                o.err("base-ai dashboard: internal error on /api/tasks/:id/registration");
+                if (!res.writableEnded) sendJson(req, res, 500, { error: "internal error" });
+              })
               .finally(() => {
                 timers.clearTimeout(run.deadline);
                 if (running === run) running = null;

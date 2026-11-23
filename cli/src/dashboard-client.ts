@@ -83,6 +83,8 @@ export interface AppState {
   /** BASE-101-D4: the last registration result per task id, and the task whose check is running. */
   registration: Record<string, RegistrationView>;
   checking: string | null;
+  /** The last registration error per task id (review r1 L2): shown only under the task it belongs to. */
+  registrationErrors: Record<string, string>;
 }
 export interface Ctx {
   win: WinLike;
@@ -159,7 +161,9 @@ export function renderDetail(ctx: Ctx): void {
   place(ctx, "tokens", tokensView(detail));
   place(ctx, "files", filesView(detail, ctx.state.editorUrl, ctx.state.copied));
   const id = ctx.state.q.selected;
-  place(ctx, "registration", registrationView(detail === null ? null : (detail.keys ?? []), id === null ? null : (ctx.state.registration[id] ?? null), id !== null && ctx.state.checking === id));
+  const check = ctx.state.checking === null ? "idle" : ctx.state.checking === id ? "running" : "busy";
+  place(ctx, "registration", registrationView(detail === null ? null : (detail.keys ?? []), id === null ? null : (ctx.state.registration[id] ?? null), check));
+  showError(ctx, "registration", id === null ? "" : (ctx.state.registrationErrors[id] ?? ""));
 }
 
 export function renderAll(ctx: Ctx): void {
@@ -210,12 +214,13 @@ export async function checkRegistrationAction(ctx: Ctx): Promise<void> {
   const id = ctx.state.q.selected;
   if (id === null || ctx.state.checking !== null) return;
   ctx.state.checking = id;
-  showError(ctx, "registration", "");
+  ctx.state.registrationErrors[id] = "";
   renderDetail(ctx);
   const r = await loadJson(ctx.win, `/api/tasks/${encodeURIComponent(id)}/registration`, { method: "POST", headers: { "X-Base-AI": "1" } });
   ctx.state.checking = null;
   if (r.ok) ctx.state.registration[id] = r.data as RegistrationView;
-  if (ctx.state.q.selected === id) showError(ctx, "registration", r.ok ? "" : (r.error ?? r.message));
+  ctx.state.registrationErrors[id] = r.ok ? "" : (r.error ?? r.message);
+  // renderDetail shows the selected task's panel and its own error, so a late result never lands under another task.
   renderDetail(ctx);
 }
 
@@ -406,6 +411,7 @@ export async function boot(win: WinLike): Promise<Ctx> {
       live: "offline",
       registration: {},
       checking: null,
+      registrationErrors: {},
     },
     cards: [],
     busy: false,

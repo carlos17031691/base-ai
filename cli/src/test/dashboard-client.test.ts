@@ -669,3 +669,41 @@ test("D4 loadJson: a non-200 body with an error string is returned as error; wit
   assert.deepEqual(await loadJson(win, "/y"), { ok: false, message: "cannot load /y (404)" });
   assert.deepEqual(await loadJson(win, "/z"), { ok: false, message: "cannot load /z (400)" });
 });
+
+test("review r1 L2: a registration error stays under its own task; while one check runs, another task's button is disabled and says why", async () => {
+  let release: () => void = () => {};
+  const gate = new Promise<void>((r) => (release = r));
+  const routes = {
+    "/api/tasks/TK-1": keyed("TK-1"),
+    "/api/tasks/TK-2": { ...DETAIL("TK-2"), keys: [{ key: "reg TK-2 review r1 i1", file: "review-report.md", line: 3 }] },
+    "POST /api/tasks/TK-1/registration": new Reply(409, { error: "a registration check is already running" }),
+    "POST /api/tasks/TK-2/registration": RESULT,
+  };
+  const { win, doc } = fakeWin(routes);
+  const ctx = await boot(win);
+  const errorLine = () => (doc.getElementById("registration-error") as FakeEl).text;
+  await client.checkRegistrationAction(ctx);
+  assert.equal(errorLine(), "a registration check is already running");
+  ctx.state.q.selected = "TK-2";
+  await client.loadDetail(ctx);
+  assert.equal(errorLine(), "", "TK-1's error is not shown under TK-2");
+  ctx.state.q.selected = "TK-1";
+  await client.loadDetail(ctx);
+  assert.equal(errorLine(), "a registration check is already running", "and is back under TK-1");
+
+  ctx.state.q.selected = "TK-2";
+  await client.loadDetail(ctx);
+  const fetch = win.fetch;
+  win.fetch = async (path, init) => {
+    if (init?.method === "POST") await gate;
+    return fetch(path, init);
+  };
+  const running = client.checkRegistrationAction(ctx);
+  ctx.state.q.selected = "TK-1";
+  await client.loadDetail(ctx);
+  const button = doc.byAction("registration")[0];
+  assert.deepEqual([button.text, button.getAttribute("disabled")], ["ANOTHER CHECK RUNNING", ""]);
+  release();
+  await running;
+  assert.equal(doc.byAction("registration")[0].text, "CHECK REGISTRATION");
+});
