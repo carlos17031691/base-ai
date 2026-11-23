@@ -17,7 +17,7 @@ import { checkTask, renderText } from "./pipeline-check.js";
 import { loadTask } from "./pipeline-files.js";
 import { spawnRunner } from "./pipeline-gh.js";
 import { checkRegistration, renderDebt } from "./pipeline-registration.js";
-import { loadUsageConfig } from "./source.js";
+import { loadDashboardConfig, loadUsageConfig } from "./source.js";
 import { guardHookProcess, readUsageReport, runUsageRecord } from "./usage-files.js";
 import { renderUsageReport, stderrLine } from "./usage.js";
 
@@ -49,7 +49,7 @@ Commands:
                                                      naming each failed check. Offline.
   pipeline debt <task-dir> [--issues n,…] [--json]  Check each To register key against GitHub issues (opt-in network, gh);
                                                      exit 0 registered, 1 missing, 2 could not check
-  dashboard [--port N]                              Serve a read-only local JSON API over .ai/tasks/ on 127.0.0.1 (default port 4747)
+  dashboard [--port N]                              Serve the read-only pipeline HUD and JSON API over .ai/tasks/ on 127.0.0.1 (default port 4747)
   usage record                                      Record a Claude Code turn's tokens from a Stop/SubagentStop hook (stdin) into
                                                      .ai/tasks/<ticket>/usage.jsonl; always exits 0, nothing on stdout
   usage report <task-dir> [--json]                  Show a task's recorded tokens per agent and model, with USD cost from
@@ -234,10 +234,12 @@ function main(argv: string[]): number {
     if (!existsSync(join(root, ".ai"))) throw new Error(`Not a base-ai project: ${root} (missing .ai/). Pass --root <dir>.`);
     // Prices are read once at start (H4): a bad config fails here, not on every request.
     const { pricing } = loadUsageConfig(root);
+    const { editorUrl } = loadDashboardConfig(root);
     const dash = startDashboard({
       root,
       port,
       pricing,
+      editorUrl,
       out: (l) => console.log(l),
       err: (l) => console.error(l),
       proc: process,

@@ -32,3 +32,10 @@ usage:
   #     cache_write: 3.75
   #     cache_read: 0.3
   #     output: 15
+# Pipeline HUD (BASE-101-D2). The "open" link template of `base-ai dashboard`, read once at start;
+# absent means vscode://file/{path}. {path} appears exactly once and becomes the file's absolute path,
+# with leading slashes dropped. At most 200 characters; the scheme must be an allowed editor scheme, such as
+# vscode, cursor, zed, subl or idea (full list: EDITOR_SCHEMES in cli/src/source.ts); any other is refused.
+# Example only:
+# dashboard:
+#   editor_url: "vscode://file/{path}"

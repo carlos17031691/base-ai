@@ -116,8 +116,10 @@ test("task list and detail routes return the JSON API shapes; / is a script-free
     const page = await get(port, "/");
     assert.equal(page.status, 200);
     assert.equal(page.headers["content-type"], "text/html; charset=utf-8");
-    assert.match(page.body, /<a href="\/api\/tasks">/);
-    assert.doesNotMatch(page.body, /<script|style=/);
+    // BASE-101-D2 (H11): the HUD skeleton loads same-origin /app.js and /app.css, with no inline code or style.
+    assert.match(page.body, /<script src="\/app\.js" defer><\/script>/);
+    assert.match(page.body, /<link rel="stylesheet" href="\/app\.css">/);
+    assert.doesNotMatch(page.body, /<script>|<script [^>]*>[^<]|<style|style=|\son[a-z]+=|https?:\/\//i);
 
     assert.equal((await get(port, "/nope")).status, 404);
     assert.equal((await get(port, "/healthz?x=1")).status, 200, "the query string is ignored");
@@ -360,5 +362,56 @@ test("review r2 L7: clientErrorReply keeps Node's status per parser error, alway
     for (const [k, v] of Object.entries(SECURITY)) assert.ok(head.toLowerCase().includes(`${k}: ${v.toLowerCase()}`), `${code} ${k}`);
     assert.match(head, new RegExp(`\r\nContent-Length: ${Buffer.byteLength(body)}\r\n`));
     assert.match(head, /\r\nConnection: close$/);
+  }
+});
+
+test("D2 routes: /app.js, /app.css and /api/meta from memory with their Content-Types and D1's headers; HEAD has no body", async () => {
+  await withServer(async (port) => {
+    for (const [path, type] of [
+      ["/app.js", "text/javascript; charset=utf-8"],
+      ["/app.css", "text/css; charset=utf-8"],
+      ["/api/meta", "application/json; charset=utf-8"],
+    ] as const) {
+      const r = await get(port, path);
+      assert.equal(r.status, 200, path);
+      assert.equal(r.headers["content-type"], type, path);
+      for (const [k, v] of Object.entries(SECURITY)) assert.equal(r.headers[k], v, `${path} ${k}`);
+      assert.equal(r.headers["access-control-allow-origin"], undefined);
+      assert.equal(Number(r.headers["content-length"]), Buffer.byteLength(r.body), path);
+      const head = await get(port, path, { method: "HEAD" });
+      assert.deepEqual([head.status, head.body], [200, ""], `HEAD ${path}`);
+    }
+    assert.deepEqual(JSON.parse((await get(port, "/api/meta")).body), { schema: 1, editorUrl: "vscode://file/{path}" });
+    assert.match((await get(port, "/app.js")).body, /^\(function \(\) \{\n"use strict";/);
+    assert.equal((await get(port, "/app.js", { host: "evil.test" })).status, 403, "the Host guard covers the assets");
+    assert.equal((await get(port, "/app.css", { method: "POST" })).status, 405);
+  });
+});
+
+test("D2 H2: /api/meta serves the configured editor template", async () => {
+  const r = root();
+  const d = startDashboard({ root: r, port: 0, pricing: {}, out: () => {}, err: () => {}, proc: fakeProc(), editorUrl: "cursor://file/{path}" });
+  try {
+    const port = await d.ready;
+    assert.deepEqual(JSON.parse((await get(port, "/api/meta")).body), { schema: 1, editorUrl: "cursor://file/{path}" });
+  } finally {
+    await new Promise((res) => d.server.close(() => res(undefined)));
+    rmSync(r, { recursive: true, force: true });
+  }
+});
+
+test("D2 H2: an invalid dashboard.editor_url makes the CLI exit 1 at start with one line naming the key", async () => {
+  const r = root();
+  writeFileSync(join(r, ".ai", "config.yaml"), 'dashboard:\n  editor_url: "javascript:alert(1)//{path}"\n');
+  try {
+    const c = spawnCli(["--root", r, "--port", "0"]);
+    try {
+      assert.equal(await c.exit, 1);
+      assert.match(c.err(), /"dashboard\.editor_url" must be/);
+    } finally {
+      c.child.kill("SIGKILL");
+    }
+  } finally {
+    rmSync(r, { recursive: true, force: true });
   }
 });
