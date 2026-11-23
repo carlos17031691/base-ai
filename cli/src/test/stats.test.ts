@@ -47,6 +47,23 @@ test("--max-tokens detects always-on context violation", () => {
   assert.ok(report.violations.some((v) => v.name === "always-on"));
 });
 
+test("T5 B11: with claude configured, always-on is the CLAUDE.md text (no indexes); without it, rules plus the skill index", () => {
+  const rules = `# Global Rules\n${"r".repeat(400)}\n\n## Available agents\n\n${"a".repeat(800)}`;
+  const skill = `---\nid: adr\ndescription: ${"d".repeat(400)}\n---\nWrite an ADR.`;
+  const project = (agents?: string) => {
+    const d = makeProject();
+    writeFileSync(join(d, ".ai/rules.md"), rules);
+    writeFileSync(join(d, ".ai/skills/adr/skill.md"), skill);
+    if (agents !== undefined) writeFileSync(join(d, ".ai/config.yaml"), `agents: ${agents}\n`);
+    return d;
+  };
+  const claudeText = `# Global Rules\n${"r".repeat(400)}`;
+  const fullText = `${rules}\n\n- **adr**: ${"d".repeat(400)}`;
+  assert.equal(computeAiStats(project()).alwaysOnTokens, Math.ceil(claudeText.length / 4), "all agents include claude");
+  assert.equal(computeAiStats(project("[claude, cursor]")).alwaysOnTokens, Math.ceil(claudeText.length / 4));
+  assert.equal(computeAiStats(project("[cursor, copilot]")).alwaysOnTokens, Math.ceil(fullText.length / 4));
+});
+
 test("--max-tokens passes when all components are within budget", () => {
   const report = computeAiStats(makeProject(), { maxTokens: 5000 });
   assert.equal(report.withinBudget, true);

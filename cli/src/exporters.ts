@@ -31,6 +31,21 @@ function skillIndex(skills: Skill[]): string {
   return `\n\n## Available skills\n\n${skills.map((s) => `- **${s.id}**: ${s.description}`).join("\n")}`;
 }
 
+/**
+ * The rules as CLAUDE.md carries them (BASE-079-T5): without the `## Available agents` section, from that heading to
+ * the next `## ` heading or the end. Claude Code lists agents (`.claude/agents/`) and skills (`.claude/commands/`)
+ * natively, so CLAUDE.md also gets no skill index. Rules without the section are returned unchanged.
+ */
+export function claudeRules(rules: string): string {
+  const start = rules.search(/^## Available agents[ \t]*$/m);
+  if (start === -1) return rules;
+  const heading = "## Available agents";
+  const rest = rules.slice(start + heading.length);
+  const next = rest.search(/^## /m);
+  const tail = next === -1 ? "" : rest.slice(next);
+  return [rules.slice(0, start).trimEnd(), tail].filter(Boolean).join("\n\n");
+}
+
 /** AGENTS.md is shared by Antigravity and Codex. */
 const agentsMd = (src: AiSource, a: Agent) => md("AGENTS.md", src.rules + skillIndex(forAgent(src, a)));
 
@@ -43,7 +58,7 @@ export const exporters: Record<Agent, Exporter> = {
   ],
   codex: (src) => [agentsMd(src, "codex")],
   claude: (src) => [
-    md("CLAUDE.md", src.rules + skillIndex(forAgent(src, "claude"))),
+    md("CLAUDE.md", claudeRules(src.rules)),
     ...forAgent(src, "claude").map((s) => md(`.claude/commands/${s.id}.md`, s.body, { description: s.description })),
     // Frontmatter kept byte for byte (Claude Code parses it), then the header after it.
     ...src.roles.flatMap((r) => [

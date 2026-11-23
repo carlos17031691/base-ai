@@ -51,15 +51,6 @@ Enforced by `.githooks/`:
 - **Locked plans:** `plan.md` becomes immutable once `plan_locked: true`. Any plan change requires human decision — no agent may replan to unblock itself.
 - **Available agent roles** (invoke by name in Claude Code): `planner`, `implementer`, `reviewer`, `qa`, `supervisor`, `improvement`.
 
-## Available agents
-
-- **planner**: Analyzes a ticket and produces a locked plan.md before any code is written. Invoke at the start of every task.
-- **implementer**: Executes the locked plan.md and writes only the files in its "Files to touch" table. Invoke after the plan is locked.
-- **reviewer**: Read-only review of a completed task against its locked plan, producing review-report.md with a verdict. Invoke after the implementer reaches completed.
-- **qa**: Verifies each acceptance criterion of a completed, review-approved task against the deliverable, running the project's tests and checks where they exist, and produces qa-report.md with a verdict. Invoke after the reviewer approves.
-- **supervisor**: Sole authority to advance a completed task to validated: checks that review and QA passed for the same latest completion, that the reports agree, that post-lock decisions are recorded and that tech debt is registered (read-only gh); otherwise names the blocking gate and who must act. Invoke after QA passes.
-- **improvement**: Evaluates one finished pipeline cycle (validated, or completed with review approved and QA passed) against each role's definition and writes improvement-report.md with per-role findings and exact proposed edits to skills, agent definitions, templates and the state-machine doc; never applies them — a human decides. Invoke after the supervisor validates, or after QA passes when the supervisor cannot run.
-
 ## Project memory
 
 - **[2026-10-20]** `[BASE-002]` `#sdlc` init and service new must bootstrap initial commit on main + development branch BEFORE activating .githooks (ADR-0002)
@@ -75,26 +66,3 @@ Enforced by `.githooks/`:
 - **[2026-10-22]** `[BASE-008]` `#sdlc,integrations` Slack CI notifications must invoke pr_ready_for_review event to generate rich Block Kit attachments with zero unresolved conversations reminder and must use .cjs extension for Node.js ES module compatibility.
 - **[2026-10-22]** `[BASE-008]` `#testing,sdlc` SonarCloud analysis for services using root organization key requires explicit exclusion of .github automation scripts and cpd duplication check suppression to pass Quality Gate on new code.
 - **[2026-10-22]** `[BASE-009]` `#agents,mcp` Native Model Context Protocol (MCP) server over stdio (`base-ai mcp`) exposes search_context, get_memory, add_memory, check_health, get_ai_stats, and list_services tools with zero external dependencies.
-
-## Available skills
-
-- **adr**: Create an immutable Architecture Decision Record (ADR) documenting the what, why and how of a technical decision. Use when asked to record an architecture decision or create an ADR.
-- **agents**: Design and secure tool-using AI agents, Model Context Protocol (MCP) servers and multi-step agentic loops with Human-in-the-Loop and execution guardrails. Use when building autonomous or tool-calling AI features.
-- **ai-ops**: Optimize AI/LLM usage, model selection, token consumption, prompt caching and token/cost monitoring (AI FinOps). Use when choosing models, reducing latency or token spend, designing prompt caching or instrumenting LLM telemetry.
-- **architecture**: Design or evaluate the architecture of a service or module using clean boundaries, dependency inversion, explicit contracts and resilience patterns. Use when designing a new service, refactoring boundaries or assessing coupling.
-- **database**: Design schemas, queries, transactions and zero-downtime migrations for SQL, NoSQL and cache stores. Use when modeling data, writing migrations, tuning queries or handling concurrency.
-- **discovery**: Turn a raw product idea or feature request into domain boundaries, candidate services for services.yaml, Epics and actionable User Stories with Gherkin acceptance criteria (Jira/ClickUp/Trello). Use at the start of a project or epic.
-- **docs**: Create and maintain clear project, service, API/event contract and onboarding documentation. Use when documenting a service, API, onboarding guide, architecture overview or postmortem.
-- **infrastructure**: Design, deploy and monitor cloud infrastructure (AWS, GCP, Azure, Cloudflare, PaaS/K8s) using IaC, OIDC keyless auth, GitOps PR pipelines, Monitoring as Code and Cloud FinOps. Use when provisioning cloud resources, writing Terraform/OpenTofu/Pulumi/Dockerfiles or setting up CI/CD.
-- **integrations**: Design and implement resilient integrations with external APIs, third-party providers (payments, auth, messaging, storage), webhooks, AI gateways (e.g. OpenRouter, LiteLLM) and LLM models. Use when connecting to any external service or AI provider.
-- **memory**: Manage persistent project memory across AI coding sessions and design short-term / long-term memory architectures for AI-powered applications and agents. Use when recording project learnings or building stateful AI features.
-- **observability**: Design and implement monitoring, structured logging, metrics (RED/USE, SLIs/SLOs), distributed tracing, health checks and actionable alerts. Use when instrumenting a service or setting up monitoring.
-- **pipeline**: Explain and apply the multi-agent pipeline protocol: the task state machine, the agent responsible for each transition, the files each role may read and write, plan immutability, escalation to the human and the coordinator's duties. Use when starting or resuming a task, when unsure which agent acts next, or when invoked without a role.
-- **rag**: Design, implement, secure and evaluate Retrieval-Augmented Generation (RAG) pipelines (ingestion, chunking, embeddings, vector/hybrid search, reranking, access control and hallucination evaluation). Use when building search, knowledge bases, document Q&A or context-aware AI features.
-- **review**: Review code or a pull request for ticket traceability, branch/PR hygiene, correctness, clean code, architecture, security, resilience and SDLC compliance. Use before a merge or when a review is requested.
-- **rfc**: Draft a Request for Comments (RFC) for high-impact changes before implementing them. Use for significant features, cross-service contract changes, migrations or infrastructure changes.
-- **runbook**: Generate an on-call operational runbook for a service or component. Use when deploying something new, creating an alert, or when asked to document how to operate or mitigate an incident.
-- **sdlc**: Guide and verify a change through the SDLC gates (ticket, branch, design, implementation, tests, review, PR, release, operations) and the pipeline agent owning each. Use when planning or gating a feature or release.
-- **security**: Perform threat modeling (STRIDE) and security auditing (OWASP, secrets, input validation, authz, supply chain, safe logging). Use when designing features, auditing code or reviewing sensitive changes.
-- **testing**: Design and implement automated test suites across the test pyramid (unit, integration, contract testing across services, resilience/chaos and AI Evals). Use when writing tests, setting up test harnesses or evaluating AI/RAG outputs.
-- **workflows**: Design, govern and operate workflow automation and agent orchestration engines (e.g. n8n, Temporal, Inngest, event queues). Use when automating multi-step processes, SaaS integrations, webhooks or AI agent workflows.
