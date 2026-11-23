@@ -472,7 +472,7 @@ function securityProblem(r: Report, round: Round): string | null {
   }
   if (rows.some((row) => row.length < 3 || plain(row[1]) === "" || plain(row[2]) === "")) return "a category row has an empty Result or Basis";
 
-  const ids = (text: string) => [...new Set(text.match(FINDING_ID) ?? [])].sort();
+  const ids = (text: string) => [...new Set(text.match(FINDING_ID) ?? [])].sort((a, b) => a.localeCompare(b));
   const cited = ids(value("Findings"));
   const inRows = ids(rows.map((row) => row[1]).join(" "));
   if (cited.length === 0 && value("Findings").toLowerCase() !== "none") return "Findings is neither none nor finding ids";
