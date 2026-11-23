@@ -163,6 +163,8 @@ test("keys are processed in computed order, and every candidate not yet viewed i
 });
 
 // BASE-101-D4: the CLI sequence shared with the dashboard. A temp task whose review marks one key To register.
+// A valid Security section (BASE-124-B, K19), appended to review fixtures that must stay consistent.
+const SEC = "\n## Security\n\n- Trust boundary touched: no\n- Method: OWASP checklist\n- Findings: none\n\n| Category | Result | Basis |\n|---|---|---|\n| Input validation & injection | none | src/x.ts:1 |\n| Authn/authz & isolation | n/a | no auth code |\n| Secrets & data protection | none | src/x.ts:2 |\n| Abuse resistance | n/a | no endpoint |\n| Supply chain | none | no dependency change |\n";
 const C = "2026-01-01T00:03:00Z";
 function taskRoot(review: string) {
   const root = mkdtempSync(join(tmpdir(), "reg-"));
@@ -187,7 +189,7 @@ function taskRoot(review: string) {
 }
 
 test("D4 taskKeys and debtForTask: K16 not passing gives keys with its status and no call; passing runs the check", async () => {
-  const ok = taskRoot(`Round: 1\n${C}\n## Verdict: approved\n| L1 | x | To register |\n`);
+  const ok = taskRoot(`Round: 1\n${C}\n## Verdict: approved\n| L1 | x | To register |\n${SEC}`);
   try {
     const keys = taskKeys(ok.root, ".ai/tasks/TK-2");
     assert.equal(keys.kind, "ready");
@@ -202,7 +204,7 @@ test("D4 taskKeys and debtForTask: K16 not passing gives keys with its status an
     ok.done();
   }
   // A broken status.json fails K1, so K16 is skipped: the keys are not computed.
-  const bad = taskRoot(`Round: 1\n${C}\n## Verdict: approved\n| L1 | x | To register |\n`);
+  const bad = taskRoot(`Round: 1\n${C}\n## Verdict: approved\n| L1 | x | To register |\n${SEC}`);
   writeFileSync(join(bad.root, ".ai", "tasks", "TK-2", "status.json"), "{ broken");
   try {
     const f = fake({});

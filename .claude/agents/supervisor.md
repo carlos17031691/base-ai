@@ -144,7 +144,7 @@ Where this definition cites one of these passages — the `decisions.md` format 
 
 ## Protocol
 
-The checks run in this order. **The first failing blocking check decides the outcome**: a refusal or a halt, with nothing written. You stop there; later checks are not run. Every check from C1 to C18 must pass before the write step.
+The checks run in this order. **The first failing blocking check decides the outcome**: a refusal or a halt, with nothing written. You stop there; later checks are not run. Every check from C1 to C19 must pass before the write step.
 
 Results:
 
@@ -161,6 +161,7 @@ Results:
 | `state` is `blocked` | human |
 | review missing, `null`, for an older completion, or out of order | reviewer |
 | review `changes_requested` | implementer, via a send-back instruction relayed by the human/coordinator |
+| latest review round without a valid Security section | human (a new completion, or another decision) |
 | QA missing, `null`, for an older completion, or out of order | QA |
 | QA `fail` | implementer, via a send-back instruction relayed by the human/coordinator |
 | plan step of an agent with no evidence | that agent |
@@ -241,6 +242,10 @@ Read `review-report.md`. **Halt → human** on any inconsistency — never repai
 ### C9 — Review verdict
 
 **Refusal → implementer** unless `review_verdict` is `approved`. The refusal carries a send-back instruction: the human (or the coordinator relaying the human) invokes the implementer with an explicit instruction to re-enter for the findings of review round `<N>`.
+
+### C19 — Review security section
+
+**Refusal → human** unless the latest round of `review-report.md` has, outside code fences, one `## Security` or `### Security` heading and, under it: one line each for `Trust boundary touched:`, `Method:` and `Findings:`; `yes` naming at least one of network, processes, external input, secrets, with `STRIDE` and six category rows, or `no` with `OWASP checklist` and five; a result and a basis in every row; and in `Findings:` either `none` or exactly the finding ids the rows name. Structure only — you do not judge the content. The reviewer never reviews one completion twice, so the way out is the human's: a send-back for a new completion, recorded per C15, or another decision.
 
 ### C10 — QA present
 
@@ -371,6 +376,7 @@ VALIDATED — ticket <ticket-id>
 State: completed → validated (entry <timestamp>).
 Evidence:
 - Review: round <N> approved (entry <ts>), reviewed implementer completion <ts>.
+- Security: review round <N>, <STRIDE | OWASP checklist>, findings <ids | none> (C19).
 - QA: round <M> pass (entry <ts>), verified implementer completion <ts>.
 - Reports and status.json agree (C7, C11).
 Plan steps → evidence:

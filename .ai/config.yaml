@@ -13,12 +13,12 @@ budgets:
     improvement: 8000
     planner: 1500
     qa: 14500
-    reviewer: 6000
-    supervisor: 8750
+    reviewer: 6250
+    supervisor: 9000
   definition_totals:
     qa: 18250
-    reviewer: 7000
-    supervisor: 11250
+    reviewer: 7250
+    supervisor: 11500
 # Token usage (BASE-101-U2). `base-ai ai sync` writes (claude-code) or removes (none) the marked
 # SubagentStop/Stop hook of .claude/settings.json; absent means none. `init` sets none in new projects.
 usage:

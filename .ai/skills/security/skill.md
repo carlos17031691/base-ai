@@ -35,4 +35,6 @@ Evaluate the design or code diff against defense-in-depth and OWASP principles:
    - Minimal, well-maintained dependencies; lockfiles committed; no unpinned external scripts in CI.
    - CI dependency audit (OSV-Scanner + `templates/service/.github/scripts/dependency-audit.cjs`): a High, Critical or unscored advisory in a production dependency fails the build. Upgrade or remove first; accept only with a reviewed entry in `.github/dependency-audit-accepted.json` (`id`, `reason`, `accepted`, `expires`; at most 90 days).
 
+**In the pipeline:** the reviewer runs this audit in every review round: item 1 (STRIDE) when the change touches a trust boundary (network, processes, external input, secrets), items 2–6 (the OWASP checklist) otherwise. It records the result in the Security section of `review-report.md` (form: `templates/task/review-report.md`), Critical as High, and the PR's "Security audit" quotes that section.
+
 Report findings ordered by severity (**Critical**, **High**, **Medium**, **Low**) with `file:line`, exploit scenario and concrete remediation.
