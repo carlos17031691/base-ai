@@ -46,6 +46,7 @@ export const INDEX_HTML = `<!doctype html>
 <section class="panel" data-panel="timeline" aria-labelledby="h-timeline"><h2 id="h-timeline">TIMELINE</h2><div id="timeline"></div></section>
 <section class="panel" data-panel="checks" aria-labelledby="h-checks"><h2 id="h-checks">INTEGRITY CHECKS</h2><div id="checks"></div></section>
 <section class="panel" data-panel="files" aria-labelledby="h-files"><h2 id="h-files">FILES</h2><div id="files"></div></section>
+<section class="panel" data-panel="registration" aria-labelledby="h-registration"><h2 id="h-registration">REGISTRATION <span class="note">checks GitHub with gh on demand</span></h2><div id="registration"></div><p id="registration-error" class="error" role="status"></p></section>
 </aside>
 </div>
 </body>
@@ -83,8 +84,12 @@ export function appFunctions(): ((...args: never[]) => unknown)[] {
     view.roundsView,
     view.checkCells,
     view.checksView,
+    view.compactTokens,
     view.tokenFlow,
     view.tokensView,
+    view.keyStatus,
+    view.registrationSummary,
+    view.registrationView,
     view.editorHref,
     view.filesView,
     view.palette,
@@ -99,6 +104,8 @@ export function appFunctions(): ((...args: never[]) => unknown)[] {
     client.renderAll,
     client.loadJson,
     client.loadDetail,
+    client.loadRegistration,
+    client.checkRegistrationAction,
     client.refresh,
     client.serialized,
     client.eventId,
@@ -217,17 +224,26 @@ h2 .note{font-size:11px;letter-spacing:0;margin-left:6px}
 .cell.skip{background:${c.amber}}
 .checks-summary{margin:10px 0 0;text-align:center;font-size:12px;color:${c.muted}}
 .flow{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
-.flow-row{display:grid;grid-template-columns:90px 1fr auto;gap:8px;align-items:center;font-size:12px}
+.flow-row{display:grid;grid-template-columns:90px 1fr auto auto;gap:8px;align-items:center;font-size:12px}
+.flow-tokens{font-family:ui-monospace,monospace;color:${c.text}}
 .flow-agent{color:${c.muted}}
 .flow-bar{height:8px;background:${c.bg};border-radius:4px;overflow:hidden}
 .flow-fill{display:block;height:100%;background:${c.cyan};box-shadow:0 0 6px ${c.cyan}}
 ${widths}
 .flow-cost{font-family:ui-monospace,monospace}
-.flow-total{display:flex;justify-content:space-between;margin:10px 0 0;padding-top:8px;border-top:1px solid ${c.line};font-weight:600}
+.flow-total{display:flex;justify-content:space-between;gap:8px;margin:10px 0 0;padding-top:8px;border-top:1px solid ${c.line};font-weight:600}
 .files{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
 .file{display:flex;gap:10px;align-items:center;font-size:12px}
 .file-name{flex:1;font-family:ui-monospace,monospace}
 .file-open{color:${c.cyan}}
+.reg-keys{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:12px;font-family:ui-monospace,monospace}
+.reg-key{overflow-wrap:anywhere;color:${c.muted}}
+.reg-key.reg-ok{color:${c.green}}
+.reg-key.reg-missing{color:${c.amber}}
+.reg-summary{margin:8px 0;font-size:12px;color:${c.text}}
+.reg-halt{margin:4px 0;font-size:12px;color:${c.red}}
+.reg-check{margin-top:6px;padding:6px 10px;border:1px solid ${c.cyan};border-radius:6px;background:${c.bg};color:${c.cyan}}
+.reg-check[disabled]{opacity:.6;cursor:progress}
 .file-copy{background:none;border:1px solid ${c.line};border-radius:6px;padding:2px 8px;color:${c.muted}}
 @keyframes pulse{50%{box-shadow:0 0 20px ${c.cyan}99}}
 @keyframes glow{50%{opacity:.8}}

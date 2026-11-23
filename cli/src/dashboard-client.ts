@@ -15,11 +15,13 @@ import {
   queueControlsView,
   queueKey,
   queueListView,
+  registrationView,
   ringView,
   roundsView,
   timelineView,
   tokensView,
   type LiveState,
+  type RegistrationView,
   type QueueState,
   type TaskDetailView,
   type TaskEntryView,
@@ -66,7 +68,7 @@ export interface WinLike {
   document: DocLike;
   EventSource?: new (url: string) => EventSourceLike;
   location: { host: string };
-  fetch(path: string, init?: { headers?: Record<string, string> }): Promise<ResLike>;
+  fetch(path: string, init?: { method?: string; headers?: Record<string, string> }): Promise<ResLike>;
   navigator: { clipboard?: { writeText(text: string): Promise<void> } };
 }
 export interface AppState {
@@ -78,6 +80,9 @@ export interface AppState {
   copied: Record<string, string>;
   errors: Record<string, string>;
   live: LiveState;
+  /** BASE-101-D4: the last registration result per task id, and the task whose check is running. */
+  registration: Record<string, RegistrationView>;
+  checking: string | null;
 }
 export interface Ctx {
   win: WinLike;
@@ -153,6 +158,8 @@ export function renderDetail(ctx: Ctx): void {
   place(ctx, "checks", checksView(detail));
   place(ctx, "tokens", tokensView(detail));
   place(ctx, "files", filesView(detail, ctx.state.editorUrl, ctx.state.copied));
+  const id = ctx.state.q.selected;
+  place(ctx, "registration", registrationView(detail === null ? null : (detail.keys ?? []), id === null ? null : (ctx.state.registration[id] ?? null), id !== null && ctx.state.checking === id));
 }
 
 export function renderAll(ctx: Ctx): void {
@@ -162,14 +169,54 @@ export function renderAll(ctx: Ctx): void {
 }
 
 /** GETs a same-origin JSON route; failures become a message, never an exception. */
-export async function loadJson(win: WinLike, path: string): Promise<{ ok: true; data: unknown } | { ok: false; message: string }> {
+/**
+ * The only network call of the UI: a same-origin `fetch` of a relative path. A non-200 reply also gives the
+ * server's own `error` string when its body has one (BASE-101-D4: 403, 409 and 422 explain themselves).
+ */
+export async function loadJson(
+  win: WinLike,
+  path: string,
+  init: { method?: string; headers?: Record<string, string> } = {},
+): Promise<{ ok: true; data: unknown } | { ok: false; message: string; error?: string }> {
   try {
-    const res = await win.fetch(path, { headers: { Accept: "application/json" } });
-    if (!res.ok) return { ok: false, message: `cannot load ${path} (${res.status})` };
+    const res = await win.fetch(path, { ...init, headers: { Accept: "application/json", ...(init.headers ?? {}) } });
+    if (!res.ok) {
+      let error: string | undefined;
+      try {
+        const body = (await res.json()) as { error?: unknown } | null;
+        if (body !== null && typeof body === "object" && typeof body.error === "string") error = body.error;
+      } catch {
+        // A body that is not JSON keeps the generic message.
+      }
+      return { ok: false, message: `cannot load ${path} (${res.status})`, ...(error === undefined ? {} : { error }) };
+    }
     return { ok: true, data: await res.json() };
   } catch {
     return { ok: false, message: `cannot load ${path} (network)` };
   }
+}
+
+/** GET the cached registration result of a task (BASE-101-D4); a failure leaves the panel as it was. */
+export async function loadRegistration(ctx: Ctx, id: string): Promise<void> {
+  const r = await loadJson(ctx.win, `/api/tasks/${encodeURIComponent(id)}/registration`);
+  if (r.ok) ctx.state.registration[id] = r.data as RegistrationView;
+}
+
+/**
+ * CHECK REGISTRATION: POST with `X-Base-AI: 1`, which the server requires and a cross-site page cannot send. The
+ * result is stored for its task; when the selection changed meanwhile it does not replace the new task's panel.
+ */
+export async function checkRegistrationAction(ctx: Ctx): Promise<void> {
+  const id = ctx.state.q.selected;
+  if (id === null || ctx.state.checking !== null) return;
+  ctx.state.checking = id;
+  showError(ctx, "registration", "");
+  renderDetail(ctx);
+  const r = await loadJson(ctx.win, `/api/tasks/${encodeURIComponent(id)}/registration`, { method: "POST", headers: { "X-Base-AI": "1" } });
+  ctx.state.checking = null;
+  if (r.ok) ctx.state.registration[id] = r.data as RegistrationView;
+  if (ctx.state.q.selected === id) showError(ctx, "registration", r.ok ? "" : (r.error ?? r.message));
+  renderDetail(ctx);
 }
 
 /** Loads the selected task's detail; on failure the previous detail stays and the error is shown. */
@@ -185,6 +232,8 @@ export async function loadDetail(ctx: Ctx): Promise<void> {
   if (r.ok) {
     ctx.state.detail = r.data as TaskDetailView;
     showError(ctx, "detail", "");
+    await loadRegistration(ctx, id);
+    if (ctx.state.q.selected !== id) return;
   } else {
     showError(ctx, "detail", r.message);
   }
@@ -300,6 +349,8 @@ export async function onAction(ctx: Ctx, el: ElLike, modes: ElLike[]): Promise<v
   } else if (action === "toggle-validated") {
     q.expanded = !q.expanded;
     renderQueue(ctx);
+  } else if (action === "registration") {
+    await checkRegistrationAction(ctx);
   } else if (action === "refresh") {
     await serialized(ctx, () => refresh(ctx));
   } else if (action === "copy") {
@@ -353,6 +404,8 @@ export async function boot(win: WinLike): Promise<Ctx> {
       copied: {},
       errors: {},
       live: "offline",
+      registration: {},
+      checking: null,
     },
     cards: [],
     busy: false,

@@ -49,13 +49,16 @@ const GITIGNORE = [
 
 /**
  * A new project starts with the usage hook off (H2): its hook command needs base-ai installed in node_modules,
- * which a fresh project does not have yet. Comments in the copied config are kept.
+ * which a fresh project does not have yet. BASE-101-D4 H13: it also starts without `usage.pricing`, because
+ * base-ai's own prices are a maintainer choice, not a default for other projects. Comments in the copied config
+ * are kept.
  */
-function disableUsageHook(dir: string): void {
+export function disableUsageHook(dir: string): void {
   const cfgPath = join(dir, ".ai", "config.yaml");
   if (!existsSync(cfgPath)) return;
   const doc = parseDocument(readFileSync(cfgPath, "utf8"));
   doc.setIn(["usage", "hook"], "none");
+  doc.deleteIn(["usage", "pricing"]);
   writeFileSync(cfgPath, doc.toString());
 }
 

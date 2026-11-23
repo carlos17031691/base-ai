@@ -10,6 +10,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEFAULT_PORT, clientErrorReply, parsePort, startDashboard, type DashboardData, type DashboardOptions } from "../dashboard.js";
 import type { Timers, WatchFn } from "../dashboard-watch.js";
+import { haltText, type RunResult, type Runner } from "../pipeline-registration.js";
 
 const CLI = join(dirname(fileURLToPath(import.meta.url)), "..", "index.js");
 const SECURITY = {
@@ -60,7 +61,7 @@ function rawNoHost(port: number): Promise<string> {
 
 const fakeProc = () => Object.assign(new EventEmitter(), {}) as EventEmitter & { on: EventEmitter["on"]; off: EventEmitter["off"] };
 
-type Extra = Pick<DashboardOptions, "watch" | "maxClients" | "heartbeatMs" | "timers">;
+type Extra = Pick<DashboardOptions, "watch" | "maxClients" | "heartbeatMs" | "timers" | "registration" | "registrationDeadlineMs" | "now">;
 
 /** Real timeouts (for the debounce), but a hand-driven heartbeat interval whose clearing is recorded. */
 function fakeIntervals() {
@@ -626,5 +627,288 @@ test("D3 spawned CLI: with an /events stream open, SIGTERM still exits 0", async
   } finally {
     c.child.kill("SIGKILL");
     rmSync(r, { recursive: true, force: true });
+  }
+});
+
+// ---- BASE-101-D4: POST /api/tasks/<id>/registration ----
+// A task whose review marks one key To register (K16 passes); TK-1 from root() stays broken (K16 not computed).
+const C4 = "2026-01-01T00:03:00Z";
+function writeKeyedTask(r: string, id = "TK-2") {
+  const dir = join(r, ".ai", "tasks", id);
+  mkdirSync(dir, { recursive: true });
+  const transitions = [
+    { from: null, to: "pending", agent: "planner", timestamp: "2026-01-01T00:00:00Z", note: "init" },
+    { from: "pending", to: "pending", agent: "human", timestamp: "2026-01-01T00:01:00Z", note: "approved" },
+    { from: "pending", to: "in_progress", agent: "implementer", timestamp: "2026-01-01T00:02:00Z", note: "claim" },
+    { from: "in_progress", to: "completed", agent: "implementer", timestamp: C4, note: "done" },
+    { from: "completed", to: "completed", agent: "reviewer", timestamp: "2026-01-01T00:04:00Z", note: `review round 1: approved; reviewed implementer completion ${C4}` },
+    { from: "completed", to: "completed", agent: "qa", timestamp: "2026-01-01T00:05:00Z", note: `qa round 1: pass; verified implementer completion ${C4}` },
+  ];
+  writeFileSync(join(dir, "status.json"), JSON.stringify({ ticket_id: id, state: "completed", plan_locked: true, assignee: null, blocker: null, transitions, checklist: { tests_pass: true, lint_pass: false, types_pass: true, review_verdict: "approved", qa_verdict: "pass" } }));
+  writeFileSync(join(dir, "plan.md"), "# Plan\n## Steps\n1. **human** — ok\n");
+  writeFileSync(join(dir, "review-report.md"), `Round: 1\n${C4}\n## Verdict: approved\n| L1 | x | To register |\n| L2 | y | To register |\n`);
+  writeFileSync(join(dir, "qa-report.md"), `Round: 1\nImplementer completion verified: ${C4}\n## Verdict: pass\n`);
+}
+
+/** A fake gh/git: the first key is on issue #104 (open), the second is missing. Records every call; never a process. */
+function fakeGh(o: { gh?: RunResult; git?: RunResult; hold?: Promise<void>; throws?: boolean } = {}) {
+  const calls: string[][] = [];
+  const signals: AbortSignal[] = [];
+  const factory = (signal: AbortSignal): Runner => {
+    signals.push(signal);
+    return async (cmd, args) => {
+      calls.push([cmd, ...args]);
+      if (o.throws) throw new Error("boom /secret/path");
+      if (o.hold) await o.hold;
+      if (signal.aborted) return { kind: "error", reason: "timeout" };
+      if (cmd === "git") return o.git ?? { kind: "ok", stdout: "https://x-access-token:SECRET-TOKEN@github.com/acme/repo.git\n" };
+      if (o.gh) return o.gh;
+      if (args[1] === "view") {
+        return { kind: "ok", stdout: JSON.stringify({ number: 104, state: "OPEN", title: "SECRET-TITLE", body: "[reg TK-2 review r1 i1]", comments: [] }) };
+      }
+      const key = /^"(.*)" in:body,comments$/.exec(args[args.indexOf("--search") + 1])?.[1] ?? "";
+      return { kind: "ok", stdout: JSON.stringify(key.endsWith("i1") ? [{ number: 104, state: "OPEN", title: "t" }] : []) };
+    };
+  };
+  return { factory, calls, signals };
+}
+
+const POST_OK = { method: "POST", headers: { "X-Base-AI": "1" } };
+const regPath = (id = "TK-2") => `/api/tasks/${id}/registration`;
+
+async function withKeyed(fn: Parameters<typeof withServer>[0], extra: Extra) {
+  await withServer(async (port, ctx) => {
+    writeKeyedTask(ctx.root);
+    await fn(port, ctx);
+  }, undefined, extra);
+}
+
+test("D4 check on demand: GET before any check is checkedAt null; POST with X-Base-AI: 1 returns each key as registered #N (open), missing; GET then serves the cached result", async () => {
+  const g = fakeGh();
+  await withKeyed(
+    async (port) => {
+      const before = await get(port, regPath());
+      assert.deepEqual([before.status, JSON.parse(before.body)], [200, { schema: 1, checkedAt: null }]);
+      const keys = JSON.parse((await get(port, "/api/tasks/TK-2")).body).keys.map((k: { key: string }) => k.key);
+      assert.deepEqual(keys, ["reg TK-2 review r1 i1", "reg TK-2 review r1 i2"]);
+
+      const r = await get(port, regPath(), POST_OK);
+      assert.equal(r.status, 200, r.body);
+      assert.equal(r.headers["content-type"], "application/json; charset=utf-8");
+      for (const [h, v] of Object.entries(SECURITY)) assert.equal(r.headers[h], v, h);
+      assert.ok(!Object.keys(r.headers).some((h) => h.startsWith("access-control-")), "no CORS header");
+      const body = JSON.parse(r.body);
+      assert.deepEqual(body, {
+        schema: 1,
+        ticket: "TK-2",
+        outcome: "missing",
+        repo: "acme/repo",
+        calls: body.calls,
+        checkedAt: "2026-11-23T16:05:09.000Z",
+        keys: [
+          { key: "reg TK-2 review r1 i1", status: "registered", issue: 104, state: "open" },
+          { key: "reg TK-2 review r1 i2", status: "missing" },
+        ],
+      });
+      assert.equal(body.calls, g.calls.filter((c) => c[0] === "gh").length);
+      // Never a file, line, path, title, stderr or credential.
+      for (const bad of ["review-report.md", "line", "taskDir", "SECRET", ".ai/tasks"]) assert.ok(!r.body.includes(bad), bad);
+
+      const after = await get(port, regPath());
+      assert.deepEqual(JSON.parse(after.body), body, "GET serves the cached result");
+      const head = await get(port, regPath(), { method: "HEAD" });
+      assert.deepEqual([head.status, head.body], [200, ""]);
+    },
+    { registration: g.factory, now: () => new Date("2026-11-23T16:05:09Z") },
+  );
+});
+
+test("D4 cross-site trigger refused: no X-Base-AI, a wrong value, a foreign Origin or a cross-site Sec-Fetch-Site give 403; a body gives 400; the runner is never called", async () => {
+  const g = fakeGh();
+  await withKeyed(
+    async (port) => {
+      const cases: [Record<string, string>, number, string][] = [
+        [{}, 403, "missing X-Base-AI header"],
+        [{ "X-Base-AI": "true" }, 403, "missing X-Base-AI header"],
+        [{ "X-Base-AI": "1", Origin: "https://evil.example" }, 403, "cross-site request refused"],
+        [{ "X-Base-AI": "1", Origin: `http://127.0.0.1:${port + 1}` }, 403, "cross-site request refused"],
+        [{ "X-Base-AI": "1", Origin: "null" }, 403, "cross-site request refused"],
+        [{ "X-Base-AI": "1", "Sec-Fetch-Site": "cross-site" }, 403, "cross-site request refused"],
+        [{ "X-Base-AI": "1", "Sec-Fetch-Site": "same-site" }, 403, "cross-site request refused"],
+        [{ "X-Base-AI": "1", "Content-Length": "2" }, 400, "no body expected"],
+        [{ "X-Base-AI": "1", "Transfer-Encoding": "chunked" }, 400, "no body expected"],
+      ];
+      for (const [headers, status, error] of cases) {
+        const r = await get(port, regPath(), { method: "POST", headers });
+        assert.deepEqual([r.status, JSON.parse(r.body)], [status, { error }], JSON.stringify(headers));
+        assert.ok(!Object.keys(r.headers).some((h) => h.startsWith("access-control-")));
+      }
+      assert.equal(g.signals.length, 0, "the runner factory was never called");
+      // The same-origin forms pass: this server's Origin (both host names) and Sec-Fetch-Site: same-origin.
+      for (const headers of [
+        { "X-Base-AI": "1", Origin: `http://127.0.0.1:${port}` } as Record<string, string>,
+        { "X-Base-AI": "1", Origin: `http://localhost:${port}`, "Sec-Fetch-Site": "same-origin" },
+      ]) {
+        assert.equal((await get(port, regPath(), { method: "POST", headers })).status, 200);
+      }
+    },
+    { registration: g.factory },
+  );
+});
+
+test("D4 order and methods: Host 403 first; 405 with Allow GET, HEAD, POST on the registration path and GET, HEAD elsewhere; bad id 400; K16 not computed 422; no factory 404", async () => {
+  const g = fakeGh();
+  await withKeyed(
+    async (port) => {
+      assert.equal((await get(port, regPath(), { ...POST_OK, host: "evil.example" })).status, 403);
+      for (const method of ["PUT", "DELETE", "OPTIONS", "PATCH"]) {
+        const r = await get(port, regPath(), { method });
+        assert.deepEqual([r.status, r.headers.allow], [405, "GET, HEAD, POST"], method);
+      }
+      for (const path of ["/api/tasks", "/api/tasks/TK-2", "/events", "/api/tasks/TK-2/registration/x"]) {
+        const r = await get(port, path, POST_OK);
+        assert.deepEqual([r.status, r.headers.allow], [405, "GET, HEAD"], path);
+      }
+      for (const id of ["NOPE-9", "..%2F..", "%E0%A4%A", "a%20b"]) {
+        assert.equal((await get(port, `/api/tasks/${id}/registration`, POST_OK)).status, 400, id);
+      }
+      const k = await get(port, regPath("TK-1"), POST_OK);
+      assert.deepEqual([k.status, JSON.parse(k.body)], [422, { error: "keys not computed" }]);
+      assert.equal(g.signals.length, 0, "no run for a refused request");
+    },
+    { registration: g.factory },
+  );
+  await withServer(async (port, { root: r }) => {
+    writeKeyedTask(r);
+    assert.equal((await get(port, regPath(), POST_OK)).status, 405, "without a factory POST is like any other path");
+    assert.equal((await get(port, regPath())).status, 404, "without a factory the route does not exist");
+  });
+});
+
+test("D4 gh missing or unauthenticated: the halt text is gh: command not found or gh: non-zero exit; a git failure is git:; no key counts as registered", async () => {
+  for (const [o, template, text] of [
+    [{ gh: { kind: "error", reason: "missing" } }, "T6", `gh: ${haltText("missing")}`],
+    [{ gh: { kind: "error", reason: "exit" } }, "T6", `gh: ${haltText("exit")}`],
+    [{ git: { kind: "error", reason: "exit" } }, "T5", `git: ${haltText("exit")}`],
+  ] as const) {
+    const g = fakeGh(o);
+    await withKeyed(
+      async (port) => {
+        const r = await get(port, regPath(), POST_OK);
+        const body = JSON.parse(r.body);
+        assert.equal(r.status, 200);
+        assert.equal(body.outcome, "halt");
+        assert.deepEqual([body.halt.template, body.halt.text], [template, text]);
+        assert.ok(!body.keys.some((k: { status: string }) => k.status === "registered"), "nothing registered after a halt");
+      },
+      { registration: g.factory },
+    );
+  }
+  assert.equal(haltText("missing"), "command not found");
+});
+
+test("D4 one run at a time: a second POST while a check runs gets 409 and starts no second run", async () => {
+  let release!: () => void;
+  const hold = new Promise<void>((r) => (release = r));
+  const g = fakeGh({ hold });
+  await withKeyed(
+    async (port) => {
+      const first = get(port, regPath(), POST_OK);
+      await until(() => g.signals.length === 1);
+      const second = await get(port, regPath(), POST_OK);
+      assert.deepEqual([second.status, JSON.parse(second.body)], [409, { error: "a registration check is already running" }]);
+      assert.equal(g.signals.length, 1, "no second run");
+      release();
+      assert.equal((await first).status, 200);
+      assert.equal((await get(port, regPath(), POST_OK)).status, 200, "a new check runs after the first ends");
+      assert.equal(g.signals.length, 2);
+    },
+    { registration: g.factory },
+  );
+});
+
+test("D4 deadline: a run past registrationDeadlineMs is aborted and reports a timeout halt; the slot frees", async () => {
+  let release!: () => void;
+  const hold = new Promise<void>((r) => (release = r));
+  const g = fakeGh({ hold });
+  await withKeyed(
+    async (port) => {
+      const pending = get(port, regPath(), POST_OK);
+      await until(() => g.signals[0]?.aborted === true);
+      release();
+      const body = JSON.parse((await pending).body);
+      assert.equal(body.outcome, "halt");
+      assert.equal(body.halt.reason, "timeout");
+      assert.equal((await get(port, regPath(), POST_OK)).status, 200);
+    },
+    { registration: g.factory, registrationDeadlineMs: 50 },
+  );
+});
+
+test("D4 an unexpected throw gives 500 with the route label on stderr, caches nothing and frees the slot", async () => {
+  const g = fakeGh({ throws: true });
+  await withKeyed(
+    async (port, { errs }) => {
+      const r = await get(port, regPath(), POST_OK);
+      assert.deepEqual([r.status, JSON.parse(r.body)], [500, { error: "internal error" }]);
+      assert.ok(errs.includes("base-ai dashboard: internal error on /api/tasks/:id/registration"));
+      assert.ok(!errs.join("\n").includes("secret"), "no message or path");
+      assert.deepEqual(JSON.parse((await get(port, regPath())).body), { schema: 1, checkedAt: null });
+      assert.equal((await get(port, regPath(), POST_OK)).status, 500, "not 409: the slot was freed");
+    },
+    { registration: g.factory },
+  );
+});
+
+test("D4 shutdown during a run: SIGTERM aborts the run's signal and still resolves stopped", async () => {
+  const hold = new Promise<void>(() => {});
+  const g = fakeGh({ hold });
+  await withKeyed(
+    async (port, { proc, stopped }) => {
+      void get(port, regPath(), POST_OK).catch(() => {});
+      await until(() => g.signals.length === 1);
+      proc.emit("SIGTERM");
+      await stopped;
+      assert.equal(g.signals[0].aborted, true, "the running call's signal is aborted");
+    },
+    { registration: g.factory },
+  );
+});
+
+test("D4 spawned CLI: SIGTERM during a check kills the stub gh and exits 0 (stub gh on PATH; never the real gh)", async () => {
+  const r = root();
+  writeKeyedTask(r);
+  const bin = realpathSync(mkdtempSync(join(tmpdir(), "dash-bin-")));
+  const marker = join(bin, "started");
+  // The stub records that it ran, then sleeps as itself (exec), so the dashboard's SIGKILL reaches the sleeper.
+  writeFileSync(join(bin, "gh"), `#!/bin/sh\necho started > "${marker}"\nexec sleep 30\n`, { mode: 0o755 });
+  const git = spawn("git", ["init", "-q", r]);
+  await new Promise((res) => git.on("exit", res));
+  const remote = spawn("git", ["-C", r, "remote", "add", "origin", "https://github.com/acme/repo.git"]);
+  await new Promise((res) => remote.on("exit", res));
+  const child = spawn(process.execPath, [CLI, "dashboard", "--root", r, "--port", "0"], {
+    stdio: ["ignore", "pipe", "pipe"],
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH ?? ""}` },
+  });
+  let out = "";
+  let err = "";
+  child.stdout.setEncoding("utf8").on("data", (c) => (out += c));
+  child.stderr.setEncoding("utf8").on("data", (c) => (err += c));
+  const exit = new Promise<number | null>((res) => child.on("exit", (code, sig) => res(sig === null ? code : -1)));
+  try {
+    await until(() => /127\.0\.0\.1:(\d+)/.test(out), 5000);
+    const port = Number(/127\.0\.0\.1:(\d+)/.exec(out)?.[1]);
+    void get(port, regPath(), POST_OK).catch(() => {});
+    const { existsSync } = await import("node:fs");
+    await until(() => existsSync(marker), 5000);
+    const t0 = Date.now();
+    child.kill("SIGTERM");
+    assert.equal(await exit, 0, err);
+    assert.ok(Date.now() - t0 < 5000, "exited promptly");
+    assert.match(err, /base-ai dashboard: stopped/);
+  } finally {
+    child.kill("SIGKILL");
+    rmSync(r, { recursive: true, force: true });
+    rmSync(bin, { recursive: true, force: true });
   }
 });

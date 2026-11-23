@@ -1,11 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse } from "yaml";
-import { init, templateRoot } from "../init.js";
+import { disableUsageHook, init, templateRoot } from "../init.js";
 import { memoryList } from "../memory.js";
 import { aiSync } from "../sync.js";
 
@@ -72,6 +72,22 @@ test("init turns the usage hook off in the new project and writes no settings ho
   init(dir);
   const cfg = parse(readFileSync(join(dir, ".ai/config.yaml"), "utf8"));
   assert.equal(cfg.usage.hook, "none");
+  assert.equal(cfg.usage.pricing, undefined, "D4 H13: no maintainer prices in a new project");
   assert.equal(cfg.version, 1, "the rest of the config is kept");
   assert.ok(!existsSync(join(dir, ".claude/settings.json")));
+});
+
+test("D4 H13: the copied config loses usage.pricing in the same edit that turns the hook off; comments and other keys stay", () => {
+  const dir = mkdtempSync(join(tmpdir(), "base-ai-init-cfg-"));
+  mkdirSync(join(dir, ".ai"));
+  writeFileSync(
+    join(dir, ".ai/config.yaml"),
+    "version: 1\n# usage comment kept\nusage:\n  hook: claude\n  pricing:\n    claude-opus-5-5: { input: 4, cache_write: 8, cache_read: 0.2, output: 20 }\n  keep: yes\n",
+  );
+  disableUsageHook(dir);
+  const text = readFileSync(join(dir, ".ai/config.yaml"), "utf8");
+  const cfg = parse(text);
+  assert.deepEqual(cfg.usage, { hook: "none", keep: "yes" });
+  assert.ok(text.includes("# usage comment kept"));
+  disableUsageHook(join(dir, "missing"));
 });

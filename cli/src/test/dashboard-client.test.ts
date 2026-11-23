@@ -70,7 +70,7 @@ class FakeDoc {
   created: string[] = [];
   constructor() {
     this.body = new FakeEl(this, "BODY");
-    for (const id of ["header-stats", "queue-controls", "queue-error", "queue-list", "detail-error", "rounds", "tokens", "timeline", "checks", "files"]) {
+    for (const id of ["header-stats", "queue-controls", "queue-error", "queue-list", "detail-error", "rounds", "tokens", "timeline", "checks", "files", "registration", "registration-error"]) {
       const el = new FakeEl(this, "DIV");
       el.setAttribute("id", id);
       this.body.append(el);
@@ -135,29 +135,42 @@ const DETAIL = (id: string) => ({
   usage: { report: { groups: [], total: { records: 0, messages: 0, input_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 0, cost_usd: null, unpriced_records: 0 } }, records: [] },
 });
 
+/** A non-200 reply with a JSON body (D4: the server's own error string). */
+class Reply {
+  constructor(
+    readonly status: number,
+    readonly body: unknown,
+  ) {}
+}
+const NOT_CHECKED = { schema: 1, checkedAt: null };
 function fakeWin(routes: Record<string, unknown | number | Error> = {}, clipboard?: { writeText(t: string): Promise<void> }) {
   const doc = new FakeDoc();
   const calls: string[] = [];
+  const inits: { path: string; method?: string; headers?: Record<string, string> }[] = [];
   const res = (status: number, body: unknown): ResLike => ({ ok: status === 200, status, json: async () => body });
   const win: WinLike & { document: FakeDoc } = {
     document: doc,
     location: { host: "127.0.0.1:4747" },
     navigator: clipboard === undefined ? {} : { clipboard },
-    fetch: async (path: string) => {
+    fetch: async (path: string, init?: { method?: string; headers?: Record<string, string> }) => {
       calls.push(path);
-      const r = Object.hasOwn(routes, path) ? routes[path] : path === "/api/meta" ? { schema: 1, editorUrl: "vscode://file/{path}" } : path === "/api/tasks" ? TASKS : path.startsWith("/api/tasks/") ? DETAIL(decodeURIComponent(path.slice(11))) : 404;
+      inits.push({ path, ...init });
+      // A POST route is keyed "POST <path>"; GET routes by their path alone.
+      const key = init?.method === "POST" ? `POST ${path}` : path;
+      const r = Object.hasOwn(routes, key) ? routes[key] : init?.method === "POST" ? 405 : path.endsWith("/registration") ? NOT_CHECKED : path === "/api/meta" ? { schema: 1, editorUrl: "vscode://file/{path}" } : path === "/api/tasks" ? TASKS : path.startsWith("/api/tasks/") ? DETAIL(decodeURIComponent(path.slice(11))) : 404;
       if (r instanceof Error) throw r;
+      if (r instanceof Reply) return res(r.status, r.body);
       return typeof r === "number" ? res(r, {}) : res(200, r);
     },
   };
-  return { win, doc, calls };
+  return { win, doc, calls, inits };
 }
 const settle = () => new Promise((r) => setTimeout(r, 0));
 
 test("boot: loads /api/meta, /api/tasks and the first active task's detail with relative paths, and fills every panel", async () => {
   const { win, doc, calls } = fakeWin();
   const ctx = await boot(win);
-  assert.deepEqual(calls, ["/api/meta", "/api/tasks", "/api/tasks/TK-1"]);
+  assert.deepEqual(calls, ["/api/meta", "/api/tasks", "/api/tasks/TK-1", "/api/tasks/TK-1/registration"]);
   assert.equal(ctx.svgNs, SVG_NS, "the SVG namespace comes from the page's own <svg>");
   assert.equal(ctx.state.q.selected, "TK-1");
   assert.deepEqual(ctx.cards.map((c) => c.getAttribute("data-id")), ["TK-1", "TK-2"]);
@@ -208,7 +221,7 @@ test("clicks: select loads the detail and keeps focus; ACTIVE/ALL and the valida
   doc.fire("click", { target: (ctx.cards[1] as unknown as FakeEl).children[0] });
   await settle();
   assert.equal(ctx.state.q.selected, "TK-2");
-  assert.equal(calls.at(-1), "/api/tasks/TK-2");
+  assert.deepEqual(calls.slice(-2), ["/api/tasks/TK-2", "/api/tasks/TK-2/registration"]);
   assert.equal(doc.activeElement && (doc.activeElement as FakeEl).getAttribute("data-id"), "TK-2", "focus kept on the same card after re-render");
 
   const [active, all2] = doc.byAction("mode");
@@ -238,7 +251,7 @@ test("clicks: select loads the detail and keeps focus; ACTIVE/ALL and the valida
   const before = calls.length;
   doc.fire("click", { target: doc.byAction("refresh")[0] });
   await settle();
-  assert.deepEqual(calls.slice(before), ["/api/tasks", "/api/tasks/TK-2"], "refresh keeps the selection");
+  assert.deepEqual(calls.slice(before), ["/api/tasks", "/api/tasks/TK-2", "/api/tasks/TK-2/registration"], "refresh keeps the selection");
   doc.fire("click", { target: doc.body });
   assert.equal(actionTarget(null), null);
 });
@@ -274,7 +287,7 @@ test("the first load selects the queue's first card (newest updated_at), not the
   const { win, calls } = fakeWin({ "/api/tasks": { schema: 1, tasks: [TASKS.tasks[0], later, TASKS.tasks[2]], skipped: 0 } });
   const ctx = await boot(win);
   assert.equal(ctx.state.q.selected, "TK-2");
-  assert.equal(calls.at(-1), "/api/tasks/TK-2");
+  assert.deepEqual(calls.slice(-2), ["/api/tasks/TK-2", "/api/tasks/TK-2/registration"]);
   assert.equal(ctx.cards[0].getAttribute("aria-current"), "true");
 });
 
@@ -320,7 +333,7 @@ test("APP_JS is every exported view and client function, booted for real in node
   runInNewContext(APP_JS, { window: win, encodeURIComponent, Date, Math, Object, Array, Map, Set, JSON, Promise, Number, String, Error, RegExp, Boolean });
   for (let i = 0; i < 20 && calls.length < 3; i++) await settle();
   await settle();
-  assert.deepEqual(calls, ["/api/meta", "/api/tasks", "/api/tasks/TK-1"]);
+  assert.deepEqual(calls, ["/api/meta", "/api/tasks", "/api/tasks/TK-1", "/api/tasks/TK-1/registration"]);
   assert.equal(doc.getElementById("queue-list")?.getAttribute("aria-label"), "Tasks");
   assert.ok((doc.getElementById("timeline") as FakeEl).text.includes(evil));
 });
@@ -340,7 +353,13 @@ test("no HTML sink and no network beyond same-origin fetch in the UI sources and
   // Every load names a fixed relative route; the only variable part is an encoded task id.
   const clientSrc = readFileSync(join(SRC, "dashboard-client.ts"), "utf8");
   const routes = Array.from(clientSrc.matchAll(/await loadJson\((?:ctx\.)?win, (.+)\);$/gm), (m) => m[1]);
-  assert.deepEqual(routes, ["`/api/tasks/${encodeURIComponent(id)}`", '"/api/tasks"', '"/api/meta"']);
+  assert.deepEqual(routes, [
+    "`/api/tasks/${encodeURIComponent(id)}/registration`",
+    '`/api/tasks/${encodeURIComponent(id)}/registration`, { method: "POST", headers: { "X-Base-AI": "1" } }',
+    "`/api/tasks/${encodeURIComponent(id)}`",
+    '"/api/tasks"',
+    '"/api/meta"',
+  ]);
   assert.equal(clientSrc.match(/\.fetch\(/g)?.length, 1, "fetch is called in loadJson only");
 });
 
@@ -381,7 +400,7 @@ test("D3 subscribe: EventSource('/events') after the first load; RECONNECTING un
   es.emit("open");
   await drain();
   assert.match(header(), /● LIVE 127\.0\.0\.1:4747/);
-  assert.deepEqual(calls, ["/api/tasks", "/api/tasks/TK-1"], "open runs a full refresh (H6)");
+  assert.deepEqual(calls, ["/api/tasks", "/api/tasks/TK-1", "/api/tasks/TK-1/registration"], "open runs a full refresh (H6)");
 });
 
 test("D3 reload rules: task for the selected id reloads list and detail; for another id only the list; list reloads both; bad data is ignored", async () => {
@@ -391,7 +410,7 @@ test("D3 reload rules: task for the selected id reloads list and detail; for ano
   calls.length = 0;
   es.emit("task", JSON.stringify({ id: "TK-1" }));
   await drain();
-  assert.deepEqual(calls, ["/api/tasks", "/api/tasks/TK-1"]);
+  assert.deepEqual(calls, ["/api/tasks", "/api/tasks/TK-1", "/api/tasks/TK-1/registration"]);
   calls.length = 0;
   es.emit("task", JSON.stringify({ id: "TK-2" }));
   await drain();
@@ -400,7 +419,7 @@ test("D3 reload rules: task for the selected id reloads list and detail; for ano
   calls.length = 0;
   es.emit("list", "{}");
   await drain();
-  assert.deepEqual(calls, ["/api/tasks", "/api/tasks/TK-1"]);
+  assert.deepEqual(calls, ["/api/tasks", "/api/tasks/TK-1", "/api/tasks/TK-1/registration"]);
   calls.length = 0;
   for (const bad of ["not json", "null", '{"id":7}', "[]", undefined]) es.emit("task", bad);
   await drain();
@@ -420,7 +439,7 @@ test("D3 reconnect: error while CONNECTING shows RECONNECTING; the next open rel
   es.emit("open");
   await drain();
   assert.match(header(), / LIVE /);
-  assert.deepEqual(calls, ["/api/tasks", "/api/tasks/TK-2"]);
+  assert.deepEqual(calls, ["/api/tasks", "/api/tasks/TK-2", "/api/tasks/TK-2/registration"]);
   assert.equal(ctx.state.q.selected, "TK-2");
   es.readyState = 2;
   es.emit("error");
@@ -451,7 +470,7 @@ test("D3 serialised reloads: events during a reload set one pending flag, so exa
   assert.equal(ctx.pending, true);
   release();
   await drain();
-  assert.deepEqual(calls, ["/api/tasks", "/api/tasks/TK-1", "/api/tasks", "/api/tasks/TK-1"], "one queued refresh, never overlapping");
+  assert.deepEqual(calls, ["/api/tasks", "/api/tasks/TK-1", "/api/tasks/TK-1/registration", "/api/tasks", "/api/tasks/TK-1", "/api/tasks/TK-1/registration"], "one queued refresh, never overlapping");
   assert.equal(ctx.busy, false);
   assert.equal(ctx.pending, false);
 });
@@ -461,11 +480,11 @@ test("D3 REFRESH stays and goes through the same serialiser; without EventSource
   const ctx = await boot(win);
   assert.equal(ctx.state.live, "offline");
   assert.match((doc.getElementById("header-stats") as FakeEl).text, /● OFFLINE 127\.0\.0\.1:4747/);
-  assert.deepEqual(calls, ["/api/meta", "/api/tasks", "/api/tasks/TK-1"]);
+  assert.deepEqual(calls, ["/api/meta", "/api/tasks", "/api/tasks/TK-1", "/api/tasks/TK-1/registration"]);
   calls.length = 0;
   const refreshBtn = { getAttribute: (n: string) => (n === "data-action" ? "refresh" : null) } as unknown as client.ElLike;
   await client.onAction(ctx, refreshBtn, []);
-  assert.deepEqual(calls, ["/api/tasks", "/api/tasks/TK-1"]);
+  assert.deepEqual(calls, ["/api/tasks", "/api/tasks/TK-1", "/api/tasks/TK-1/registration"]);
   ctx.busy = true;
   await client.onAction(ctx, refreshBtn, []);
   assert.equal(ctx.pending, true, "a refresh asked for during a reload is queued");
@@ -525,4 +544,128 @@ test("review r1 L3: boot's first load and a card select go through the serialise
   await running;
   assert.equal(ctx.state.detail?.id, "TK-2");
   assert.equal(ctx.pending, false);
+});
+
+// ---- BASE-101-D4: the REGISTRATION panel ----
+const KEYS = [
+  { key: "reg TK-1 review r1 i1", file: "review-report.md", line: 10 },
+  { key: "reg TK-1 review r1 i2", file: "review-report.md", line: 11 },
+];
+const RESULT = {
+  schema: 1,
+  ticket: "TK-1",
+  outcome: "missing",
+  repo: "acme/repo",
+  calls: 3,
+  checkedAt: "2026-11-23T16:05:09.000Z",
+  keys: [
+    { key: "reg TK-1 review r1 i1", status: "registered", issue: 104, state: "open" },
+    { key: "reg TK-1 review r1 i2", status: "missing" },
+  ],
+};
+const keyed = (id: string) => ({ ...DETAIL(id), keys: id === "TK-1" ? KEYS : [] });
+
+test("D4 check on demand: the button POSTs the relative path with X-Base-AI: 1, shows CHECKING… while running, then each key's status as text", async () => {
+  let release: () => void = () => {};
+  const gate = new Promise<void>((r) => (release = r));
+  const { win, doc, inits } = fakeWin({ "/api/tasks/TK-1": keyed("TK-1"), "POST /api/tasks/TK-1/registration": RESULT });
+  const ctx = await boot(win);
+  const panel = doc.getElementById("registration") as FakeEl;
+  assert.ok(panel.text.includes("reg TK-1 review r1 i1 · review-report.md:10 · not checked"));
+  assert.ok(panel.text.includes("not checked yet"));
+  const fetch = win.fetch;
+  win.fetch = async (path, init) => {
+    if (init?.method === "POST") await gate;
+    return fetch(path, init);
+  };
+  doc.fire("click", { target: doc.byAction("registration")[0] });
+  await settle();
+  const busy = doc.byAction("registration")[0];
+  assert.deepEqual([busy.text, busy.getAttribute("disabled")], ["CHECKING…", ""]);
+  assert.equal(ctx.state.checking, "TK-1");
+  // A second click while running sends nothing.
+  doc.fire("click", { target: busy });
+  release();
+  await settle();
+  await settle();
+  const posts = inits.filter((i) => i.method === "POST");
+  assert.equal(posts.length, 1, "one POST");
+  assert.deepEqual(posts[0], { path: "/api/tasks/TK-1/registration", method: "POST", headers: { Accept: "application/json", "X-Base-AI": "1" } });
+  const text = (doc.getElementById("registration") as FakeEl).text;
+  assert.ok(text.includes("reg TK-1 review r1 i1 · review-report.md:10 · registered #104 (open)"));
+  assert.ok(text.includes("reg TK-1 review r1 i2 · review-report.md:11 · missing"));
+  assert.ok(text.includes("MISSING · 3 gh call(s) · checked 16:05:09"));
+  assert.equal(doc.byAction("registration")[0].text, "CHECK REGISTRATION");
+  assert.equal(ctx.state.checking, null);
+});
+
+test("D4 selecting a task GETs its cached registration; a task without keys shows no button", async () => {
+  const { win, doc, calls } = fakeWin({ "/api/tasks/TK-1": keyed("TK-1"), "/api/tasks/TK-1/registration": RESULT });
+  const ctx = await boot(win);
+  assert.ok(calls.includes("/api/tasks/TK-1/registration"));
+  assert.ok((doc.getElementById("registration") as FakeEl).text.includes("registered #104 (open)"), "the cached result renders");
+  ctx.state.q.selected = "TK-2";
+  await client.loadDetail(ctx);
+  assert.equal((doc.getElementById("registration") as FakeEl).text, "no keys to register");
+  assert.equal(doc.byAction("registration").length, 0);
+});
+
+test("D4 gh missing: the halt text shows as text and no key counts as registered", async () => {
+  const halt = { ...RESULT, outcome: "halt", calls: 0, halt: { template: "T6", reason: "missing", text: "gh: command not found" }, keys: KEYS.map((k) => ({ key: k.key, status: "unchecked" })) };
+  const { win, doc } = fakeWin({ "/api/tasks/TK-1": keyed("TK-1"), "POST /api/tasks/TK-1/registration": halt });
+  await boot(win);
+  doc.fire("click", { target: doc.byAction("registration")[0] });
+  await settle();
+  await settle();
+  const text = (doc.getElementById("registration") as FakeEl).text;
+  assert.ok(text.includes("gh: command not found"));
+  assert.ok(text.includes("reg TK-1 review r1 i1 · review-report.md:10 · unchecked") && !text.includes("registered #"));
+  assert.ok(text.includes("HALT · 0 gh call(s)"));
+});
+
+test("D4 errors: 409, 403 and 422 show the server's error text through showError; a network failure the generic message; the panel keeps its last result", async () => {
+  for (const [reply, shown] of [
+    [new Reply(409, { error: "a registration check is already running" }), "a registration check is already running"],
+    [new Reply(403, { error: "missing X-Base-AI header" }), "missing X-Base-AI header"],
+    [new Reply(422, { error: "keys not computed" }), "keys not computed"],
+    [new Reply(500, "not json"), "cannot load /api/tasks/TK-1/registration (500)"],
+    [new Error("down"), "cannot load /api/tasks/TK-1/registration (network)"],
+  ] as const) {
+    const { win, doc } = fakeWin({ "/api/tasks/TK-1": keyed("TK-1"), "/api/tasks/TK-1/registration": RESULT, "POST /api/tasks/TK-1/registration": reply });
+    const ctx = await boot(win);
+    doc.fire("click", { target: doc.byAction("registration")[0] });
+    await settle();
+    await settle();
+    assert.equal((doc.getElementById("registration-error") as FakeEl).text, shown);
+    assert.equal(ctx.state.errors.registration, shown);
+    assert.ok((doc.getElementById("registration") as FakeEl).text.includes("registered #104 (open)"), "the last result stays");
+    assert.equal(ctx.state.checking, null, "the button is enabled again");
+  }
+});
+
+test("D4 a late result for a deselected task is stored but not rendered over the new task's panel", async () => {
+  let release: () => void = () => {};
+  const gate = new Promise<void>((r) => (release = r));
+  const { win, doc } = fakeWin({ "/api/tasks/TK-1": keyed("TK-1"), "POST /api/tasks/TK-1/registration": RESULT });
+  const ctx = await boot(win);
+  const fetch = win.fetch;
+  win.fetch = async (path, init) => {
+    if (init?.method === "POST") await gate;
+    return fetch(path, init);
+  };
+  const running = client.checkRegistrationAction(ctx);
+  ctx.state.q.selected = "TK-2";
+  await client.loadDetail(ctx);
+  release();
+  await running;
+  assert.deepEqual(ctx.state.registration["TK-1"], RESULT, "stored for TK-1");
+  assert.equal((doc.getElementById("registration") as FakeEl).text, "no keys to register", "TK-2's panel is untouched");
+  assert.equal((doc.getElementById("registration-error") as FakeEl).text, "");
+});
+
+test("D4 loadJson: a non-200 body with an error string is returned as error; without one only the generic message", async () => {
+  const { win } = fakeWin({ "/x": new Reply(409, { error: "busy" }), "/y": new Reply(404, { other: 1 }), "/z": new Reply(400, null) });
+  assert.deepEqual(await loadJson(win, "/x"), { ok: false, message: "cannot load /x (409)", error: "busy" });
+  assert.deepEqual(await loadJson(win, "/y"), { ok: false, message: "cannot load /y (404)" });
+  assert.deepEqual(await loadJson(win, "/z"), { ok: false, message: "cannot load /z (400)" });
 });
