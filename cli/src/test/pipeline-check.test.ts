@@ -73,7 +73,8 @@ test("a consistent task passes every check and computes facts and keys", () => {
   assert.equal(r.checks.length, 19);
   assert.ok(r.checks.every((c) => c.status === "pass"));
   assert.equal(r.schema, 1);
-  assert.equal(r.rule, "supervisor.md@682c6e4");
+  assert.match(r.rule, /^supervisor\.md@[0-9a-f]{7}$/);
+  assert.notEqual(r.rule, "supervisor.md@682c6e4");
   assert.equal(r.facts.latestCompletion, C);
   assert.deepEqual(r.facts.review, { rounds: 1, verdict: "approved", entry: "2026-01-01T00:04:00Z" });
   assert.deepEqual(r.facts.qa, { rounds: 1, verdict: "pass", entry: "2026-01-01T00:05:00Z" });
