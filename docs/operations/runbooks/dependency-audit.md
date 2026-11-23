@@ -14,7 +14,7 @@ The step is named `Dependency audit (High/Critical, production dependencies)`. I
 | Where | Workflow and job | What is scanned | Script | Accepted file |
 |---|---|---|---|---|
 | This repo | `.github/workflows/ci.yml`, job `cli` (a required check) | `cli/package-lock.json` only | `templates/service/.github/scripts/dependency-audit.cjs` | `.github/dependency-audit-accepted.json` |
-| A generated service | `.github/workflows/ci.yml`, job `service` (from `templates/service/`) | every lockfile in the repository, recursively; no lockfile is a pass | `.github/scripts/dependency-audit.cjs` | `.github/dependency-audit-accepted.json` |
+| A generated service | `.github/workflows/ci.yml`, job `service` (from `templates/service/`) | every lockfile in the repository, recursively (`--recursive --allow-no-lockfiles --no-ignore`); a lockfile matching a `.gitignore` rule is scanned too; no lockfile is a pass | `.github/scripts/dependency-audit.cjs` | `.github/dependency-audit-accepted.json` |
 
 The policy:
 
@@ -40,7 +40,7 @@ To fix: upgrade or remove the package. Only when neither is possible, add a revi
 dependency audit: FAIL (1 blocking, 0 error(s))
 ```
 
-Each finding line is: advisory id, package and version, ecosystem, severity, the reason code, and the lockfile it came from. Values taken from the lockfile or the accepted file are printed on one line, cut at 200 characters, with `::` shown as `: :` and `##[` as `## [`, so that a value can never be read as a workflow command; search the lockfile for the original spelling.
+Each finding line is: advisory id, package and version, ecosystem, severity, the reason code, and the lockfile it came from. Values taken from the lockfile or the accepted file are printed on one line, cut at 200 characters, with no two colons left adjacent (each `:` followed by another gets a space after it, so `::` is shown as `: :` and `:::` as `: : :`) and `##[` shown as `## [`, so that a value can never be read as a workflow command; search the lockfile for the original spelling.
 
 | What the log shows | Meaning | What to do |
 |---|---|---|
