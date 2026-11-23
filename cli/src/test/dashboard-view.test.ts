@@ -281,10 +281,19 @@ test("header: counts, ACTIVE = not validated, cost at current prices with the no
   assert.deepEqual(headerStats(tasks), { tasks: 3, active: 2, cost: "$1.27 + no price at current prices" });
   assert.equal(headerStats([entry("A", "pending", { tokens: totals({ records: 1, unpriced_records: 1 }) })]).cost, "no price");
   assert.equal(headerStats([entry("A", "pending")]).cost, "no usage data");
-  const v = headerView(tasks, "127.0.0.1:4747", "13:05:51 UTC");
-  assert.deepEqual(texts(v), ["●", " 127.0.0.1:4747", "updated 13:05:51 UTC", "3 TASKS · 2 ACTIVE · $1.27 + no price at current prices"]);
-  assert.ok(!texts(v).some((x) => /LIVE/.test(x)), "no LIVE claim before D3");
-  assert.ok(texts(headerView([], "h", null)).includes("not loaded"));
+  const v = headerView(tasks, "127.0.0.1:4747", "13:05:51 UTC", "live");
+  assert.deepEqual(texts(v), ["●", " LIVE 127.0.0.1:4747", "updated 13:05:51 UTC", "3 TASKS · 2 ACTIVE · $1.27 + no price at current prices"]);
+  assert.ok(texts(headerView([], "h", null, "offline")).includes("not loaded"));
+});
+
+test("D3 H5: the header shows LIVE, RECONNECTING or OFFLINE as text with a class per state; LIVE only when live", () => {
+  for (const [live, label] of [["live", "LIVE"], ["reconnecting", "RECONNECTING"], ["offline", "OFFLINE"]] as const) {
+    const v = headerView([], "127.0.0.1:4747", null, live);
+    const where = v.children[0];
+    assert.ok(!("text" in where) && where.attrs.class === `where live-${live}`, live);
+    assert.ok(texts(v).includes(` ${label} 127.0.0.1:4747`), live);
+    if (live !== "live") assert.ok(!texts(v).some((x) => /(^|\s)LIVE\b/.test(x)), `${live} never claims LIVE`);
+  }
 });
 
 test("file links: one row per present file with an editor link (vscode://file/<abs>, configurable) and a copy-path button; no file text", () => {
@@ -320,7 +329,7 @@ test("hostile task text: <script>alert(1)</script> in a note, title, check detai
     checksView(d),
     tokensView(d),
     filesView(d, "vscode://file/{path}", {}),
-    headerView([e], evil, evil),
+    headerView([e], evil, evil, "live"),
   ];
   for (const tree of trees) {
     for (const n of all(tree)) {

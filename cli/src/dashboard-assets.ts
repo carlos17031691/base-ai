@@ -100,6 +100,10 @@ export function appFunctions(): ((...args: never[]) => unknown)[] {
     client.loadJson,
     client.loadDetail,
     client.refresh,
+    client.serialized,
+    client.eventId,
+    client.setLive,
+    client.subscribe,
     client.actionTarget,
     client.onAction,
     client.onKey,
@@ -132,7 +136,9 @@ h2{font-size:13px;margin-bottom:10px}
 h2 .note{font-size:11px;letter-spacing:0;margin-left:6px}
 .top{display:flex;align-items:center;gap:16px;padding:12px 20px;border-bottom:1px solid ${c.line}}
 .header-stats{flex:1;display:flex;gap:18px;justify-content:center;flex-wrap:wrap;font-family:ui-monospace,monospace;font-size:13px}
-.header-stats .dot{color:${c.green}}
+.header-stats .live-live .dot,.header-stats .live-live{color:${c.green}}
+.header-stats .live-reconnecting{color:${c.amber}}
+.header-stats .live-offline{color:${c.muted}}
 .header-stats .updated{color:${c.muted}}
 .refresh{background:${c.panel};border:1px solid ${c.cyan};color:${c.cyan};border-radius:6px;padding:6px 12px;letter-spacing:.08em}
 .layout{display:grid;grid-template-columns:300px 1fr 320px;gap:16px;padding:16px 20px}

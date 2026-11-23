@@ -19,6 +19,7 @@ import {
   roundsView,
   timelineView,
   tokensView,
+  type LiveState,
   type QueueState,
   type TaskDetailView,
   type TaskEntryView,
@@ -56,8 +57,14 @@ export interface ResLike {
   status: number;
   json(): Promise<unknown>;
 }
+/** The part of `EventSource` the client uses (BASE-101-D3). readyState 2 is CLOSED. */
+export interface EventSourceLike {
+  readyState: number;
+  addEventListener(type: string, fn: (e: { data?: unknown }) => void): void;
+}
 export interface WinLike {
   document: DocLike;
+  EventSource?: new (url: string) => EventSourceLike;
   location: { host: string };
   fetch(path: string, init?: { headers?: Record<string, string> }): Promise<ResLike>;
   navigator: { clipboard?: { writeText(text: string): Promise<void> } };
@@ -70,6 +77,7 @@ export interface AppState {
   updated: string | null;
   copied: Record<string, string>;
   errors: Record<string, string>;
+  live: LiveState;
 }
 export interface Ctx {
   win: WinLike;
@@ -77,6 +85,9 @@ export interface Ctx {
   svgNs: string;
   state: AppState;
   cards: ElLike[];
+  /** H5: reloads run one at a time; a reload asked for meanwhile sets `pending`, and one full refresh follows. */
+  busy: boolean;
+  pending: boolean;
 }
 
 /**
@@ -112,7 +123,7 @@ export function showError(ctx: Ctx, panel: string, message: string): void {
 }
 
 export function renderHeader(ctx: Ctx): void {
-  place(ctx, "header-stats", headerView(ctx.state.tasks, ctx.win.location.host, ctx.state.updated));
+  place(ctx, "header-stats", headerView(ctx.state.tasks, ctx.win.location.host, ctx.state.updated, ctx.state.live));
 }
 
 /** Re-renders the queue list; focus stays on the card that had it, by id. */
@@ -180,8 +191,12 @@ export async function loadDetail(ctx: Ctx): Promise<void> {
   renderDetail(ctx);
 }
 
-/** Boot and REFRESH: the task list, then the selected task's detail; the selection is kept if it still exists. */
-export async function refresh(ctx: Ctx): Promise<void> {
+/**
+ * Boot, REFRESH and live events: the task list, then the selected task's detail when `withDetail` (or when the
+ * selection had to change); the selection is kept if it still exists.
+ */
+export async function refresh(ctx: Ctx, withDetail = true): Promise<void> {
+  const before = ctx.state.q.selected;
   const r = await loadJson(ctx.win, "/api/tasks");
   if (r.ok) {
     ctx.state.tasks = (r.data as { tasks: TaskEntryView[] }).tasks;
@@ -199,7 +214,63 @@ export async function refresh(ctx: Ctx): Promise<void> {
   }
   renderHeader(ctx);
   renderQueue(ctx);
-  await loadDetail(ctx);
+  if (withDetail || ctx.state.q.selected !== before) await loadDetail(ctx);
+  else renderDetail(ctx);
+}
+
+/** Runs `job` unless a reload is in flight, in which case one full refresh is queued after it (H5). */
+export async function serialized(ctx: Ctx, job: () => Promise<void>): Promise<void> {
+  if (ctx.busy) {
+    ctx.pending = true;
+    return;
+  }
+  ctx.busy = true;
+  try {
+    await job();
+    while (ctx.pending) {
+      ctx.pending = false;
+      await refresh(ctx);
+    }
+  } finally {
+    ctx.busy = false;
+  }
+}
+
+/** The task id of a `task` event's data, or null for anything malformed. */
+export function eventId(data: unknown): string | null {
+  try {
+    const v = JSON.parse(String(data)) as { id?: unknown } | null;
+    return v !== null && typeof v === "object" && typeof v.id === "string" ? v.id : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setLive(ctx: Ctx, live: LiveState): void {
+  ctx.state.live = live;
+  renderHeader(ctx);
+}
+
+/**
+ * Subscribes to GET /events (H5, H6). `task` reloads the list, and the detail only for the selected task; `list`
+ * and every `open` (the first and each reconnect) run a full refresh. The browser reconnects by itself; a 503 or
+ * a stopped server closes the stream (OFFLINE), and REFRESH stays the fallback.
+ */
+export function subscribe(ctx: Ctx): void {
+  const Source = ctx.win.EventSource;
+  if (Source === undefined) return setLive(ctx, "offline");
+  const es = new Source("/events");
+  setLive(ctx, "reconnecting");
+  es.addEventListener("open", () => {
+    setLive(ctx, "live");
+    void serialized(ctx, () => refresh(ctx));
+  });
+  es.addEventListener("error", () => setLive(ctx, es.readyState === 2 ? "offline" : "reconnecting"));
+  es.addEventListener("task", (e) => {
+    const id = eventId(e.data);
+    if (id !== null) void serialized(ctx, () => refresh(ctx, id === ctx.state.q.selected));
+  });
+  es.addEventListener("list", () => void serialized(ctx, () => refresh(ctx)));
 }
 
 /** The element carrying `data-action` at or above `target`, if any. */
@@ -230,7 +301,7 @@ export async function onAction(ctx: Ctx, el: ElLike, modes: ElLike[]): Promise<v
     q.expanded = !q.expanded;
     renderQueue(ctx);
   } else if (action === "refresh") {
-    await refresh(ctx);
+    await serialized(ctx, () => refresh(ctx));
   } else if (action === "copy") {
     const path = el.getAttribute("data-path") ?? "";
     try {
@@ -281,8 +352,11 @@ export async function boot(win: WinLike): Promise<Ctx> {
       updated: null,
       copied: {},
       errors: {},
+      live: "offline",
     },
     cards: [],
+    busy: false,
+    pending: false,
   };
   const modes: ElLike[] = [];
   place(ctx, "queue-controls", queueControlsView(ctx.state.q), true, (el, attrs) => {
@@ -303,5 +377,6 @@ export async function boot(win: WinLike): Promise<Ctx> {
   else showError(ctx, "detail", meta.message);
   renderAll(ctx);
   await refresh(ctx);
+  subscribe(ctx);
   return ctx;
 }
