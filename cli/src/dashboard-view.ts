@@ -308,7 +308,86 @@ export function arcPath(cx: number, cy: number, r: number, a0: number, a1: numbe
   return `M ${p(a0)} A ${r} ${r} 0 ${end - a0 > 180 ? 1 : 0} 1 ${p(end)}`;
 }
 
-/** The stage ring with the selected task at its centre. No satellites (D5). */
+/** One orbital satellite (BASE-101-D5): an active task's place on the orbit around the ring. */
+export interface Satellite {
+  id: string;
+  label: string;
+  state: string;
+  angle: number;
+  x: number;
+  y: number;
+  selected: boolean;
+}
+
+/** A satellite's label: the last segment of the id (`BASE-101-D5` → `D5`), cut to 3 characters. */
+export function satelliteLabel(id: string): string {
+  const tail = id.slice(id.lastIndexOf("-") + 1);
+  return clip(tail === "" ? id : tail, 3);
+}
+
+/**
+ * The satellites of the active (non-validated) tasks, in queue order: the first 6, then `more` counts the rest.
+ * A selected active task beyond the sixth takes the sixth place, so it always has a satellite. Seven fixed slots
+ * on a circle of radius 171, starting at 315°; the `+N` marker uses the seventh. The search box and the
+ * ACTIVE/ALL toggle are not inputs, as for the arcs. All the geometry is here: `beam` runs from the selected
+ * satellite's inner edge (radius 160) to the core's outer edge (121), and `marker` is where `+N` goes.
+ */
+export function satellites(
+  tasks: TaskEntryView[],
+  selectedId: string | null,
+): { items: Satellite[]; more: number; beam: { x1: number; y1: number; x2: number; y2: number } | null; marker: { x: number; y: number } | null } {
+  // A point on a circle around the ring's centre (200, 200), with `arcPath`'s angle convention.
+  const ringPoint = (r: number, angle: number) => {
+    const rad = ((angle - 90) * Math.PI) / 180;
+    return { x: 200 + r * Math.cos(rad), y: 200 + r * Math.sin(rad) };
+  };
+  const active = orderQueue(tasks).active;
+  const shown = active.slice(0, 6);
+  const at = active.findIndex((x) => x.id === selectedId);
+  if (at >= 6) shown[5] = active[at];
+  const items = shown.map((task, k) => {
+    const angle = (315 + (k * 360) / 7) % 360;
+    return { id: task.id, label: satelliteLabel(task.id), state: stateKey(task.state), angle, ...ringPoint(171, angle), selected: task.id === selectedId };
+  });
+  const more = active.length - shown.length;
+  const chosen = items.find((i) => i.selected);
+  const from = chosen === undefined ? null : ringPoint(160, chosen.angle);
+  const to = chosen === undefined ? null : ringPoint(121, chosen.angle);
+  return {
+    items,
+    more,
+    beam: from === null || to === null ? null : { x1: from.x, y1: from.y, x2: to.x, y2: to.y },
+    marker: more > 0 ? ringPoint(171, (315 + (6 * 360) / 7) % 360) : null,
+  };
+}
+
+/**
+ * The satellite group: the orbit, the beam from the selected satellite to the core's edge, the satellites and
+ * the `+N` marker. Decorative: `aria-hidden`, nothing focusable or clickable. Null when no task is active.
+ */
+export function satellitesView(tasks: TaskEntryView[], selectedId: string | null): VElement | null {
+  const { items, more, beam, marker } = satellites(tasks, selectedId);
+  if (items.length === 0) return null;
+  const n = (v: number) => v.toFixed(1);
+  const children: VNode[] = [s("circle", { class: "orbit", cx: "200", cy: "200", r: "171" })];
+  // The beam stops at the core's edge, so it never crosses the centre text.
+  if (beam !== null) children.push(s("line", { class: "beam", x1: n(beam.x1), y1: n(beam.y1), x2: n(beam.x2), y2: n(beam.y2) }));
+  for (const i of items) {
+    children.push(
+      s("g", { class: `sat state-${i.state}${i.selected ? " selected" : ""}` }, [
+        s("title", {}, [t(i.id)]),
+        s("circle", { cx: n(i.x), cy: n(i.y), r: "11" }),
+        s("text", { x: n(i.x), y: n(i.y), "text-anchor": "middle", "dominant-baseline": "central" }, [t(i.label)]),
+      ]),
+    );
+  }
+  if (marker !== null) {
+    children.push(s("text", { class: "sat-more", x: n(marker.x), y: n(marker.y), "text-anchor": "middle", "dominant-baseline": "central" }, [t(`+${more}`)]));
+  }
+  return s("g", { class: "satellites", "aria-hidden": "true" }, children);
+}
+
+/** The stage ring with the selected task at its centre, and the active tasks' satellites around it (D5). */
 export function ringView(tasks: TaskEntryView[], selected: TaskEntryView | null, detail: TaskDetailView | null): VElement {
   const arcs = ringArcs(tasks, selected?.state ?? null);
   const label = arcs.map((a) => a.label).join(", ");
@@ -321,11 +400,15 @@ export function ringView(tasks: TaskEntryView[], selected: TaskEntryView | null,
     // Outside the arc, anchored away from the ring so a long label never crosses it.
     const mid = ((a.start + a.end) / 2 - 90) * (Math.PI / 180);
     const cos = Math.cos(mid);
-    const lx = (200 + 176 * cos).toFixed(1);
-    const ly = (200 + 176 * Math.sin(mid)).toFixed(1);
+    // Radius 192 (D5): the band from 160 to 182 belongs to the satellites.
+    const lx = (200 + 192 * cos).toFixed(1);
+    const ly = (200 + 192 * Math.sin(mid)).toFixed(1);
     const anchor = cos > 0.3 ? "start" : cos < -0.3 ? "end" : "middle";
     children.push(s("text", { class: `arc-label state-${a.state}`, x: lx, y: ly, "text-anchor": anchor, "dominant-baseline": "middle" }, [t(a.label)]));
   }
+  // After the arcs and before the core, so the core and its text paint last.
+  const orbit = satellitesView(tasks, selected?.id ?? null);
+  if (orbit !== null) children.push(orbit);
   children.push(s("circle", { class: "ring-core", cx: "200", cy: "200", r: "118" }));
   if (selected === null) {
     children.push(s("text", { class: "core-id", x: "200", y: "205", "text-anchor": "middle" }, [t(tasks.length === 0 ? "no tasks" : "select a task")]));
@@ -337,7 +420,7 @@ export function ringView(tasks: TaskEntryView[], selected: TaskEntryView | null,
     );
   }
   const summary = selected === null ? label : `${label}; selected ${selected.id}, ${ringPill(actor)}`;
-  return s("svg", { class: "ring", viewBox: "-80 0 560 400", role: "img", "aria-label": summary }, children);
+  return s("svg", { class: "ring", viewBox: "-110 0 620 400", role: "img", "aria-label": summary }, children);
 }
 
 /** Timeline rows: state changes as `from → to`, other entries as the note cut to 60 characters. */

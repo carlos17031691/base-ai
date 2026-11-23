@@ -60,3 +60,12 @@ test("isShippedPath normalises Windows separators and trailing slashes", () => {
   assert.equal(isShippedPath(".ai/tasks/"), false);
   assert.equal(isShippedPath("./templates/"), true);
 });
+
+test("BASE-101-D5: docs/assets (the README's images) is never shipped; the rest of docs/ ships as before", () => {
+  for (const p of ["docs/assets", "docs/assets/", "docs/assets/dashboard.png", "docs\\assets\\dashboard.png", "docs/assets/sub/x.svg"]) {
+    assert.equal(isShippedPath(p), false, p);
+  }
+  for (const p of ["docs", "docs/architecture", "docs/architecture/adrs/.gitkeep", "docs/.gitkeep", "docs/task-state-machine.md", "docs/assets-other/.gitkeep"]) {
+    assert.equal(isShippedPath(p), true, p);
+  }
+});

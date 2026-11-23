@@ -30,6 +30,8 @@ export function isShippedPath(rel: string): boolean {
   }
 
   if (p === "docs" || p.startsWith("docs/")) {
+    // The README's images (BASE-101-D5): this repository's own, never part of a new project.
+    if (p === "docs/assets" || p.startsWith("docs/assets/")) return false;
     if (!p.endsWith(".md")) return true; // directories and the non-Markdown skeleton (.gitkeep)
     return SHIPPED_DOCS.includes(p);
   }
