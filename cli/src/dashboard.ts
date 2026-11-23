@@ -1,6 +1,7 @@
 /**
- * `base-ai dashboard` (BASE-101-D1, epic #101): a local, read-only `node:http` server over `.ai/tasks/`, bound to
- * 127.0.0.1 only. No network beyond this listener, no write, no CORS. The page, its script and its stylesheet come
+ * `base-ai dashboard` (BASE-101-D1, epic #101): a local `node:http` server over `.ai/tasks/`, bound to 127.0.0.1
+ * only, that reads only and writes nothing, except the opt-in registration check below (BASE-101-D4), whose runner
+ * is the dashboard's only outbound call. No CORS. The page, its script and its stylesheet come
  * from memory (dashboard-assets.ts, BASE-101-D2), so `default-src 'self'` holds with no inline code. BASE-101-D3 adds
  * `GET /events`, a same-origin Server-Sent Events stream fed by per-directory watchers (dashboard-watch.ts).
  * BASE-101-D4 adds the one write-like route, `POST /api/tasks/<id>/registration`, which runs `pipeline debt`'s check

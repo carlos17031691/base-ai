@@ -51,7 +51,6 @@ test("D4 H3: stderr is drained and never returned; the runner is async, so the e
 test("D4 H8: aborting the signal mid-call kills the child within 1 s and returns timeout; later calls spawn nothing", async () => {
   const abort = new AbortController();
   const run = spawnRunner({ signal: abort.signal });
-  const started = Date.now();
   // The child writes its pid to a file, then sleeps; after the abort it must be gone (review r1 L3).
   const dir = mkdtempSync(join(tmpdir(), "gh-pid-"));
   const pidFile = join(dir, "pid");
@@ -66,9 +65,11 @@ test("D4 H8: aborting the signal mid-call kills the child within 1 s and returns
     });
     const pid = Number(readFileSync(pidFile, "utf8"));
     assert.ok(alive(pid));
+    // Review r2 L6: timed from the abort itself, against the plan's 1 s.
+    const aborted = Date.now();
     abort.abort();
     assert.deepEqual(await pending, { kind: "error", reason: "timeout" });
-    assert.ok(Date.now() - started < 1500, "returned within 1 s of the abort");
+    assert.ok(Date.now() - aborted < 1000, "returned within 1 s of the abort");
     await until(() => !alive(pid), 1000);
   } finally {
     rmSync(dir, { recursive: true, force: true });
