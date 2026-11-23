@@ -5,11 +5,13 @@
  * Pure: every process call goes through the injected `Runner` (pipeline-gh.ts is the real one), so the
  * matching logic is tested with a fake runner and no network.
  */
-import { RULE, type CheckReport } from "./pipeline-check.js";
+import { RULE, checkTask, type CheckReport } from "./pipeline-check.js";
+import { loadTask } from "./pipeline-files.js";
 
 export type RunResult = { kind: "ok"; stdout: string } | { kind: "error"; reason: RunFailure };
 export type RunFailure = "missing" | "exit" | "timeout" | "overflow";
-export type Runner = (cmd: string, args: string[]) => RunResult;
+/** Async (BASE-101-D4 H3) so a long check never blocks the dashboard's event loop. */
+export type Runner = (cmd: string, args: string[]) => Promise<RunResult>;
 
 export const MAX_GH_CALLS = 60;
 
@@ -95,23 +97,23 @@ class Halt extends Error {
 }
 
 /** Runs C16 for the keys of a passing `pipeline check` report. `issues` are the invocation-named issues. */
-export function checkRegistration(report: CheckReport, issues: number[], run: Runner): DebtReport {
+export async function checkRegistration(report: CheckReport, issues: number[], run: Runner): Promise<DebtReport> {
   const keys: DebtKey[] = report.keys.map((k) => ({ ...k, status: "unchecked" }));
   const out: DebtReport = { schema: 1, rule: RULE, ticket: report.ticket, repo: null, outcome: "registered", calls: 0, keys };
   if (keys.length === 0) return out;
 
   const viewed = new Set<number>();
-  const gh = (template: Template, args: string[]): string => {
+  const gh = async (template: Template, args: string[]): Promise<string> => {
     if (out.calls >= MAX_GH_CALLS) throw new Halt(template, "cap");
     out.calls++;
-    const r = run("gh", args);
+    const r = await run("gh", args);
     if (r.kind === "error") throw new Halt(template, r.reason);
     return r.stdout;
   };
-  const view = (n: number) => {
+  const view = async (n: number) => {
     if (viewed.has(n)) return;
     viewed.add(n);
-    const issue = parseView(gh("T7", ["issue", "view", String(n), "--repo", out.repo as string, "--json", "number,state,title,body,comments"]));
+    const issue = parseView(await gh("T7", ["issue", "view", String(n), "--repo", out.repo as string, "--json", "number,state,title,body,comments"]));
     if (!issue) throw new Halt("T7", "json");
     for (const k of keys) {
       if (k.status !== "registered" && issue.texts.some((text) => text.includes(`[${k.key}]`))) {
@@ -121,19 +123,19 @@ export function checkRegistration(report: CheckReport, issues: number[], run: Ru
   };
 
   try {
-    const remote = run("git", ["-C", report.taskDir, "remote", "get-url", "origin"]);
+    const remote = await run("git", ["-C", report.taskDir, "remote", "get-url", "origin"]);
     if (remote.kind === "error") throw new Halt("T5", remote.reason);
     out.repo = parseRemote(remote.stdout);
     if (out.repo === null) throw new Halt("T5", "remote");
 
-    for (const n of issues) view(n);
+    for (const n of issues) await view(n);
     for (const k of keys) {
       if (k.status === "registered") continue;
       const search = `"${k.key}" in:body,comments`;
-      const found = parseList(gh("T6", ["issue", "list", "--repo", out.repo, "--state", "all", "--search", search, "--json", "number,state,title", "--limit", "20"]));
+      const found = parseList(await gh("T6", ["issue", "list", "--repo", out.repo, "--state", "all", "--search", search, "--json", "number,state,title", "--limit", "20"]));
       if (!found) throw new Halt("T6", "json");
       // Every candidate not yet viewed is viewed once (registration-match.md step 2), so the call count matches the supervisor's.
-      for (const n of found) view(n);
+      for (const n of found) await view(n);
       // view() mutates k.status, so re-read it through a function call.
       if (!isRegistered(k)) k.status = "missing";
     }
@@ -157,6 +159,29 @@ const HALT_TEXT: Record<HaltReason, string> = {
   cap: `the next call would exceed ${MAX_GH_CALLS} gh calls`,
 };
 
+/** The halt explanation shared by the CLI and the dashboard (BASE-101-D4 H7). */
+export function haltText(reason: HaltReason): string {
+  return HALT_TEXT[reason];
+}
+
+/** The task's check report when its keys are computed (K16 passes), or K16's status: `pipeline debt`'s gate. */
+export type TaskKeys = { kind: "keys"; status: string } | { kind: "ready"; report: CheckReport };
+
+export function taskKeys(root: string, dir: string): TaskKeys {
+  const report = checkTask(loadTask(root, dir));
+  const k16 = report.checks.find((c) => c.id === "K16");
+  return k16?.status === "pass" ? { kind: "ready", report } : { kind: "keys", status: k16?.status ?? "missing" };
+}
+
+/** `pipeline debt`'s sequence, shared with the dashboard (BASE-101-D4): the K16 gate, then the registration check. */
+export type DebtOutcome = { kind: "keys"; status: string } | { kind: "debt"; report: DebtReport };
+
+export async function debtForTask(root: string, dir: string, issues: number[], run: Runner): Promise<DebtOutcome> {
+  const keys = taskKeys(root, dir);
+  if (keys.kind === "keys") return keys;
+  return { kind: "debt", report: await checkRegistration(keys.report, issues, run) };
+}
+
 /** Plain-text rendering: keys, issue numbers and states only; never a URL, stderr or issue text. */
 export function renderDebt(r: DebtReport): string {
   const head = r.outcome === "registered" ? "REGISTERED" : r.outcome === "missing" ? "MISSING" : "HALT";
@@ -164,7 +189,7 @@ export function renderDebt(r: DebtReport): string {
   for (const k of r.keys) {
     out.push(k.status === "registered" ? `  ${k.key} — registered #${k.issue} (${k.state})` : `  ${k.key} — ${k.status}`);
   }
-  if (r.halt) out.push(`halt: ${r.halt.template} ${HALT_TEXT[r.halt.reason]}; could not check, so nothing unchecked counts as registered`);
+  if (r.halt) out.push(`halt: ${r.halt.template} ${haltText(r.halt.reason)}; could not check, so nothing unchecked counts as registered`);
   const missing = r.keys.filter((k) => k.status === "missing");
   if (missing.length) {
     out.push("missing keys, ready to paste:", ...missing.map((k) => `  [${k.key}]`));

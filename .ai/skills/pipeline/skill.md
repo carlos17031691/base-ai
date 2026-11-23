@@ -118,7 +118,7 @@ The coordinator never writes a report, a verdict field or an agent's transition.
 
 ## Evidence and git
 
-`.ai/tasks/` is git-ignored, so task artifacts stay local. Evidence reaches the PR only when the human publishes the review and QA reports, and any improvement proposals, on the PR or in an issue. Scratch task directories for dry runs are never committed.
+Task artifacts in `.ai/tasks/` are git-ignored and stay local, except each task's `usage.jsonl`, which is versioned and reaches the PR with the branch. Evidence reaches the PR only when the human publishes the review and QA reports, and any improvement proposals, on the PR or in an issue. Scratch task directories for dry runs are never committed.
 
 ## Changing the protocol
 

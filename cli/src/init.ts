@@ -1,7 +1,8 @@
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readdirSync, renameSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseDocument } from "yaml";
 import { aiSync } from "./sync.js";
 import { isShippedPath } from "./shipped.js";
 import { MEMORY_HEADER } from "./memory.js";
@@ -33,7 +34,33 @@ services: []
 #    ai: inherit         # inherit | none
 `;
 
-const GITIGNORE = "src/*\n!src/.gitkeep\n.ai/context-index.json\n.ai/tasks/\n";
+// Task artefacts stay local, except each task's usage.jsonl, which is versioned (BASE-101-U1, P-4).
+const GITIGNORE = [
+  "src/*",
+  "!src/.gitkeep",
+  ".ai/context-index.json",
+  ".ai/tasks/*",
+  "!.ai/tasks/*/",
+  ".ai/tasks/*/*",
+  "!.ai/tasks/*/usage.jsonl",
+  ".ai/usage/",
+  "",
+].join("\n");
+
+/**
+ * A new project starts with the usage hook off (H2): its hook command needs base-ai installed in node_modules,
+ * which a fresh project does not have yet. BASE-101-D4 H13: it also starts without `usage.pricing`, because
+ * base-ai's own prices are a maintainer choice, not a default for other projects. Comments in the copied config
+ * are kept.
+ */
+export function disableUsageHook(dir: string): void {
+  const cfgPath = join(dir, ".ai", "config.yaml");
+  if (!existsSync(cfgPath)) return;
+  const doc = parseDocument(readFileSync(cfgPath, "utf8"));
+  doc.setIn(["usage", "hook"], "none");
+  doc.deleteIn(["usage", "pricing"]);
+  writeFileSync(cfgPath, doc.toString());
+}
 
 const CI: Record<Exclude<CiProvider, "none">, { path: string; content: string }> = {
   github: {
@@ -106,6 +133,7 @@ export function init(rawDir: string | undefined, ci: string = "none"): string {
   writeFileSync(join(dir, ".gitignore"), GITIGNORE);
   writeFileSync(join(dir, "README.md"), readme(basename(dir)));
   writeFileSync(join(dir, ".ai", "memory.md"), MEMORY_HEADER);
+  disableUsageHook(dir);
   writeServiceHooks(dir);
   aiSync(dir);
   bootstrapGitBaseline(dir, "chore: initial base-ai scaffold");

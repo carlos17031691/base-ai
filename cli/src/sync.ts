@@ -4,6 +4,17 @@ import { parse } from "yaml";
 import { buildContextIndex } from "./context.js";
 import { isGenerated, render } from "./exporters.js";
 import { loadRoleDefinitions, loadSource, mergeSource, type AiSource } from "./source.js";
+import {
+  SETTINGS_PATH,
+  SettingsError,
+  hookCommand,
+  hookState,
+  isBaseAiRepo,
+  mergeHook,
+  removeHook,
+  type HookState,
+  type UsageHook,
+} from "./usage-hook.js";
 
 const LOCK = ".ai/generated.json";
 
@@ -66,6 +77,51 @@ export function syncDir(dir: string, src: AiSource, check: boolean): SyncResult 
   return res;
 }
 
+const readText = (abs: string) => (existsSync(abs) ? readFileSync(abs, "utf8") : null);
+
+/** The hook command for this root (H1): in-tree CLI in the base-ai repository, else the installed package. */
+export const usageHookCommand = (root: string) => hookCommand(isBaseAiRepo(readText(join(root, "cli", "package.json"))));
+
+/** The doctor's state of the root's `.claude/settings.json` for the configured hook. */
+export function usageHookState(root: string, hook: UsageHook): HookState {
+  return hookState(readText(join(root, SETTINGS_PATH)), hook, usageHookCommand(root));
+}
+
+/**
+ * Computes the generated usage hook of the root's `.claude/settings.json` (BASE-101-U2), keeping every user key,
+ * and returns the step that writes or removes it. Computing first means an invalid file throws before `ai sync`
+ * writes any artefact. The file is reported in the result but never added to the lock. With check=true an
+ * invalid file is only reported as out of date, and the doctor names the problem.
+ */
+export function prepareUsageHook(root: string, hook: UsageHook, check: boolean): (res: SyncResult) => void {
+  const abs = join(root, SETTINGS_PATH);
+  const current = readText(abs);
+  let next: string | null;
+  try {
+    next = hook === "claude-code" ? mergeHook(current, usageHookCommand(root)) : removeHook(current);
+  } catch (e) {
+    if (!(e instanceof SettingsError)) throw e;
+    if (check) return (res) => void res.written.push(SETTINGS_PATH);
+    throw new Error(`${abs} ${e.message}; fix it, then run: base-ai ai sync`);
+  }
+  return (res) => {
+    if (next === current) {
+      if (current !== null && hook === "claude-code") res.unchanged.push(SETTINGS_PATH);
+      return;
+    }
+    if (next === null) {
+      res.removed.push(SETTINGS_PATH);
+      if (!check) rmSync(abs);
+      return;
+    }
+    (hook === "claude-code" ? res.written : res.removed).push(SETTINGS_PATH);
+    if (!check) {
+      mkdirSync(dirname(abs), { recursive: true });
+      writeFileSync(abs, next);
+    }
+  };
+}
+
 interface ServiceEntry {
   name: string;
   ai?: "inherit" | "none";
@@ -74,7 +130,10 @@ interface ServiceEntry {
 /** ai sync: root + services with ai: inherit present in src/. */
 export function aiSync(root: string, check = false): SyncResult[] {
   const base = loadSource(root);
+  // Services keep their own settings: the hook is written at the root only (H7).
+  const applyUsageHook = prepareUsageHook(root, base.usageHook ?? "none", check);
   const results = [syncDir(root, base, check)];
+  applyUsageHook(results[0]);
 
   const manifest = join(root, "services.yaml");
   if (!existsSync(manifest)) return results;

@@ -6,7 +6,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { PassThrough } from "node:stream";
 import { fileURLToPath } from "node:url";
-import { appendLines, readBranch, readStdin, readTranscript, runUsageRecord } from "../usage-files.js";
+import { EventEmitter } from "node:events";
+import { appendLines, guardHookProcess, readBranch, readStdin, readTranscript, readUsageReport, readUsageText, runUsageRecord } from "../usage-files.js";
 import { AGENT_LINES, MAIN_LINES, PAYLOADS } from "./usage-fixtures.js";
 
 const CLI = join(dirname(fileURLToPath(import.meta.url)), "..", "index.js");
@@ -324,6 +325,131 @@ test("spawned CLI: a synchronous failure before dispatch still exits 0 for usage
     const r = spawnSync("/bin/sh", ["-c", `cd "${gone}" && rmdir "${gone}" && exec "${process.execPath}" "${CLI}" usage record`], { input: "{}", encoding: "utf8" });
     assert.deepEqual([r.status, r.stdout], [0, ""]);
     assert.match(r.stderr, /^base-ai usage: internal error; nothing written\n$/);
+  } finally {
+    b.done();
+  }
+});
+
+// --- usage report, guard and L6 (BASE-101-U2) ---
+
+const REC = (over: Record<string, unknown> = {}) =>
+  JSON.stringify({
+    schema: 1,
+    agent: "qa",
+    model: "claude-x",
+    messages: 2,
+    input_tokens: 1_000_000,
+    cache_creation_input_tokens: 0,
+    cache_read_input_tokens: 0,
+    output_tokens: 0,
+    ...over,
+  });
+const PRICES = { "claude-x": { input: 3, cache_write: 0, cache_read: 0, output: 0 } };
+
+test("readUsageReport: priced, unpriced and corrupt lines; a missing file is no usage data; a symlink is refused", () => {
+  const b = sandbox();
+  try {
+    b.task("T-1");
+    const file = join(b.root, ".ai", "tasks", "T-1", "usage.jsonl");
+    assert.equal(readUsageReport(b.root, ".ai/tasks/T-1", PRICES).records, 0, "missing file");
+    writeFileSync(file, `${REC()}\n${REC({ model: "other" })}\ngarbage\n`);
+    const r = readUsageReport(b.root, ".ai/tasks/T-1", PRICES);
+    assert.deepEqual([r.ticket, r.records, r.skipped_lines, r.total.cost_usd, r.total.unpriced_records], ["T-1", 2, 1, 3, 1]);
+    assert.equal(readUsageReport(b.base, join(b.root, ".ai", "tasks", "T-1"), PRICES).records, 2, "absolute task dir");
+    assert.throws(() => readUsageReport(b.root, ".ai/tasks/NOPE", PRICES), /task directory not found: \.ai\/tasks\/NOPE/);
+
+    b.task("T-2");
+    symlinkSync(file, join(b.root, ".ai", "tasks", "T-2", "usage.jsonl"));
+    assert.throws(() => readUsageReport(b.root, ".ai/tasks/T-2", PRICES), /not a regular file/);
+  } finally {
+    b.done();
+  }
+});
+
+test("spawned CLI: usage report in text and --json exits 0; prices come from .ai/config.yaml; a missing task dir exits 1", () => {
+  const b = sandbox();
+  try {
+    b.task("T-1");
+    writeFileSync(join(b.root, ".ai", "tasks", "T-1", "usage.jsonl"), `${REC()}\n${REC({ agent: "reviewer", model: "other", output_tokens: 9 })}\n`);
+    mkdirSync(join(b.root, ".ai"), { recursive: true });
+    writeFileSync(
+      join(b.root, ".ai", "config.yaml"),
+      "usage:\n  pricing:\n    claude-x: { input: 3, cache_write: 0, cache_read: 0, output: 0 }\n",
+    );
+    const run = (...args: string[]) => spawnSync(process.execPath, [CLI, "usage", "report", ...args, "--root", b.root], { encoding: "utf8" });
+
+    const text = run(".ai/tasks/T-1");
+    assert.equal(text.status, 0, text.stderr);
+    assert.match(text.stdout, /qa \/ claude-x: in 1000000, cache write 0, cache read 0, out 0; \$3\.0000/);
+    assert.match(text.stdout, /reviewer \/ other: in 1000000, cache write 0, cache read 0, out 9; no price/);
+    assert.match(text.stdout, /total: .*; \$3\.0000 \(\+1 record with no price\)/);
+
+    const js = run(".ai/tasks/T-1", "--json");
+    assert.equal(js.status, 0, js.stderr);
+    const parsed = JSON.parse(js.stdout);
+    assert.deepEqual([parsed.schema, parsed.ticket, parsed.records, parsed.skipped_lines], [1, "T-1", 2, 0]);
+    assert.deepEqual(parsed.groups.map((g: { cost_usd: number | null }) => g.cost_usd), [3, null]);
+    assert.deepEqual([parsed.total.cost_usd, parsed.total.unpriced_records], [3, 1]);
+
+    b.task("EMPTY");
+    const empty = run(".ai/tasks/EMPTY");
+    assert.deepEqual([empty.status, empty.stdout], [0, "usage EMPTY: no usage data\n"]);
+
+    const missing = run(".ai/tasks/NOPE");
+    assert.equal(missing.status, 1);
+    assert.match(missing.stderr, /task directory not found/);
+
+    writeFileSync(join(b.root, ".ai", "config.yaml"), "usage:\n  hook: sometimes\n");
+    const badCfg = run(".ai/tasks/T-1");
+    assert.equal(badCfg.status, 1);
+    assert.match(badCfg.stderr, /"usage\.hook" must be "claude-code" or "none"/);
+  } finally {
+    b.done();
+  }
+});
+
+test("L6 uncaught exception: guardHookProcess writes one stderr line and exits 0, even when stderr throws", () => {
+  const fake = Object.assign(new EventEmitter(), { codes: [] as number[], exit(code: number) { this.codes.push(code); } });
+  const lines: string[] = [];
+  guardHookProcess(fake, (l) => lines.push(l));
+  fake.emit("uncaughtException", new Error("boom"));
+  fake.emit("unhandledRejection", new Error("again"));
+  assert.deepEqual(lines, ["base-ai usage: internal error; nothing written"]);
+  assert.deepEqual(fake.codes, [0, 0]);
+
+  const broken = Object.assign(new EventEmitter(), { codes: [] as number[], exit(code: number) { this.codes.push(code); } });
+  guardHookProcess(broken, () => {
+    throw Object.assign(new Error("write EPIPE"), { code: "EPIPE" });
+  });
+  broken.emit("uncaughtException", new Error("boom"));
+  assert.deepEqual(broken.codes, [0]);
+});
+
+test("L6 flag before the command: --root . usage record from a deleted working directory exits 0", () => {
+  const b = sandbox();
+  try {
+    const gone = join(b.base, "gone");
+    mkdirSync(gone);
+    const r = spawnSync("/bin/sh", ["-c", `cd "${gone}" && rmdir "${gone}" && exec "${process.execPath}" "${CLI}" --root . usage record`], { input: "{}", encoding: "utf8" });
+    assert.deepEqual([r.status, r.stdout], [0, ""]);
+    assert.match(r.stderr, /^base-ai usage: internal error; nothing written\n$/);
+  } finally {
+    b.done();
+  }
+});
+
+test("readUsageText: the text, \"\" for a missing file, and a throw on a symlink or a missing task directory (BASE-101-D1)", () => {
+  const b = sandbox();
+  try {
+    b.task("T-1");
+    assert.equal(readUsageText(b.root, ".ai/tasks/T-1"), "");
+    const file = join(b.root, ".ai", "tasks", "T-1", "usage.jsonl");
+    writeFileSync(file, `${REC()}\n`);
+    assert.equal(readUsageText(b.root, ".ai/tasks/T-1"), `${REC()}\n`);
+    b.task("T-2");
+    symlinkSync(file, join(b.root, ".ai", "tasks", "T-2", "usage.jsonl"));
+    assert.throws(() => readUsageText(b.root, ".ai/tasks/T-2"), /^Error: \.ai\/tasks\/T-2\/usage\.jsonl is not a regular file/);
+    assert.throws(() => readUsageText(b.root, ".ai/tasks/NOPE"), /task directory not found/);
   } finally {
     b.done();
   }

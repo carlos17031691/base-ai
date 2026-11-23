@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { resolve } from "node:path";
+import { existsSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { buildContextIndex, searchContext } from "./context.js";
 import { runDoctor } from "./doctor.js";
 import { init } from "./init.js";
@@ -8,15 +9,17 @@ import { listServices, serviceAdd, serviceNew, serviceRemove, syncServices } fro
 import { computeAiStats, describeDefinitionViolation, renderCiReport } from "./stats.js";
 import { aiSync } from "./sync.js";
 import { startMcpServer } from "./mcp.js";
+import { parsePort, startDashboard } from "./dashboard.js";
 import { runEvals, renderEvalReport } from "./eval.js";
 import { runWizard } from "./wizard.js";
 import { devUp, devStop, devStatus } from "./dev.js";
 import { checkTask, renderText } from "./pipeline-check.js";
 import { loadTask } from "./pipeline-files.js";
 import { spawnRunner } from "./pipeline-gh.js";
-import { checkRegistration, renderDebt } from "./pipeline-registration.js";
-import { runUsageRecord } from "./usage-files.js";
-import { stderrLine } from "./usage.js";
+import { debtForTask, renderDebt } from "./pipeline-registration.js";
+import { loadDashboardConfig, loadUsageConfig } from "./source.js";
+import { guardHookProcess, readUsageReport, runUsageRecord } from "./usage-files.js";
+import { renderUsageReport, stderrLine } from "./usage.js";
 
 const USAGE = `base-ai <command> [--root <dir>]
 
@@ -46,8 +49,12 @@ Commands:
                                                      naming each failed check. Offline.
   pipeline debt <task-dir> [--issues n,…] [--json]  Check each To register key against GitHub issues (opt-in network, gh);
                                                      exit 0 registered, 1 missing, 2 could not check
+  dashboard [--port N]                              Serve the pipeline HUD and JSON API over .ai/tasks/ on 127.0.0.1 (default port 4747);
+                                                     it reads only, except the opt-in CHECK REGISTRATION (gh)
   usage record                                      Record a Claude Code turn's tokens from a Stop/SubagentStop hook (stdin) into
                                                      .ai/tasks/<ticket>/usage.jsonl; always exits 0, nothing on stdout
+  usage report <task-dir> [--json]                  Show a task's recorded tokens per agent and model, with USD cost from
+                                                     usage.pricing of .ai/config.yaml, or "no price". Offline, read-only
 `;
 
 // Flags that never take a value, so `--json <task-dir>` keeps the path positional.
@@ -70,7 +77,7 @@ function parseArgs(argv: string[]) {
 
 const str = (v: string | true | undefined) => (typeof v === "string" ? v : undefined);
 
-function main(argv: string[]): number {
+function main(argv: string[]): number | Promise<number> {
   const { flags, pos } = parseArgs(argv);
   const root = resolve(str(flags.root) ?? process.cwd());
   const [cmd, sub, ...rest] = pos;
@@ -219,6 +226,35 @@ function main(argv: string[]): number {
     console.log("✔ sync complete");
     return 0;
   }
+  if (cmd === "dashboard") {
+    const port = parsePort(flags.port);
+    if (port === null) {
+      console.error("base-ai dashboard: --port must be an integer from 0 to 65535");
+      return 1;
+    }
+    if (!existsSync(join(root, ".ai"))) throw new Error(`Not a base-ai project: ${root} (missing .ai/). Pass --root <dir>.`);
+    // Prices are read once at start (H4): a bad config fails here, not on every request.
+    const { pricing } = loadUsageConfig(root);
+    const { editorUrl } = loadDashboardConfig(root);
+    const dash = startDashboard({
+      root,
+      port,
+      pricing,
+      editorUrl,
+      // BASE-101-D4 H3: the only process runner; dashboard.ts itself imports no child_process.
+      registration: (signal) => spawnRunner({ signal }),
+      out: (l) => console.log(l),
+      err: (l) => console.error(l),
+      proc: process,
+    });
+    dash.ready.catch((e) => {
+      console.error((e as Error).message);
+      process.exitCode = 1;
+    });
+    // `stopped` never rejects; `void` marks the chain as deliberately not awaited (Sonar S9383, PR #118).
+    void dash.stopped.then(() => process.exit(0));
+    return 0;
+  }
   if (cmd === "mcp") {
     startMcpServer(root);
     return 0;
@@ -274,9 +310,21 @@ function main(argv: string[]): number {
   if (cmd === "usage" && sub === "record") {
     // A hook must never fail the agent: every path, an internal error included, exits 0.
     const stderr = (line: string) => process.stderr.write(`${line}\n`);
+    guardHookProcess(process, stderr);
     runUsageRecord({ root, stdin: process.stdin, env: process.env, now: Date.now, stderr })
       .catch(() => stderr(stderrLine("internal")))
       .finally(() => process.exit(0));
+    return 0;
+  }
+
+  if (cmd === "usage" && sub === "report") {
+    const dir = rest[0];
+    if (!dir) {
+      console.error("usage: base-ai usage report <task-dir> [--json] [--root <dir>]");
+      return 1;
+    }
+    const report = readUsageReport(root, dir, loadUsageConfig(root).pricing);
+    console.log(flags.json === true ? JSON.stringify(report, null, 2) : renderUsageReport(report));
     return 0;
   }
 
@@ -288,16 +336,15 @@ function main(argv: string[]): number {
       console.error(usage);
       return 1;
     }
-    const report = checkTask(loadTask(root, dir));
-    const k16 = report.checks.find((c) => c.id === "K16");
-    if (k16?.status !== "pass") {
-      console.error(`keys not computed: K16 ${k16?.status ?? "missing"}`);
-      return 1;
-    }
     const issues = issuesArg === undefined ? [] : (str(issuesArg) as string).split(",").map(Number);
-    const debt = checkRegistration(report, issues, spawnRunner());
-    console.log(flags.json === true ? JSON.stringify(debt, null, 2) : renderDebt(debt));
-    return debt.outcome === "registered" ? 0 : debt.outcome === "missing" ? 1 : 2;
+    return debtForTask(root, dir, issues, spawnRunner()).then((r) => {
+      if (r.kind === "keys") {
+        console.error(`keys not computed: K16 ${r.status}`);
+        return 1;
+      }
+      console.log(flags.json === true ? JSON.stringify(r.report, null, 2) : renderDebt(r.report));
+      return r.report.outcome === "registered" ? 0 : r.report.outcome === "missing" ? 1 : 2;
+    });
   }
 
   if (cmd === "pipeline" && sub === "check") {
@@ -323,10 +370,24 @@ function main(argv: string[]): number {
 }
 
 try {
-  process.exitCode = main(process.argv.slice(2));
+  const code = main(process.argv.slice(2));
+  if (typeof code === "number") process.exitCode = code;
+  else {
+    // `pipeline debt` is async (BASE-101-D4 H3): the same exit code, and the same "✖ <message>" on a failure.
+    void code.then(
+      (c) => {
+        process.exitCode = c;
+      },
+      (e: unknown) => {
+        console.error(`✖ ${(e as Error).message}`);
+        process.exitCode = 1;
+      },
+    );
+  }
 } catch (e) {
-  const args = process.argv.slice(2);
-  if (args[0] === "usage" && args[1] === "record") {
+  // L6 (b): the parsed command, so `--root <dir> usage record` is recognised as well.
+  const { pos } = parseArgs(process.argv.slice(2));
+  if (pos[0] === "usage" && pos[1] === "record") {
     // A synchronous throw before dispatch (e.g. a deleted working directory) must not fail the agent either.
     process.stderr.write(`${stderrLine("internal")}\n`);
     process.exit(0);

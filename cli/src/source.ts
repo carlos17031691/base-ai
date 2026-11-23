@@ -1,6 +1,8 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
+import type { UsageHook } from "./usage-hook.js";
+import { parsePricing, type Pricing } from "./usage.js";
 
 export const AGENTS = ["antigravity", "claude", "cursor", "copilot", "codex"] as const;
 export type Agent = (typeof AGENTS)[number];
@@ -37,6 +39,8 @@ export interface AiSource {
   definitionBudgets?: Record<string, number>;
   /** `budgets.definition_totals`: cap per role on the definition plus its reference files; absent when not configured. */
   definitionTotals?: Record<string, number>;
+  /** `usage.hook` of config.yaml (BASE-101-U2); read only at the root. */
+  usageHook?: UsageHook;
 }
 
 /** Splits YAML frontmatter from the Markdown body. */
@@ -71,13 +75,89 @@ function parseRoleBudgets(cfg: Record<string, unknown>, key: string, file: strin
   return defs as Record<string, number>;
 }
 
+export interface UsageConfig {
+  hook: UsageHook;
+  pricing: Pricing;
+}
+
+const readConfig = (cfgPath: string) =>
+  existsSync(cfgPath) ? ((parse(readFileSync(cfgPath, "utf8")) ?? {}) as Record<string, unknown>) : {};
+
+/** Reads `usage` (hook and pricing); absent means `none` and no prices. Throws naming the key on any other value. */
+function parseUsage(cfg: Record<string, unknown>, file: string): UsageConfig {
+  const usage = cfg.usage;
+  if (usage === undefined || usage === null) return { hook: "none", pricing: {} };
+  const hookError = `${file}: "usage.hook" must be "claude-code" or "none"`;
+  if (typeof usage !== "object" || Array.isArray(usage)) throw new Error(hookError);
+  const { hook = "none", pricing } = usage as Record<string, unknown>;
+  if (hook !== "claude-code" && hook !== "none") throw new Error(hookError);
+  return { hook, pricing: parsePricing(pricing, file) };
+}
+
+/** The `usage` config of <dir>/.ai/config.yaml, read on its own by `usage report`. */
+export function loadUsageConfig(dir: string): UsageConfig {
+  const cfgPath = join(dir, ".ai", "config.yaml");
+  return parseUsage(readConfig(cfgPath), cfgPath);
+}
+
+export const DEFAULT_EDITOR_URL = "vscode://file/{path}";
+/**
+ * Editor URL schemes `dashboard.editor_url` may use (BASE-101-D2 decisions.md D2: an allowlist, not a denylist,
+ * because OS protocol handlers such as ms-msdt: or search-ms: can run code). Adding one is a reviewed code change.
+ */
+export const EDITOR_SCHEMES = [
+  "vscode",
+  "vscode-insiders",
+  "vscodium",
+  "cursor",
+  "windsurf",
+  "zed",
+  "subl",
+  "txmt",
+  "mvim",
+  "idea",
+  "pycharm",
+  "webstorm",
+  "phpstorm",
+  "goland",
+  "rubymine",
+  "clion",
+  "rider",
+  "jetbrains",
+] as const;
+
+/**
+ * Validates `dashboard.editor_url` (BASE-101-D2 H2, D2): a string of at most 200 characters, with `{path}` exactly
+ * once, starting with `<scheme>:` for a scheme in EDITOR_SCHEMES. The UI only substitutes the encoded path.
+ */
+export function parseEditorUrl(value: unknown, file: string): string {
+  if (value === undefined || value === null) return DEFAULT_EDITOR_URL;
+  const error = new Error(
+    `${file}: "dashboard.editor_url" must be a string of at most 200 characters with {path} exactly once, starting with an editor scheme: ${EDITOR_SCHEMES.join(", ")}`,
+  );
+  if (typeof value !== "string" || value.length > 200 || value.split("{path}").length !== 2) throw error;
+  const scheme = /^([a-z][a-z0-9+.-]*):/.exec(value);
+  if (scheme === null || !(EDITOR_SCHEMES as readonly string[]).includes(scheme[1])) throw error;
+  return value;
+}
+
+/** The `dashboard` config of <dir>/.ai/config.yaml, read once when the dashboard starts. */
+export function loadDashboardConfig(dir: string): { editorUrl: string } {
+  const cfgPath = join(dir, ".ai", "config.yaml");
+  const dashboard = readConfig(cfgPath).dashboard;
+  if (dashboard === undefined || dashboard === null) return { editorUrl: DEFAULT_EDITOR_URL };
+  if (typeof dashboard !== "object" || Array.isArray(dashboard)) throw new Error(`${cfgPath}: "dashboard" must be a mapping`);
+  return { editorUrl: parseEditorUrl((dashboard as Record<string, unknown>).editor_url, cfgPath) };
+}
+
 /** Loads the single AI source from <dir>/.ai. */
 export function loadSource(dir: string): AiSource {
   const ai = join(dir, ".ai");
   if (!existsSync(ai)) throw new Error(`${ai} not found`);
 
   const cfgPath = join(ai, "config.yaml");
-  const cfg = existsSync(cfgPath) ? ((parse(readFileSync(cfgPath, "utf8")) ?? {}) as Record<string, unknown>) : {};
+  const cfg = readConfig(cfgPath);
+  const usage = parseUsage(cfg, cfgPath);
   const agents = parseTargets(cfg.agents ?? "all", cfgPath);
   const definitionBudgets = parseRoleBudgets(cfg, "definitions", cfgPath);
   const definitionTotals = parseRoleBudgets(cfg, "definition_totals", cfgPath);
@@ -118,6 +198,7 @@ export function loadSource(dir: string): AiSource {
     lang: String(cfg.lang ?? "en"),
     skills,
     roles: [],
+    usageHook: usage.hook,
     ...(definitionBudgets ? { definitionBudgets } : {}),
     ...(definitionTotals ? { definitionTotals } : {}),
   };
@@ -134,6 +215,7 @@ export function mergeSource(base: AiSource, local: AiSource | null): AiSource {
     lang: local.lang,
     skills: [...skills.values()].sort((a, b) => a.id.localeCompare(b.id)),
     roles: base.roles,
+    usageHook: base.usageHook,
   };
 }
 

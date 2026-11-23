@@ -19,3 +19,30 @@ budgets:
     qa: 18250
     reviewer: 7000
     supervisor: 11250
+# Token usage (BASE-101-U2). `base-ai ai sync` writes (claude-code) or removes (none) the marked
+# SubagentStop/Stop hook of .claude/settings.json; absent means none. `init` sets none in new projects.
+usage:
+  hook: claude-code
+  # This repo's price (BASE-101-D4): Anthropic's official pricing page, 2026-11-23; API-equivalent list prices, not a subscription bill.
+  pricing:
+    claude-opus-5-5:
+      input: 4
+      cache_write: 8 # the 1-hour cache write rate; the 5-minute rate is 5
+      cache_read: 0.2
+      output: 20
+  # USD per million tokens, keyed by the exact model id of the records; all four keys are required.
+  # No default prices: a model with no entry shows "no price", never 0. Example only; copy your
+  # provider's current prices and the model id exactly as the records show it (no aliases, no prefixes):
+  # pricing:
+  #   claude-sonnet-4-5-20250929:
+  #     input: 3
+  #     cache_write: 3.75
+  #     cache_read: 0.3
+  #     output: 15
+# Pipeline HUD (BASE-101-D2). The "open" link template of `base-ai dashboard`, read once at start;
+# absent means vscode://file/{path}. {path} appears exactly once and becomes the file's absolute path,
+# with leading slashes dropped. At most 200 characters; the scheme must be an allowed editor scheme, such as
+# vscode, cursor, zed, subl or idea (full list: EDITOR_SCHEMES in cli/src/source.ts); any other is refused.
+# Example only:
+# dashboard:
+#   editor_url: "vscode://file/{path}"

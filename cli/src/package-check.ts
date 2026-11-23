@@ -22,6 +22,7 @@ const ROOT_FILES = [".coderabbit.yaml", "sonar-project.properties"];
 export const EXEMPT: Record<string, string> = {
   ".ai/tasks/": "created by the planner at run time",
   ".ai/usage/": "written by `base-ai usage record` at run time",
+  ".claude/settings.json": "written by `base-ai ai sync` when usage.hook is claude-code",
 };
 
 /** Inline-code spans (no whitespace) that name a template path. Fenced code blocks are ignored. */
