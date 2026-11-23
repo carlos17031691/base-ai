@@ -11,6 +11,7 @@ Part of `.claude/agents/reviewer.md`. It binds exactly as that file does. Read i
 - new findings, by severity, in the same form as round 1
 - the scope-check result for the current change set
 - the acceptance-criteria table
+- the Security section, headed `### Security`, complete and for the current change set (Step 4, Step 7): boundary and method decided again, every category row present
 - this round's verdict
 
 Earlier rounds are never edited — not their findings, not their tables, and not the top `## Verdict` line, which keeps showing the round 1 verdict. The latest round's verdict is the authoritative one, and the report says so.

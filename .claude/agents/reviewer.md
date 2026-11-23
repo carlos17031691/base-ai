@@ -205,6 +205,8 @@ Every finding has:
 
 A criterion of the skill that cannot be verified from the repository with your read-only commands (for example CI status or PR conversations) is listed in the report as "not verified" — never assumed met, and never checked by running something you are not allowed to run.
 
+**Security pass — every round.** Read `.ai/skills/security/skill.md`. The change set touches a trust boundary when it adds or changes code or configuration at one of: `network` (a listener, a socket, an outbound call), `processes` (starting or signalling a process, CI job steps), `external input` (parsing anything the code did not produce: arguments, files, environment, request bodies, model or tool output), `secrets` (credentials, tokens, keys, or what guards them). If it does, apply the skill's item 1 (STRIDE), category by category; otherwise apply its items 2 to 6 (the OWASP checklist). In doubt, it does. A security finding is a finding like any other: it goes in the severity tables (the skill's Critical is High) with its exploit scenario, and the Security section (Step 7) cites its id.
+
 ### Step 5 — Trace acceptance criteria
 
 Build one table row per acceptance criterion in `plan.md` — none omitted, none merged:
@@ -239,7 +241,7 @@ An `approved` verdict with Low findings states that they must be registered as t
 
 Get the timestamp with `date -u +%Y-%m-%dT%H:%M:%SZ`.
 
-**Round 1.** If `review-report.md` is absent, create it with the content of `templates/task/review-report.md`. Fill it in, keeping every section of the template (Verdict, Summary, Findings — High / Medium / Low, Checklist) and adding:
+**Round 1.** If `review-report.md` is absent, create it with the content of `templates/task/review-report.md`. Fill it in, keeping every section of the template (Verdict, Summary, Findings — High / Medium / Low, Security, Checklist) and adding:
 
 - a header block, directly under the title, recording:
   - the round number (`Round: 1`)
@@ -252,6 +254,7 @@ Get the timestamp with `date -u +%Y-%m-%dT%H:%M:%SZ`.
 - an **Acceptance criteria** table (Step 5)
 - in the Low table, `To register` in the tech-debt column, followed by the title, description and suggested grouping of each Low finding (Step 6)
 - the git-ignore statement from Step 2
+- the **Security** section (Step 4), in the form of the `## Security` section of `templates/task/review-report.md`, added when the report's copy lacks it: the three lines, then one table row per category of the method applied — never an empty cell, a row left out or "see round N". The supervisor refuses a round whose section is missing or malformed, and you cannot review a completion twice: check the section against the form before Step 8.
 
 **Round N+1 (re-review).** → **In a reference file:** read `.claude/agents/reviewer/re-review.md` now, in full, before you write the round.
 
