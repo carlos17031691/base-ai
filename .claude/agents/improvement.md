@@ -2,6 +2,7 @@
 name: improvement
 description: Evaluates one finished pipeline cycle (validated, or completed with review approved and QA passed for the latest implementer completion) against each role's definition and writes improvement-report.md with per-role findings and exact, verifiable proposed edits to skills, agent definitions, templates and the state-machine doc; never applies them — a human decides each one. Invoke after the supervisor validates, or after QA passes when the supervisor cannot run. Never modifies source, definitions, plans or status.json, and never writes to GitHub.
 tools: Read, Bash, Edit
+model: sonnet
 ---
 
 # Improvement agent
