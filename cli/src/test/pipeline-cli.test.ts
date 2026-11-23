@@ -8,6 +8,8 @@ import { fileURLToPath } from "node:url";
 import { loadTask, readBounded } from "../pipeline-files.js";
 
 const CLI = resolve(dirname(fileURLToPath(import.meta.url)), "..", "index.js");
+// A valid Security section (BASE-124-B, K19), appended to review fixtures that must stay consistent.
+const SEC = "\n## Security\n\n- Trust boundary touched: no\n- Method: OWASP checklist\n- Findings: none\n\n| Category | Result | Basis |\n|---|---|---|\n| Input validation & injection | none | src/x.ts:1 |\n| Authn/authz & isolation | n/a | no auth code |\n| Secrets & data protection | none | src/x.ts:2 |\n| Abuse resistance | n/a | no endpoint |\n| Supply chain | none | no dependency change |\n";
 const C = "2026-01-01T00:03:00Z";
 
 function writeTask(root: string, id: string, files: Record<string, string>) {
@@ -36,7 +38,7 @@ const status = JSON.stringify({
 const files = {
   "status.json": status,
   "plan.md": "# Plan\n## Steps\n1. **human** — ok\n",
-  "review-report.md": `Round: 1\n${C}\n## Verdict: approved\n| L1 | x | To register |\n`,
+  "review-report.md": `Round: 1\n${C}\n## Verdict: approved\n| L1 | x | To register |\n${SEC}`,
   "qa-report.md": `Round: 1\nImplementer completion verified: ${C}\n## Verdict: pass\n`,
 };
 
@@ -127,7 +129,7 @@ test("pipeline check names K17 for a malformed decisions.md", () => {
 test("pipeline debt: zero keys exit 0 with no command; keys outside a git repository halt at T5 (exit 2); bad --issues is a usage error", () => {
   const root = mkdtempSync(join(tmpdir(), "pc-"));
   try {
-    writeTask(root, "TK-2", { ...files, "review-report.md": `Round: 1\n${C}\n## Verdict: approved\n` });
+    writeTask(root, "TK-2", { ...files, "review-report.md": `Round: 1\n${C}\n## Verdict: approved\n${SEC}` });
     const none = run(["pipeline", "debt", ".ai/tasks/TK-2", "--root", root, "--json"]);
     assert.equal(none.status, 0, none.stdout + none.stderr);
     assert.deepEqual([JSON.parse(none.stdout).outcome, JSON.parse(none.stdout).calls], ["registered", 0]);

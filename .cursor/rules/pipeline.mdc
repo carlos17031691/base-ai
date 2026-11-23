@@ -53,6 +53,7 @@ Every task lives in `.ai/tasks/<ticket-id>/`; its state is in `status.json`. Sta
 | `completed`, review `changes_requested` | human: send back to the implementer, or decide otherwise |
 | `completed`, review `approved`, no QA round for the latest completion | qa |
 | `completed`, QA `fail` | human: send back to the implementer, or decide otherwise |
+| `completed`, latest review round without a valid Security section | human: send back for a new completion, or decide otherwise |
 | `completed`, review `approved` and QA `pass` | human registers every `To register` item as tech debt with its key; then supervisor. When the plan's "Files to touch" lists `.claude/agents/supervisor.md`, the supervisor halts on its own ticket and the task stays `completed` |
 | `validated`, or `completed` with both gates passed when the supervisor cannot run | improvement, optionally (it halts when the plan lists `.claude/agents/improvement.md`); then the human's PR |
 
@@ -64,7 +65,7 @@ Reading never implies writing. Each write list is closed; everything else is for
 |---|---|---|
 | planner | `src/**`, `docs/**`, `templates/task/`, its task directory, `CLAUDE.md`, `AGENTS.md`, `.ai/rules.md` | Creates the task directory from `templates/task/`; `plan.md` only before the lock; `status.json`: initialization, and the lock on approval given to it directly |
 | implementer | its task's `status.json` and `plan.md`; `review-report.md` and `qa-report.md` on re-entry; `src/**`, `tests/**`, `docs/**`, `cli/**`, `templates/**`, `.ai/rules.md`, `.ai/skills/**`, `.claude/agents/**`, `CLAUDE.md`, `AGENTS.md`; every file the plan names | Its effective allow-list: the plan's "Files to touch" minus its forbidden list. `status.json`: `state`, `assignee`, `updated_at`, `blocker`, `checklist.tests_pass`, `lint_pass`, `types_pass`, appended entries; never `plan_locked`. Forbidden whatever the plan says: `plan.md`, every report, `.ai/rules.md`, `.ai/skills/**`, `.github/**`, `cli/**`, `templates/**`, files at the root of `src/`, and `.claude/agents/**` except a definition the plan lists as its deliverable |
-| reviewer | The whole affected repository, git history and diffs | `review-report.md` (round 1, then appended rounds); `status.json`: `checklist.review_verdict`, `updated_at`, one appended entry per round |
+| reviewer | The whole affected repository, git history and diffs | `review-report.md` (round 1, then appended rounds, each with its Security section); `status.json`: `checklist.review_verdict`, `updated_at`, one appended entry per round |
 | qa | The whole affected repository except secret files; scratch task directories the invocation names; runs the project's checks | `qa-report.md` (round 1, then appended rounds); `status.json`: `checklist.qa_verdict`, `updated_at`, one appended entry per round. Files the checks write to git-ignored paths are tolerated; QA writes nothing else itself |
 | supervisor | The task's artifacts, `decisions.md` included; `.ai/rules.md`, `.ai/skills/**`, `docs/**`, `.claude/agents/**`; read-only `gh` | `status.json` only: `state` `completed` → `validated`, `updated_at`, one appended entry, with one `Edit`. It never creates a file |
 | improvement | The whole repository except secret files; other task directories as recurrence evidence; read-only `gh` | `improvement-report.md` only, with one `Edit`, only when unfilled; no `status.json` field. Proposals are text; it never applies them |
@@ -96,7 +97,7 @@ The coordinator:
 6. Runs the dry runs a plan lists, one at a time, in scratch task directories, keeping before/after evidence and each run's output on disk for QA.
 7. Registers tech debt in GitHub issues with the keys the supervisor checks, with the human's approval.
 
-The coordinator never writes a report, a verdict field or an agent's transition. It never edits `plan.md` after the lock, decides for the human, runs an agent's gate by hand, sets `validated`, or approves a PR. The human approves plans, decides every post-lock question, and approves and merges the PR.
+The coordinator never writes a report, a verdict field, an agent's transition or a PR's security audit (it quotes the reviewer's). It never edits `plan.md` after the lock, decides for the human, runs an agent's gate by hand, sets `validated`, or approves a PR. The human approves plans, decides every post-lock question, and approves and merges the PR.
 
 ## Finding raised after validation
 
@@ -113,7 +114,7 @@ The coordinator never writes a report, a verdict field or an agent's transition.
 
 ## Evidence and git
 
-Task artifacts in `.ai/tasks/` are git-ignored and stay local, except each task's `usage.jsonl`, which is versioned and reaches the PR with the branch. Evidence reaches the PR only when the human publishes the review and QA reports, and any improvement proposals, on the PR or in an issue. Scratch task directories for dry runs are never committed.
+Task artifacts in `.ai/tasks/` are git-ignored and stay local, except each task's `usage.jsonl`, which is versioned and reaches the PR with the branch. Evidence reaches the PR only when the human publishes the review and QA reports, and any improvement proposals, on the PR or in an issue. Scratch task directories for dry runs are never committed. The PR's "Security audit" quotes the latest review round's Security section, unchanged, naming the round.
 
 ## Changing the protocol
 

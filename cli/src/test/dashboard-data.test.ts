@@ -6,6 +6,8 @@ import { join } from "node:path";
 import { isTaskId, listTaskIds, listTasks, planTitle, taskDetail } from "../dashboard-data.js";
 
 // Every test works in its own temp root: never this repository's .ai/tasks/.
+// A valid Security section (BASE-124-B, K19), appended to review fixtures that must stay consistent.
+const SEC = "\n## Security\n\n- Trust boundary touched: no\n- Method: OWASP checklist\n- Findings: none\n\n| Category | Result | Basis |\n|---|---|---|\n| Input validation & injection | none | src/x.ts:1 |\n| Authn/authz & isolation | n/a | no auth code |\n| Secrets & data protection | none | src/x.ts:2 |\n| Abuse resistance | n/a | no endpoint |\n| Supply chain | none | no dependency change |\n";
 const C = "2026-01-01T00:03:00Z";
 const T = (from: string | null, to: string, agent: string, minute: number, note: string, extra: Record<string, unknown> = {}) => ({
   from,
@@ -36,7 +38,7 @@ const status = (ticket: string) =>
 const files = (ticket: string) => ({
   "status.json": status(ticket),
   "plan.md": "# Plan\n## Steps\n1. **human** — ok\n",
-  "review-report.md": `Round: 1\n${C}\n## Verdict: approved\n| L1 | x | To register |\n`,
+  "review-report.md": `Round: 1\n${C}\n## Verdict: approved\n| L1 | x | To register |\n${SEC}`,
 });
 const record = (over: Record<string, unknown> = {}) =>
   JSON.stringify({
@@ -151,7 +153,7 @@ test("usage: priced records give cost per record and in the total; unpriced is n
   }
 });
 
-test("task detail: transitions with five fields, checks K1–K18 in order, facts, keys with file and line only", () => {
+test("task detail: transitions with five fields, checks K1–K19 in order, facts, keys with file and line only", () => {
   const b = sandbox();
   try {
     b.task("TK-1");
@@ -159,7 +161,7 @@ test("task detail: transitions with five fields, checks K1–K18 in order, facts
     assert.deepEqual([d.schema, d.id, d.ticket, d.updated_at], [1, "TK-1", "TK-1", "2026-01-01T00:04:00Z"]);
     assert.equal(d.transitions.length, 5);
     assert.deepEqual(Object.keys(d.transitions[0]), ["from", "to", "agent", "timestamp", "note"]);
-    assert.deepEqual(d.checks.map((c) => c.id), Array.from({ length: 18 }, (_, i) => `K${i + 1}`));
+    assert.deepEqual(d.checks.map((c) => c.id), Array.from({ length: 19 }, (_, i) => `K${i + 1}`));
     assert.equal(d.facts.nextActor.role, "qa");
     assert.deepEqual(d.keys, [{ key: "reg TK-1 review r1 i1", file: "review-report.md", line: 4 }]);
     assert.equal(d.taskDir, join(b.root, ".ai", "tasks", "TK-1"));

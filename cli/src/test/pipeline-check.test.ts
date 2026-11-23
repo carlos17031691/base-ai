@@ -44,7 +44,10 @@ function status(over: Record<string, unknown> = {}, transitions = baseTransition
 }
 
 const PLAN = "# Plan\n\n## Steps\n\n1. **human** — approve\n2. **implementer** — do it\n\n## Files to touch\n\n| File | Action |\n|---|---|\n| `x.md` | modify |\n";
-const REVIEW = `# Review\nRound: 1\nReviewed implementer completion: ${C}\n\n## Verdict: approved\n\n| # | Issue | Tech debt |\n|---|---|---|\n| L1 | thing | To register |\n`;
+// A valid Security section (BASE-124-B, K19); `### Security` is the heading of a re-review round.
+const SEC = "\n## Security\n\n- Trust boundary touched: no\n- Method: OWASP checklist\n- Findings: none\n\n| Category | Result | Basis |\n|---|---|---|\n| Input validation & injection | none | src/x.ts:1 |\n| Authn/authz & isolation | n/a | no auth code |\n| Secrets & data protection | none | src/x.ts:2 |\n| Abuse resistance | n/a | no endpoint |\n| Supply chain | none | no dependency change |\n";
+const SEC3 = SEC.replace("## Security", "### Security");
+const REVIEW = `# Review\nRound: 1\nReviewed implementer completion: ${C}\n\n## Verdict: approved\n\n| # | Issue | Tech debt |\n|---|---|---|\n| L1 | thing | To register |\n${SEC}`;
 const QA = `# QA\nRound: 1\nImplementer completion verified: ${C}\n\n## Verdict: pass\n\n- **C1** — **To register**\n`;
 
 const ok = (text: string): FileRead => ({ kind: "ok", text });
@@ -67,7 +70,7 @@ const statusOf = (r: CheckReport, id: string) => check(r, id).status;
 test("a consistent task passes every check and computes facts and keys", () => {
   const r = checkTask(input());
   assert.equal(r.ok, true, renderText(r));
-  assert.equal(r.checks.length, 18);
+  assert.equal(r.checks.length, 19);
   assert.ok(r.checks.every((c) => c.status === "pass"));
   assert.equal(r.schema, 1);
   assert.equal(r.rule, "supervisor.md@682c6e4");
@@ -394,7 +397,7 @@ test("K16 keys: every review round, only the latest QA round, fences and code sp
   const review = [
     "# Review", "Round: 1", C, "", "## Verdict: changes_requested", "",
     "| L1 | a | To register |", "| L2 | b | `To register` |", "```", "**To register**", "```",
-    "## Round 2 re-review", "", C, "**Round 2 verdict:** approved", "- **To register** then **To register**",
+    "## Round 2 re-review", "", C, "**Round 2 verdict:** approved", "- **To register** then **To register**", SEC3,
   ].join("\n");
   const qa = [
     "# QA", "Round: 1", `Implementer completion verified: ${C}`, "## Verdict: pass", "- **To register**", "",
@@ -433,9 +436,9 @@ test("renderText prints only computed values: no note or report text", () => {
   const text = renderText(r);
   assert.doesNotMatch(text, /SECRET/);
   assert.doesNotMatch(JSON.stringify(r), /SECRET/);
-  assert.match(text, /^pipeline check TK-1: PASS \(0 failed, 0 skipped of 18\)/);
+  assert.match(text, /^pipeline check TK-1: PASS \(0 failed, 0 skipped of 19\)/);
   const failed = renderText(checkTask(input({ status: { kind: "missing" } })));
-  assert.match(failed, /^pipeline check \(unknown\): FAIL \(1 failed, 16 skipped of 18\)/);
+  assert.match(failed, /^pipeline check \(unknown\): FAIL \(1 failed, 17 skipped of 19\)/);
   assert.match(failed, /✖ K1 status\.parse — status\.json is missing/);
   assert.match(failed, /- K2 status\.ticket — skipped: depends on K1/);
 });
@@ -667,4 +670,209 @@ test("the next: line, with and without a round; note and report text never reach
   const text = renderText(r);
   assert.match(text, /\n {2}next: qa round 1 — no QA round\n/);
   assert.doesNotMatch(text + r.facts.nextActor.reason, /SENTINEL/);
+});
+
+// ---- K19 review.security (BASE-124-B): the form of the latest review round's Security section ----
+
+const BARE = REVIEW.replace(SEC, "");
+const OWASP = ["Input validation & injection", "Authn/authz & isolation", "Secrets & data protection", "Abuse resistance", "Supply chain"];
+const STRIDE = ["Spoofing", "Tampering", "Repudiation", "Information disclosure", "Denial of service", "Elevation of privilege"];
+interface SecOpts {
+  heading?: string;
+  boundary?: string | null;
+  method?: string | null;
+  findings?: string | null;
+  cats?: string[];
+  results?: string[];
+  basis?: string;
+  label?: (l: string) => string;
+  extra?: string;
+}
+/** A Security section; every part can be bent. */
+function sec(o: SecOpts = {}): string {
+  const label = o.label ?? ((l: string) => `- ${l}:`);
+  const cats = o.cats ?? OWASP;
+  const line = (l: string, v: string | null | undefined, d: string) => (v === null ? [] : [`${label(l)} ${v ?? d}`]);
+  return [
+    o.heading ?? "## Security",
+    "",
+    ...line("Trust boundary touched", o.boundary, "no"),
+    ...line("Method", o.method, "OWASP checklist"),
+    ...line("Findings", o.findings, "none"),
+    "",
+    "| Category | Result | Basis |",
+    "|---|---|---|",
+    ...cats.map((c, i) => `| ${c} | ${o.results?.[i] ?? "none"} | ${o.basis ?? "cli/src/x.ts:1"} |`),
+    ...(o.extra === undefined ? [] : [o.extra]),
+    "",
+  ].join("\n");
+}
+const k19 = (review: string, st: unknown = status()) => check(checkTask(input({ review: ok(review) }, st)), "K19");
+const stride = (o: SecOpts = {}) => sec({ boundary: "yes — external input", method: "STRIDE", cats: STRIDE, ...o });
+/** Two review rounds on one completion: round 1 changes_requested, round 2 approved. */
+function twoRounds(round2: string): [string, unknown] {
+  const t = baseTransitions();
+  t[4].note = `review round 1: changes_requested; reviewed implementer completion ${C}`;
+  t.splice(5, 0, { from: "completed", to: "completed", agent: "reviewer", timestamp: "2026-01-01T00:04:30Z", note: `review round 2: approved; reviewed implementer completion ${C}` });
+  const review = `${REVIEW.replace("## Verdict: approved", "## Verdict: changes_requested")}\n## Round 2 re-review\n\n${C}\n**Round 2 verdict:** approved\n\n${round2}`;
+  return [review, status({}, t)];
+}
+
+test("K19 a well-formed section passes: OWASP checklist after no, STRIDE after yes, every accepted line form, bold categories", () => {
+  assert.deepEqual([k19(BARE + sec()).status, k19(BARE + sec()).detail], ["pass", ""]);
+  assert.equal(k19(BARE + stride()).status, "pass");
+  for (const boundary of ["yes — network", "Yes: processes and secrets", "yes (external input)", "**yes** — secrets"]) {
+    assert.equal(k19(BARE + stride({ boundary })).status, "pass", boundary);
+  }
+  for (const label of [(l: string) => `- ${l}:`, (l: string) => `${l}:`, (l: string) => `- **${l}:**`, (l: string) => `* ${l}:`, (l: string) => `**${l}:**`]) {
+    assert.equal(k19(BARE + sec({ label })).status, "pass", label("x"));
+  }
+  assert.equal(k19(BARE + sec({ cats: OWASP.map((c) => `**${c}**`) })).status, "pass", "bold category labels");
+  assert.equal(k19(BARE + sec({ cats: OWASP.map((c) => `\`${c.toLowerCase()}\``) })).status, "pass", "case and backticks");
+  assert.equal(k19(BARE + sec({ method: "`OWASP checklist`", boundary: "No" })).status, "pass");
+  // The section ends at the next heading: later tables are not category rows.
+  assert.equal(k19(`${BARE}${sec()}\n## Checklist\n\n| a | b | c |\n|---|---|---|\n| x | H9 | z |\n`).status, "pass");
+  const [review, st] = twoRounds(sec({ heading: "### Security" }));
+  assert.equal(k19(review, st).status, "pass", "a re-review round with ### Security");
+  assert.equal(k19(...twoRounds(stride())).status, "pass", "## is accepted in a re-review round too");
+});
+
+test("K19 a re-review round cannot skip the section: only the latest round counts", () => {
+  const [review, st] = twoRounds("no security pass here\n");
+  const c = k19(review, st);
+  assert.deepEqual([c.status, c.detail], ["fail", "round 2: 0 Security headings"]);
+  // And a valid latest round is enough, whatever round 1 holds.
+  const [fixed, st2] = twoRounds(sec({ heading: "### Security" }));
+  assert.equal(k19(fixed.replace(SEC, ""), st2).status, "pass");
+});
+
+test("K19 absent or not counted: no heading, two headings, a section only inside a code fence, the unfilled template", () => {
+  assert.deepEqual([k19(BARE).status, k19(BARE).detail], ["fail", "round 1: 0 Security headings"]);
+  assert.equal(k19(BARE + sec() + sec()).detail, "round 1: 2 Security headings");
+  assert.equal(k19(`${BARE}\`\`\`\n${sec()}\`\`\`\n`).detail, "round 1: 0 Security headings");
+  assert.equal(k19(BARE + sec({ heading: "#### Security" })).detail, "round 1: 0 Security headings");
+  assert.equal(k19(BARE + sec({ heading: "## Security review" })).detail, "round 1: 0 Security headings");
+  const template = [
+    "## Security",
+    "",
+    "<!-- Required in every round. -->",
+    "",
+    "- Trust boundary touched: <!-- no | yes — network -->",
+    "- Method: <!-- STRIDE | OWASP checklist -->",
+    "- Findings: <!-- none | ids -->",
+    "",
+    "| Category | Result | Basis |",
+    "|---|---|---|",
+    "| <!-- STRIDE: Spoofing … --> | <!-- ids --> | <!-- basis --> |",
+    "",
+  ].join("\n");
+  const unfilled = k19(BARE + template);
+  assert.deepEqual([unfilled.status, unfilled.detail], ["fail", "round 1: Trust boundary touched is empty"]);
+  assert.equal(k19(`${BARE}<!--\n${sec()}-->\n`).detail, "round 1: 0 Security headings", "a section inside a comment");
+});
+
+test("K19 lines: each label missing, twice or empty; a boundary that is neither no nor yes with a kind", () => {
+  for (const [key, label] of [["boundary", "Trust boundary touched"], ["method", "Method"], ["findings", "Findings"]] as const) {
+    assert.equal(k19(BARE + sec({ [key]: null })).detail, `round 1: ${label}: 0 lines`);
+    assert.equal(k19(BARE + sec({ [key]: "" })).detail, `round 1: ${label} is empty`);
+    assert.equal(k19(BARE + sec({ [key]: "**" })).detail, `round 1: ${label} is empty`);
+    assert.equal(k19(BARE + sec({ extra: `\n- ${label}: none` })).detail, `round 1: ${label}: 2 lines`);
+  }
+  for (const boundary of ["maybe", "yes", "yes — the database", "no, but yes", "none", "n/a"]) {
+    assert.equal(k19(BARE + sec({ boundary })).detail, "round 1: Trust boundary touched is neither no nor yes with a kind", boundary);
+  }
+  // An indented field line is not a field line.
+  assert.equal(k19(BARE + sec({ label: (l) => `  - ${l}:` })).detail, "round 1: Trust boundary touched: 0 lines");
+});
+
+test("K19 the method follows the boundary: yes with OWASP checklist and no with STRIDE fail", () => {
+  assert.equal(k19(BARE + sec({ boundary: "yes — network" })).detail, "round 1: Method does not match Trust boundary touched");
+  assert.equal(k19(BARE + sec({ method: "STRIDE", cats: STRIDE })).detail, "round 1: Method does not match Trust boundary touched");
+  assert.equal(k19(BARE + sec({ method: "OWASP" })).detail, "round 1: Method does not match Trust boundary touched");
+  assert.equal(k19(BARE + stride({ method: "STRIDE and OWASP checklist" })).status, "fail");
+});
+
+test("K19 rows: one filled row per category of the method, and no other row", () => {
+  assert.equal(k19(BARE + stride({ cats: STRIDE.slice(1) })).detail, "round 1: category rows: expected 6, found 5");
+  assert.equal(k19(BARE + sec({ cats: OWASP.slice(1) })).detail, "round 1: category rows: expected 5, found 4");
+  assert.equal(k19(BARE + sec({ cats: [...OWASP.slice(0, 4), OWASP[0]] })).detail, "round 1: category rows: 2 for one OWASP checklist category");
+  assert.equal(k19(BARE + sec({ cats: [...OWASP, "Logging"] })).detail, "round 1: category rows: expected 5, found 6");
+  assert.equal(k19(BARE + sec({ cats: [...OWASP.slice(0, 4), "Logging"] })).detail, "round 1: category rows: 0 for one OWASP checklist category");
+  assert.equal(k19(BARE + sec({ cats: STRIDE.slice(0, 5) })).status, "fail", "STRIDE rows under the OWASP method");
+  assert.equal(k19(BARE + sec({ results: ["", "none", "none", "none", "none"] })).detail, "round 1: a category row has an empty Result or Basis");
+  assert.equal(k19(BARE + sec({ basis: "" })).detail, "round 1: a category row has an empty Result or Basis");
+  assert.equal(k19(BARE + sec({ basis: "``" })).detail, "round 1: a category row has an empty Result or Basis");
+  assert.equal(k19(BARE + sec().replace("| Supply chain | none | cli/src/x.ts:1 |", "| Supply chain | none |")).detail, "round 1: a category row has an empty Result or Basis");
+  assert.equal(k19(BARE + sec().replace("| Category | Result | Basis |\n|---|---|---|\n", "")).status, "pass", "the rows count without a header");
+});
+
+test("K19 the cited findings agree between the Findings line and the rows", () => {
+  const h1 = ["H1", "none", "none", "none", "none"];
+  assert.equal(k19(BARE + sec({ results: h1 })).detail, "round 1: finding ids differ: 0 in Findings, 1 in the rows");
+  assert.equal(k19(BARE + sec({ findings: "H1" })).detail, "round 1: finding ids differ: 1 in Findings, 0 in the rows");
+  assert.equal(k19(BARE + sec({ findings: "H1, L2", results: h1 })).detail, "round 1: finding ids differ: 2 in Findings, 1 in the rows");
+  assert.equal(k19(BARE + sec({ findings: "H1, L2", results: ["H1", "L2 and H1", "none", "n/a", "none"] })).status, "pass");
+  assert.equal(k19(BARE + sec({ findings: "M3", results: ["none", "none", "**M3**", "none", "none"] })).status, "pass");
+  assert.equal(k19(BARE + sec({ findings: "M3", results: ["none", "none", "M4", "none", "none"] })).status, "fail", "the same count, different ids");
+  assert.equal(k19(BARE + sec({ findings: "see above" })).detail, "round 1: Findings is neither none nor finding ids");
+  assert.equal(k19(BARE + sec({ findings: "None" })).status, "pass");
+});
+
+test("K19 older and unfinished tasks are not failed: skipped outside completed, and when K8 or K9 does not pass", () => {
+  const t = baseTransitions();
+  const validated = [...t, { from: "completed", to: "validated", agent: "supervisor", timestamp: "2026-01-01T00:06:00Z", note: "validated" }];
+  const old = checkTask(input({ review: ok(BARE) }, status({ state: "validated" }, validated)));
+  assert.deepEqual([check(old, "K19").status, check(old, "K19").detail, old.ok], ["skip", "state is validated", true]);
+  assert.match(renderText(old), /^pipeline check TK-1: PASS \(0 failed, 1 skipped of 19\)/);
+  assert.match(renderText(old), /- K19 review\.security — skipped: state is validated/);
+  const blocked = [...t.slice(0, 3), { from: "in_progress", to: "blocked", agent: "implementer", timestamp: C, note: "blocked: x" }];
+  for (const [state, list] of [["in_progress", t.slice(0, 3)], ["pending", t.slice(0, 2)], ["blocked", blocked]] as const) {
+    const c = k19(BARE, status({ state, blocker: state === "blocked" ? "x" : null }, list));
+    assert.deepEqual([c.status, c.detail], ["skip", `state is ${state}`], state);
+  }
+  const noReview = k19(BARE, status({ checklist: { tests_pass: true, lint_pass: false, types_pass: true, review_verdict: null, qa_verdict: null } }, t.slice(0, 4)));
+  assert.deepEqual([noReview.status, noReview.detail], ["skip", "depends on K8"]);
+  const inconsistent = k19(REVIEW.replace("## Verdict: approved", "## Verdict: changes_requested"));
+  assert.deepEqual([inconsistent.status, inconsistent.detail], ["skip", "depends on K9"]);
+  assert.deepEqual([k19(REVIEW, undefined).status], ["pass"]);
+  const noStatus = check(checkTask(input({ status: { kind: "missing" } })), "K19");
+  assert.deepEqual([noStatus.status, noStatus.detail], ["skip", "depends on K1"]);
+});
+
+test("K19 detail and output never carry report text", () => {
+  const marker = "SENTINEL-K19";
+  const reviews = [
+    BARE + sec({ boundary: marker }),
+    BARE + sec({ method: marker }),
+    BARE + sec({ findings: marker }),
+    BARE + sec({ cats: [...OWASP.slice(0, 4), marker] }),
+    BARE + sec({ results: [marker, "H1", "none", "none", "none"] }),
+    BARE + sec({ basis: marker, findings: "H1" }),
+  ];
+  for (const review of reviews) {
+    const r = checkTask(input({ review: ok(review) }));
+    assert.equal(check(r, "K19").status, "fail");
+    assert.doesNotMatch(check(r, "K19").detail + renderText(r) + JSON.stringify(r), /SENTINEL/);
+    assert.match(check(r, "K19").detail, /^round 1: /);
+  }
+});
+
+test("K19 report shape and next actor: 19 checks in order, source C19, and a failing section goes to the human", () => {
+  const good = checkTask(input());
+  assert.deepEqual(good.checks.map((c) => c.id), Array.from({ length: 19 }, (_, i) => `K${i + 1}`));
+  assert.deepEqual([good.checks[18].key, good.checks[18].source, good.checks[18].status], ["review.security", "C19", "pass"]);
+  assert.equal(good.schema, 1);
+  assert.match(renderText(good), /of 19\)/);
+  assert.match(renderText(good), /✔ K19 review\.security/);
+  assert.match(good.rule, /^supervisor\.md@[0-9a-f]{7}$/);
+  assert.equal(good.facts.nextActor.role, "supervisor");
+
+  const bad = checkTask(input({ review: ok(BARE) }));
+  assert.equal(bad.ok, false);
+  assert.deepEqual(bad.facts.nextActor, { role: "human", reason: "check K19 review.security failed" });
+  assert.match(renderText(bad), /✖ K19 review\.security — round 1: 0 Security headings/);
+  // Review approved, no QA yet: the missing section is raised before QA is asked to run.
+  const t = baseTransitions().slice(0, 5);
+  const early = checkTask(input({ review: ok(BARE), qa: { kind: "missing" } }, status({ checklist: { tests_pass: true, lint_pass: false, types_pass: true, review_verdict: "approved", qa_verdict: null } }, t)));
+  assert.deepEqual(early.facts.nextActor, { role: "human", reason: "check K19 review.security failed" });
 });

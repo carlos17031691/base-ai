@@ -7,6 +7,10 @@
 
 - What problem does this PR solve and why?
 
+## Security audit
+
+<!-- Quote the "Security" section of the latest review round of review-report.md, unchanged, and name the round. The author never writes this section. -->
+
 ## Quality, Security & SDLC Checklist
 
 - [ ] Branch name (`feat/<ID>-...`) and commit messages include the Ticket ID.
@@ -14,7 +18,7 @@
 - [ ] Domain logic is isolated from infrastructure/transport (`architecture` skill).
 - [ ] No cross-service filesystem imports; API/event contracts remain backward-compatible or versioned.
 - [ ] Automated tests added/updated (coverage >= 80%, happy path, edge cases, failure modes) and passing (`testing` skill).
-- [ ] Security checked: zero hardcoded secrets/PII, external inputs validated, authn/authz enforced (`security` skill).
+- [ ] The "Security audit" below is quoted from the reviewer's report, not written by the author (`security` skill).
 - [ ] Sonar & CodeRabbit dual gates verified: all **High** and **Medium** findings resolved and re-verified.
 - [ ] Any **Low** findings accepted without changes logged as project issues / technical debt (list Issue # below).
 - [ ] All review conversations and comments explicitly addressed and marked resolved (Zero Unresolved Conversations rule).
