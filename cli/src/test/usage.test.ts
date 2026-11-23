@@ -279,3 +279,11 @@ test("pricing validation: missing key, negative or non-numeric value, unknown ke
   assert.throws(() => parsePricing({ "bad model": P }, f), /"usage\.pricing\.bad model" is not a valid model id/);
   assert.throws(() => parsePricing({ "claude-x": 3 }, f), /"usage\.pricing\.claude-x" must be a map/);
 });
+
+test("parseUsageLine returns ts for a valid UTC timestamp and null for a missing or malformed one (BASE-101-D1)", () => {
+  const line = (ts?: unknown) => JSON.stringify({ schema: 1, ...rec(), ...(ts === undefined ? {} : { ts }) });
+  assert.equal(parseUsageLine(line("2026-11-22T15:37:24Z"))?.ts, "2026-11-22T15:37:24Z");
+  for (const bad of [undefined, "2026-11-22 15:37:24", "2026-11-22T15:37:24.000Z", 1, null]) assert.equal(parseUsageLine(line(bad))?.ts, null, String(bad));
+  // usage report output does not carry ts: groups and totals are unchanged.
+  assert.ok(!("ts" in buildUsageReport("T", line("2026-11-22T15:37:24Z"), {}).groups[0]));
+});

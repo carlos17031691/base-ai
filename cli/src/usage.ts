@@ -312,8 +312,12 @@ export function recordCost(r: Counters & { model: string }, pricing: Pricing): n
 /** The fields of a usage.jsonl line that a report reads. */
 export type ReportRecord = Counters & { agent: string; model: string; messages: number };
 
+/** A usage.jsonl line as read: the report fields plus `ts` when it is a valid UTC timestamp, else null (BASE-101-D1). */
+export type UsageLine = ReportRecord & { ts: string | null };
+const RECORD_TS = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/;
+
 /** One usage.jsonl line as a record, or null when it is not one (the line is skipped and counted). */
-export function parseUsageLine(line: string): ReportRecord | null {
+export function parseUsageLine(line: string): UsageLine | null {
   let r: unknown;
   try {
     r = JSON.parse(line);
@@ -324,6 +328,7 @@ export function parseUsageLine(line: string): ReportRecord | null {
   if (!COUNTERS.every((c) => isCount(r[c])) || !isCount(r.messages)) return null;
   const n = (k: string) => r[k] as number;
   return {
+    ts: typeof r.ts === "string" && RECORD_TS.test(r.ts) ? r.ts : null,
     agent: r.agent,
     model: r.model,
     messages: n("messages"),
@@ -395,9 +400,9 @@ export interface UsageReport {
   total: UsageTotals;
 }
 
-/** The report of one task's usage.jsonl text. Blank lines are ignored; other unreadable lines are counted. */
-export function buildUsageReport(ticket: string, text: string, pricing: Pricing): UsageReport {
-  const records: ReportRecord[] = [];
+/** The records of a usage.jsonl text in file order. Blank lines are ignored; other unreadable lines are counted. */
+export function parseUsageLines(text: string): { records: UsageLine[]; skipped: number } {
+  const records: UsageLine[] = [];
   let skipped = 0;
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
@@ -405,6 +410,12 @@ export function buildUsageReport(ticket: string, text: string, pricing: Pricing)
     if (r === null) skipped++;
     else records.push(r);
   }
+  return { records, skipped };
+}
+
+/** The report of one task's usage.jsonl text. */
+export function buildUsageReport(ticket: string, text: string, pricing: Pricing): UsageReport {
+  const { records, skipped } = parseUsageLines(text);
   const { groups, total } = summarizeUsage(records, pricing);
   return { schema: 1, ticket, records: records.length, skipped_lines: skipped, groups, total };
 }

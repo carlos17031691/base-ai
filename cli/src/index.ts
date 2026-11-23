@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { resolve } from "node:path";
+import { existsSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { buildContextIndex, searchContext } from "./context.js";
 import { runDoctor } from "./doctor.js";
 import { init } from "./init.js";
@@ -8,6 +9,7 @@ import { listServices, serviceAdd, serviceNew, serviceRemove, syncServices } fro
 import { computeAiStats, describeDefinitionViolation, renderCiReport } from "./stats.js";
 import { aiSync } from "./sync.js";
 import { startMcpServer } from "./mcp.js";
+import { parsePort, startDashboard } from "./dashboard.js";
 import { runEvals, renderEvalReport } from "./eval.js";
 import { runWizard } from "./wizard.js";
 import { devUp, devStop, devStatus } from "./dev.js";
@@ -47,6 +49,7 @@ Commands:
                                                      naming each failed check. Offline.
   pipeline debt <task-dir> [--issues n,…] [--json]  Check each To register key against GitHub issues (opt-in network, gh);
                                                      exit 0 registered, 1 missing, 2 could not check
+  dashboard [--port N]                              Serve a read-only local JSON API over .ai/tasks/ on 127.0.0.1 (default port 4747)
   usage record                                      Record a Claude Code turn's tokens from a Stop/SubagentStop hook (stdin) into
                                                      .ai/tasks/<ticket>/usage.jsonl; always exits 0, nothing on stdout
   usage report <task-dir> [--json]                  Show a task's recorded tokens per agent and model, with USD cost from
@@ -220,6 +223,31 @@ function main(argv: string[]): number {
   if (cmd === "sync") {
     for (const r of syncServices(root)) console.log(`  ${r.name}: ${r.action}${r.reason ? ` (${r.reason})` : ""}`);
     console.log("✔ sync complete");
+    return 0;
+  }
+  if (cmd === "dashboard") {
+    const port = parsePort(flags.port);
+    if (port === null) {
+      console.error("base-ai dashboard: --port must be an integer from 0 to 65535");
+      return 1;
+    }
+    if (!existsSync(join(root, ".ai"))) throw new Error(`Not a base-ai project: ${root} (missing .ai/). Pass --root <dir>.`);
+    // Prices are read once at start (H4): a bad config fails here, not on every request.
+    const { pricing } = loadUsageConfig(root);
+    const dash = startDashboard({
+      root,
+      port,
+      pricing,
+      out: (l) => console.log(l),
+      err: (l) => console.error(l),
+      proc: process,
+    });
+    dash.ready.catch((e) => {
+      console.error((e as Error).message);
+      process.exitCode = 1;
+    });
+    // `stopped` never rejects; `void` marks the chain as deliberately not awaited (Sonar S9383, PR #118).
+    void dash.stopped.then(() => process.exit(0));
     return 0;
   }
   if (cmd === "mcp") {
