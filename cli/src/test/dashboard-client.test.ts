@@ -483,3 +483,46 @@ test("D3 APP_JS in node:vm subscribes to the relative /events route when the win
   const src = readFileSync(join(SRC, "dashboard-client.ts"), "utf8");
   assert.deepEqual(Array.from(src.matchAll(/new Source\((.+?)\)/g), (m) => m[1]), ['"/events"'], "the only stream is same-origin /events");
 });
+
+test("review r1 L3: boot's first load and a card select go through the serialiser, so they never overlap another reload", async () => {
+  // A REFRESH during the first load is queued, not run alongside it.
+  let release: () => void = () => {};
+  const gate = new Promise<void>((r) => (release = r));
+  const f = fakeWin();
+  const fetch = f.win.fetch;
+  f.win.fetch = async (path: string) => {
+    if (path === "/api/tasks") await gate;
+    return fetch(path);
+  };
+  const booting = boot(f.win);
+  for (let i = 0; i < 5; i++) await settle();
+  f.calls.length = 0;
+  f.doc.fire("click", { target: f.doc.byAction("refresh")[0] });
+  await settle();
+  assert.equal(f.calls.length, 0, "a REFRESH click during the first load starts no second load");
+  f.win.fetch = fetch;
+  release();
+  const ctx = await booting;
+  // The first load's list fetch (held by the gate) and exactly one queued refresh after it.
+  assert.equal(f.calls.filter((c) => c === "/api/tasks").length, 2, "the queued refresh runs once, after the first load");
+  assert.equal(ctx.busy, false);
+
+  // A select while a reload runs is queued: one full refresh follows, which loads the newly selected detail.
+  let release2: () => void = () => {};
+  const gate2 = new Promise<void>((r) => (release2 = r));
+  f.win.fetch = async (path: string) => {
+    if (path === "/api/tasks") await gate2;
+    return fetch(path);
+  };
+  f.calls.length = 0;
+  const running = client.serialized(ctx, () => client.refresh(ctx));
+  await settle();
+  const card = { getAttribute: (n: string) => (n === "data-action" ? "select" : n === "data-id" ? "TK-2" : null) } as unknown as client.ElLike;
+  await client.onAction(ctx, card, []);
+  assert.equal(ctx.pending, true, "the select's detail load is queued behind the running reload");
+  assert.ok(!f.calls.includes("/api/tasks/TK-2"), "no detail load overlaps the running reload");
+  release2();
+  await running;
+  assert.equal(ctx.state.detail?.id, "TK-2");
+  assert.equal(ctx.pending, false);
+});

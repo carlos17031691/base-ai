@@ -217,6 +217,33 @@ test("no .ai/tasks/: .ai is watched until it appears, then the root watcher star
   }
 });
 
+test("review r1 L1: .ai/tasks/ deleted at runtime re-arms the root watcher via .ai, and re-creating it sends list again", () => {
+  const b = sandbox("TK-1");
+  try {
+    const { events, w, t } = start(b.root);
+    const oldRoot = w.live.get(b.tasks);
+    rmSync(b.tasks, { recursive: true });
+    oldRoot?.fire();
+    t.tick(250);
+    assert.deepEqual(events, [{ kind: "list" }], "the task vanished");
+    assert.ok(!w.live.has(b.tasks) && w.live.has(join(b.root, ".ai")), "the dead root watcher is closed; .ai is watched");
+    mkdirSync(join(b.tasks, "TK-2"), { recursive: true });
+    w.live.get(join(b.root, ".ai"))?.fire();
+    t.tick(250);
+    assert.deepEqual(events.slice(1), [{ kind: "list" }]);
+    assert.ok(w.live.has(b.tasks) && w.live.has(join(b.tasks, "TK-2")));
+    // Replaced in place (new inode): the root watcher is re-opened on the new directory.
+    const before = w.opened.filter((x) => x === b.tasks).length;
+    renameSync(b.tasks, join(b.root, "old-tasks"));
+    mkdirSync(join(b.tasks, "TK-2"), { recursive: true });
+    w.live.get(b.tasks)?.fire();
+    t.tick(250);
+    assert.equal(w.opened.filter((x) => x === b.tasks).length, before + 1);
+  } finally {
+    b.done();
+  }
+});
+
 test("close() closes every watcher and clears every pending window; later raw events send nothing", () => {
   const b = sandbox("TK-1");
   try {

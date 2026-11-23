@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEFAULT_PORT, clientErrorReply, parsePort, startDashboard, type DashboardData, type DashboardOptions } from "../dashboard.js";
-import type { WatchFn } from "../dashboard-watch.js";
+import type { Timers, WatchFn } from "../dashboard-watch.js";
 
 const CLI = join(dirname(fileURLToPath(import.meta.url)), "..", "index.js");
 const SECURITY = {
@@ -60,7 +60,24 @@ function rawNoHost(port: number): Promise<string> {
 
 const fakeProc = () => Object.assign(new EventEmitter(), {}) as EventEmitter & { on: EventEmitter["on"]; off: EventEmitter["off"] };
 
-type Extra = Pick<DashboardOptions, "watch" | "maxClients" | "heartbeatMs">;
+type Extra = Pick<DashboardOptions, "watch" | "maxClients" | "heartbeatMs" | "timers">;
+
+/** Real timeouts (for the debounce), but a hand-driven heartbeat interval whose clearing is recorded. */
+function fakeIntervals() {
+  const intervals: { fn: () => void; ms: number; handle: object }[] = [];
+  const cleared: unknown[] = [];
+  const timers: Timers = {
+    setTimeout: (fn, ms) => setTimeout(fn, ms),
+    clearTimeout: (h) => clearTimeout(h as NodeJS.Timeout),
+    setInterval: (fn, ms) => {
+      const handle = { unref: () => handle };
+      intervals.push({ fn, ms, handle });
+      return handle;
+    },
+    clearInterval: (h) => void cleared.push(h),
+  };
+  return { timers, intervals, cleared };
+}
 async function withServer(
   fn: (port: number, ctx: { lines: string[]; errs: string[]; proc: EventEmitter; stopped: Promise<void>; root: string }) => Promise<void>,
   data?: DashboardData,
@@ -523,18 +540,25 @@ test("D3 events: a change in a task directory reaches every open stream once as 
   );
 });
 
-test("D3 heartbeat: open streams get a ': ping' comment on the heartbeat timer", async () => {
+test("D3 heartbeat: one shared 25 s interval; each tick sends ': ping' to every open stream (fake timer)", async () => {
+  const f = fakeIntervals();
   await withServer(
     async (port) => {
-      const st = await openEvents(port);
+      const a = await openEvents(port);
+      const b = await openEvents(port);
       try {
-        await until(() => st.text().includes(": ping\n\n"));
+        await until(() => a.text().includes("retry") && b.text().includes("retry"));
+        assert.deepEqual(f.intervals.map((i) => i.ms), [25_000], "one heartbeat timer, 25 s");
+        assert.ok(!a.text().includes(": ping"));
+        f.intervals[0].fn();
+        await until(() => a.text().includes(": ping\n\n") && b.text().includes(": ping\n\n"));
       } finally {
-        st.close();
+        a.close();
+        b.close();
       }
     },
     undefined,
-    { heartbeatMs: 20, watch: fakeWatch().watch },
+    { timers: f.timers, watch: fakeWatch().watch },
   );
 });
 
@@ -569,8 +593,9 @@ test("D3 client cap: with 10 streams open the 11th gets 503 JSON; after one clos
   );
 });
 
-test("D3 stop: SIGTERM with open streams ends them, closes every watcher and still resolves stopped", async () => {
+test("D3 stop: SIGTERM with open streams ends them, closes every watcher, clears the heartbeat and still resolves stopped", async () => {
   const w = fakeWatch();
+  const f = fakeIntervals();
   await withServer(
     async (port, { proc, stopped, errs }) => {
       const a = await openEvents(port);
@@ -579,10 +604,11 @@ test("D3 stop: SIGTERM with open streams ends them, closes every watcher and sti
       await Promise.all([a.ended, b.ended, stopped]);
       assert.deepEqual([proc.listenerCount("SIGINT"), proc.listenerCount("SIGTERM")], [0, 0]);
       assert.equal(w.counts().closed, w.counts().opened, "every watcher closed");
+      assert.deepEqual(f.cleared, [f.intervals[0].handle], "the heartbeat interval is cleared");
       assert.ok(errs.includes("base-ai dashboard: stopped"));
     },
     undefined,
-    { watch: w.watch },
+    { watch: w.watch, timers: f.timers },
   );
 });
 

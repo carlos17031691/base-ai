@@ -47,7 +47,7 @@ export interface TaskWatcherOptions {
   windowMs?: number;
 }
 
-/** The inode of a task directory, or null when it cannot be read (it then counts as changed next time). */
+/** The inode of a directory, or null when it cannot be read; a stored null always counts as changed. */
 function inode(path: string): number | null {
   try {
     return lstatSync(path).ino;
@@ -66,6 +66,7 @@ export function startTaskWatcher(o: TaskWatcherOptions): { close(): void } {
   const windows = new Map<string, unknown>();
   const reported = new Set<string>();
   let rootHandle: WatchHandle | null = null;
+  let rootIno: number | null = null;
   let aiHandle: WatchHandle | null = null;
   let closed = false;
 
@@ -123,6 +124,13 @@ export function startTaskWatcher(o: TaskWatcherOptions): { close(): void } {
   /** Re-lists the task directories with D1's filter and brings the watchers in line; `list` fires on a change. */
   const reconcile = (initial: boolean) => {
     if (closed) return;
+    // `.ai/tasks/` itself deleted or replaced while running: its watcher is dead (Linux sends nothing more),
+    // so re-arm it, which falls back to watching `.ai/` until the directory comes back.
+    if (rootHandle !== null && (rootIno === null || rootIno !== inode(tasksDir))) {
+      rootHandle.close();
+      rootHandle = null;
+      startRoot();
+    }
     const ids = new Set(listTaskIds(o.root).ids);
     let changed = false;
     for (const id of Array.from(tasks.keys())) {
@@ -136,7 +144,7 @@ export function startTaskWatcher(o: TaskWatcherOptions): { close(): void } {
       if (known === undefined) {
         openTask(id);
         changed = true;
-      } else if (known.handle === null || known.ino !== inode(join(tasksDir, id))) {
+      } else if (known.handle === null || known.ino === null || known.ino !== inode(join(tasksDir, id))) {
         // Deleted and re-created, renamed in place, or a watcher that failed: watch the directory again.
         closeTask(id);
         openTask(id);
@@ -179,6 +187,7 @@ export function startTaskWatcher(o: TaskWatcherOptions): { close(): void } {
       startAi();
       return false;
     }
+    rootIno = inode(tasksDir);
     aiHandle?.close();
     aiHandle = null;
     return true;

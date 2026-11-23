@@ -291,7 +291,7 @@ export async function onAction(ctx: Ctx, el: ElLike, modes: ElLike[]): Promise<v
     q.selected = el.getAttribute("data-id");
     renderQueue(ctx);
     renderDetail(ctx);
-    await loadDetail(ctx);
+    await serialized(ctx, () => loadDetail(ctx));
   } else if (action === "mode") {
     q.mode = el.getAttribute("data-mode") === "all" ? "all" : "active";
     q.expanded = q.mode === "all";
@@ -376,7 +376,7 @@ export async function boot(win: WinLike): Promise<Ctx> {
   if (meta.ok) ctx.state.editorUrl = (meta.data as { editorUrl?: unknown }).editorUrl === undefined ? null : String((meta.data as { editorUrl: unknown }).editorUrl);
   else showError(ctx, "detail", meta.message);
   renderAll(ctx);
-  await refresh(ctx);
+  await serialized(ctx, () => refresh(ctx));
   subscribe(ctx);
   return ctx;
 }
