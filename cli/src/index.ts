@@ -246,7 +246,8 @@ function main(argv: string[]): number {
       console.error((e as Error).message);
       process.exitCode = 1;
     });
-    dash.stopped.then(() => process.exit(0));
+    // `stopped` never rejects; `void` marks the chain as deliberately not awaited (Sonar S9383, PR #118).
+    void dash.stopped.then(() => process.exit(0));
     return 0;
   }
   if (cmd === "mcp") {
