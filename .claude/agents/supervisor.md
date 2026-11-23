@@ -245,7 +245,7 @@ Read `review-report.md`. **Halt → human** on any inconsistency — never repai
 
 ### C19 — Review security section
 
-**Refusal → human** unless the latest round of `review-report.md` has, outside code fences, one `## Security` or `### Security` heading and, under it: one line each for `Trust boundary touched:`, `Method:` and `Findings:`; `yes` with `STRIDE` and six category rows, or `no` with `OWASP checklist` and five; a result and a basis in every row; and in `Findings:` either `none` or exactly the finding ids the rows name. Structure only — you do not judge the content. The reviewer never reviews one completion twice, so the way out is the human's: a send-back for a new completion, recorded per C15, or another decision.
+**Refusal → human** unless the latest round of `review-report.md` has, outside code fences, one `## Security` or `### Security` heading and, under it: one line each for `Trust boundary touched:`, `Method:` and `Findings:`; `yes` naming at least one of network, processes, external input, secrets, with `STRIDE` and six category rows, or `no` with `OWASP checklist` and five; a result and a basis in every row; and in `Findings:` either `none` or exactly the finding ids the rows name. Structure only — you do not judge the content. The reviewer never reviews one completion twice, so the way out is the human's: a send-back for a new completion, recorded per C15, or another decision.
 
 ### C10 — QA present
 
