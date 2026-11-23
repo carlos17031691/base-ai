@@ -61,12 +61,20 @@ function parseTargets(raw: unknown, file: string): Agent[] {
   return list as Agent[];
 }
 
+const isMap = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+
+/** Returns `budgets` of config.yaml, or undefined when absent; throws when it is not a map. */
+function budgetsMap(cfg: Record<string, unknown>, file: string): Record<string, unknown> | undefined {
+  if (cfg.budgets === undefined) return undefined;
+  if (!isMap(cfg.budgets)) throw new Error(`${file}: "budgets" must be a map`);
+  return cfg.budgets;
+}
+
 /** Reads `budgets.<key>` (role -> positive integer); throws naming the key on any other value. */
 function parseRoleBudgets(cfg: Record<string, unknown>, key: string, file: string): Record<string, number> | undefined {
-  if (cfg.budgets === undefined) return undefined;
-  const isMap = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
-  if (!isMap(cfg.budgets)) throw new Error(`${file}: "budgets" must be a map`);
-  const defs = cfg.budgets[key];
+  const budgets = budgetsMap(cfg, file);
+  if (budgets === undefined) return undefined;
+  const defs = budgets[key];
   if (defs === undefined) return undefined;
   if (!isMap(defs)) throw new Error(`${file}: "budgets.${key}" must be a map of role to tokens`);
   for (const [role, value] of Object.entries(defs)) {
@@ -79,9 +87,7 @@ function parseRoleBudgets(cfg: Record<string, unknown>, key: string, file: strin
 
 /** Reads the optional `budgets.always_on` (positive integer); throws naming the key on any other value. */
 function parseAlwaysOnBudget(cfg: Record<string, unknown>, file: string): number | undefined {
-  const budgets = cfg.budgets;
-  if (typeof budgets !== "object" || budgets === null || Array.isArray(budgets)) return undefined;
-  const value = (budgets as Record<string, unknown>).always_on;
+  const value = budgetsMap(cfg, file)?.always_on;
   if (value === undefined) return undefined;
   if (!Number.isInteger(value) || (value as number) <= 0) throw new Error(`${file}: "budgets.always_on" must be a positive integer`);
   return value as number;

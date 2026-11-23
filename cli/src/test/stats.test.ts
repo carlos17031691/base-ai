@@ -326,6 +326,18 @@ test("T6 renderCiReport shows the enforced budget and its violation", () => {
   assert.doesNotMatch(md, /All components within budget/);
 });
 
+test("T6 renderCiReport labels --max-tokens violations with --max-tokens, not budgets.always_on", () => {
+  const d = makeProject();
+  mkdirSync(join(d, ".ai/skills/big"), { recursive: true });
+  writeFileSync(join(d, ".ai/skills/big/skill.md"), `---\nid: big\ndescription: Big skill\n---\n${"x".repeat(20_000)}`);
+  setBudgets(d, "budgets:\n  always_on: 2500\n");
+  const report = computeAiStats(d, { maxTokens: 1000 });
+  assert.equal(report.maxTokens, 1000);
+  const md = renderCiReport(report);
+  assert.match(md, /- \*\*big\*\*: \d+ tokens \(exceeds 1000\)/);
+  assert.doesNotMatch(md, /exceeds 2500/);
+});
+
 test("T6 ai stats exits 1 on an enforced excess, with or without --max-tokens and --ci, and 0 without the key", () => {
   const d = makeProject();
   const run = (...args: string[]) => spawnSync(process.execPath, [CLI, "ai", "stats", "--root", d, ...args], { encoding: "utf8" });

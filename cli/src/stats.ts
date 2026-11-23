@@ -14,6 +14,8 @@ export interface AiStatsReport {
   alwaysOnEnforced: boolean;
   /** Set when an enforced always-on budget is exceeded. */
   alwaysOnViolation: { estimatedTokens: number; budget: number } | null;
+  /** The `--max-tokens` value that `violations` are measured against; null without the flag. */
+  maxTokens: number | null;
   withinBudget: boolean;
   skillsTotalTokens: number;
   skills: TokenItem[];
@@ -153,10 +155,10 @@ export function computeAiStats(root: string, opts?: GuardrailOptions): AiStatsRe
     alwaysOnBudget,
     alwaysOnEnforced,
     alwaysOnViolation,
+    maxTokens: maxTokens ?? null,
     withinBudget:
       violations.length === 0 &&
       definitionViolations.length === 0 &&
-      alwaysOnViolation === null &&
       alwaysOnTokens <= alwaysOnBudget,
     skillsTotalTokens,
     skills,
@@ -214,7 +216,7 @@ export function renderCiReport(report: AiStatsReport): string {
       lines.push(`- **always-on context**: ${v.estimatedTokens} tokens (budget: ${v.budget}, budgets.always_on)`);
     }
     for (const v of report.violations) {
-      lines.push(`- **${v.name}**: ${v.estimatedTokens} tokens (exceeds ${report.alwaysOnBudget})`);
+      lines.push(`- **${v.name}**: ${v.estimatedTokens} tokens (exceeds ${report.maxTokens})`);
     }
     for (const v of report.definitionViolations) {
       lines.push(`- ${describeDefinitionViolation(v)}`);
