@@ -1,3 +1,4 @@
+import { claudeRules } from "./exporters.js";
 import { loadRoleDefinitions, loadSource } from "./source.js";
 
 export interface TokenItem {
@@ -77,7 +78,8 @@ function estimateLatencyMs(tokens: number): string {
 export function computeAiStats(root: string, opts?: GuardrailOptions): AiStatsReport {
   const src = loadSource(root);
   const skillIndexText = src.skills.map((s) => `- **${s.id}**: ${s.description}`).join("\n");
-  const alwaysOnText = `${src.rules}\n\n${skillIndexText}`;
+  // With Claude configured, measure what Claude Code loads: CLAUDE.md has no skill or agent index (BASE-079-T5).
+  const alwaysOnText = src.agents.includes("claude") ? claudeRules(src.rules) : `${src.rules}\n\n${skillIndexText}`;
   const alwaysOnTokens = estimateTokens(alwaysOnText);
 
   const skills: TokenItem[] = src.skills

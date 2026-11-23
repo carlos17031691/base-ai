@@ -105,7 +105,7 @@ function main(argv: string[]): number | Promise<number> {
       console.log(renderCiReport(st));
     } else {
       const status = st.withinBudget ? "✔ within budget" : "⚠ exceeds budget";
-      console.log(`Always-on context (rules + memory + skill index): ~${st.alwaysOnTokens} tokens (budget: ${st.alwaysOnBudget}) [${status}]`);
+      console.log(`Always-on context (rules + memory; plus the skill index where it is exported): ~${st.alwaysOnTokens} tokens (budget: ${st.alwaysOnBudget}) [${status}]`);
       console.log(`On-demand skills (${st.skills.length} skills, loaded only when invoked): ~${st.skillsTotalTokens} tokens total\n`);
       for (const s of st.skills) {
         console.log(`  - ${s.name.padEnd(16)} ~${String(s.estimatedTokens).padStart(4)} tokens (${s.chars} chars)`);

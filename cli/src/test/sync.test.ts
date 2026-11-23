@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { aiSync } from "../sync.js";
+import { claudeRules } from "../exporters.js";
 
 function fixture(): string {
   const d = mkdtempSync(join(tmpdir(), "base-ai-"));
@@ -20,6 +21,28 @@ test("generates artefacts for all agents", () => {
     assert.ok(existsSync(join(d, f)), f);
   }
   assert.match(readFileSync(join(d, ".agents/skills/adr/SKILL.md"), "utf8"), /^---\nname: "adr"/);
+});
+
+test("T5 B10: CLAUDE.md has neither index; AGENTS.md and Copilot keep both, Cursor keeps Available agents", () => {
+  const d = fixture();
+  writeFileSync(join(d, ".ai/rules.md"), "# Rules\n- rule\n\n## Available agents\n\n- **qa**: verifies\n\n## Later\n- kept");
+  aiSync(d);
+  const count = (f: string) => (readFileSync(join(d, f), "utf8").match(/^## Available (skills|agents)$/gm) ?? []).length;
+  assert.equal(count("CLAUDE.md"), 0);
+  assert.equal(count("AGENTS.md"), 2);
+  assert.equal(count(".github/copilot-instructions.md"), 2);
+  assert.equal(count(".cursor/rules/base-ai.mdc"), 1);
+  const claude = readFileSync(join(d, "CLAUDE.md"), "utf8");
+  assert.match(claude, /- rule\n\n## Later\n- kept\n$/, "the next section follows the one before");
+  assert.doesNotMatch(claude, /\*\*qa\*\*|\*\*adr\*\*/);
+});
+
+test("T5 B10 claudeRules: unchanged without the section; a last section; one followed by another heading; ### does not end it", () => {
+  const plain = "# Rules\n- a\n\n## Available agents list\n- not the section";
+  assert.equal(claudeRules(plain), plain);
+  assert.equal(claudeRules("# R\n- a\n\n## Available agents\n\n- **qa**: x\n"), "# R\n- a");
+  assert.equal(claudeRules("# R\n\n## Available agents\n- x\n### Sub\n- y\n\n## Project memory\n- m"), "# R\n\n## Project memory\n- m");
+  assert.equal(claudeRules("## Available agents\n- x\n\n## Next\n- n"), "## Next\n- n", "a section that comes first");
 });
 
 test("is idempotent and doctor detects drift", () => {

@@ -515,7 +515,18 @@ export function compactTokens(n: number): string {
 export function tokenFlow(usage: UsageView): {
   status: "ok" | "empty" | "error";
   message: string;
-  rows: { agent: string; tokens: number; share: number; cost: string; input: number; cacheWrite: number; cacheRead: number; output: number }[];
+  rows: {
+    agent: string;
+    tokens: number;
+    share: number;
+    cost: string;
+    input: number;
+    cacheWrite: number;
+    cacheRead: number;
+    output: number;
+    calls: number;
+    ctxPerCall: number | null;
+  }[];
   total: string;
   totalTokens: number;
 } {
@@ -524,14 +535,18 @@ export function tokenFlow(usage: UsageView): {
   }
   const { groups, total } = usage.report;
   if (total.records === 0) return { status: "empty", message: "no usage data", rows: [], total: "", totalTokens: 0 };
-  const byAgent = new Map<string, { tokens: number; cost: number; priced: number; unpriced: number; input: number; cacheWrite: number; cacheRead: number; output: number }>();
+  const byAgent = new Map<
+    string,
+    { tokens: number; cost: number; priced: number; unpriced: number; input: number; cacheWrite: number; cacheRead: number; output: number; calls: number }
+  >();
   for (const g of groups) {
-    const a = byAgent.get(g.agent) ?? { tokens: 0, cost: 0, priced: 0, unpriced: 0, input: 0, cacheWrite: 0, cacheRead: 0, output: 0 };
+    const a = byAgent.get(g.agent) ?? { tokens: 0, cost: 0, priced: 0, unpriced: 0, input: 0, cacheWrite: 0, cacheRead: 0, output: 0, calls: 0 };
     a.tokens += g.input_tokens + g.cache_creation_input_tokens + g.cache_read_input_tokens + g.output_tokens;
     a.input += g.input_tokens;
     a.cacheWrite += g.cache_creation_input_tokens;
     a.cacheRead += g.cache_read_input_tokens;
     a.output += g.output_tokens;
+    a.calls += g.messages;
     if (g.cost_usd !== null) {
       a.cost += g.cost_usd;
       a.priced += 1;
@@ -549,6 +564,9 @@ export function tokenFlow(usage: UsageView): {
     cacheWrite: a.cacheWrite,
     cacheRead: a.cacheRead,
     output: a.output,
+    calls: a.calls,
+    // Same formula as `usage report` (contextPerCall in usage.ts), over the agent's groups merged across models.
+    ctxPerCall: a.calls === 0 ? null : Math.round((a.input + a.cacheWrite + a.cacheRead) / a.calls),
   })).sort((x, y) => y.tokens - x.tokens || (x.agent < y.agent ? -1 : 1));
   const totalTokens = total.input_tokens + total.cache_creation_input_tokens + total.cache_read_input_tokens + total.output_tokens;
   return { status: "ok", message: "", rows, total: money(total.cost_usd, total.unpriced_records), totalTokens };
@@ -566,7 +584,7 @@ export function tokensView(detail: TaskDetailView | null): VElement {
         h("li", { class: "flow-row" }, [
           h("span", { class: "flow-agent" }, [t(r.agent)]),
           h("span", { class: "flow-bar", "aria-hidden": "true" }, [h("span", { class: `flow-fill w${Math.round(r.share * 20) * 5}` })]),
-          h("span", { class: "flow-tokens", title: `input ${r.input} · cache write ${r.cacheWrite} · cache read ${r.cacheRead} · output ${r.output}` }, [
+          h("span", { class: "flow-tokens", title: `input ${r.input} · cache write ${r.cacheWrite} · cache read ${r.cacheRead} · output ${r.output} · calls ${r.calls} · ctx/call ${r.ctxPerCall ?? "n/a"}` }, [
             t(compactTokens(r.tokens)),
           ]),
           h("span", { class: "flow-cost" }, [t(r.cost)]),

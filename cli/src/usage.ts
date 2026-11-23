@@ -423,6 +423,14 @@ export function buildUsageReport(ticket: string, text: string, pricing: Pricing)
 const counters = (t: Counters) =>
   `in ${t.input_tokens}, cache write ${t.cache_creation_input_tokens}, cache read ${t.cache_read_input_tokens}, out ${t.output_tokens}`;
 
+/** Context tokens per call (input + cache write + cache read over messages), rounded; null when there is no call (BASE-079-T5). */
+export function contextPerCall(t: Counters & { messages: number }): number | null {
+  if (t.messages === 0) return null;
+  return Math.round((t.input_tokens + t.cache_creation_input_tokens + t.cache_read_input_tokens) / t.messages);
+}
+
+const calls = (t: Counters & { messages: number }) => `calls ${t.messages}, ctx/call ${contextPerCall(t) ?? "n/a"}`;
+
 /** The text form of `usage report`. Agent and model come from a versioned file, so control characters are stripped. */
 export function renderUsageReport(r: UsageReport): string {
   const skipped = r.skipped_lines > 0 ? ` (${r.skipped_lines} unreadable line${r.skipped_lines === 1 ? "" : "s"} skipped)` : "";
@@ -430,7 +438,7 @@ export function renderUsageReport(r: UsageReport): string {
   // C0, DEL, C1 (an 8-bit CSI is U+009B) and the bidi embedding, override and isolate controls.
   const clean = (s: string) => s.replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, "?");
   const lines = [`usage ${r.ticket}: ${r.records} record${r.records === 1 ? "" : "s"}${skipped}`];
-  for (const g of r.groups) lines.push(`  ${clean(g.agent)} / ${clean(g.model)}: ${counters(g)}; ${formatCost(g)}`);
-  lines.push(`  total: ${counters(r.total)}; ${formatCost(r.total)}`);
+  for (const g of r.groups) lines.push(`  ${clean(g.agent)} / ${clean(g.model)}: ${counters(g)}; ${calls(g)}; ${formatCost(g)}`);
+  lines.push(`  total: ${counters(r.total)}; ${calls(r.total)}; ${formatCost(r.total)}`);
   return lines.join("\n");
 }

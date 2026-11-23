@@ -380,9 +380,9 @@ test("spawned CLI: usage report in text and --json exits 0; prices come from .ai
 
     const text = run(".ai/tasks/T-1");
     assert.equal(text.status, 0, text.stderr);
-    assert.match(text.stdout, /qa \/ claude-x: in 1000000, cache write 0, cache read 0, out 0; \$3\.0000/);
-    assert.match(text.stdout, /reviewer \/ other: in 1000000, cache write 0, cache read 0, out 9; no price/);
-    assert.match(text.stdout, /total: .*; \$3\.0000 \(\+1 record with no price\)/);
+    assert.match(text.stdout, /qa \/ claude-x: in 1000000, cache write 0, cache read 0, out 0; calls 2, ctx\/call 500000; \$3\.0000/);
+    assert.match(text.stdout, /reviewer \/ other: in 1000000, cache write 0, cache read 0, out 9; calls 2, ctx\/call 500000; no price/);
+    assert.match(text.stdout, /total: .*; calls 4, ctx\/call 500000; \$3\.0000 \(\+1 record with no price\)/);
 
     const js = run(".ai/tasks/T-1", "--json");
     assert.equal(js.status, 0, js.stderr);
