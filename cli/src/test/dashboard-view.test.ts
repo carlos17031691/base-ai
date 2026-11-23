@@ -6,6 +6,7 @@ import {
   checkCells,
   checksView,
   clip,
+  compactTokens,
   contrastRatio,
   editorHref,
   filesView,
@@ -17,6 +18,8 @@ import {
   queueControlsView,
   queueKey,
   queueListView,
+  registrationSummary,
+  registrationView,
   ringArcs,
   ringPill,
   ringView,
@@ -249,7 +252,7 @@ test("check cells: 18 cells in API order with pass/fail/skip classes and the sum
 
 test("no usage data / no price: never an error or $0 — empty, unpriced, partly priced, priced, and a usage error", () => {
   const g = (agent: string, o: Partial<Totals>) => ({ ...totals({ records: 1, ...o }), agent, model: "m" });
-  assert.deepEqual(tokenFlow({ report: { groups: [], total: totals() } }), { status: "empty", message: "no usage data", rows: [], total: "" });
+  assert.deepEqual(tokenFlow({ report: { groups: [], total: totals() } }), { status: "empty", message: "no usage data", rows: [], total: "", totalTokens: 0 });
   assert.deepEqual(texts(tokensView(detail())), ["no usage data"]);
 
   const unpriced = tokenFlow({ report: { groups: [g("qa", { input_tokens: 5, unpriced_records: 1 })], total: totals({ records: 1, unpriced_records: 1 }) } });
@@ -354,4 +357,106 @@ test("palette: every text colour meets AA (4.5:1) on both backgrounds, and the d
   for (const cell of ["green", "red", "amber"]) assert.ok(contrastRatio(c.bg, c[cell]) >= 4.5, `bg on ${cell}`);
   assert.equal(Math.round(contrastRatio("#000000", "#ffffff")), 21);
   assert.equal(contrastRatio("#777777", "#777777"), 1);
+});
+
+test("D4 H11 compactTokens: 388 tok, 575.6K tok, 11.2M tok, with the K-to-M switch at 999,950", () => {
+  const cases: [number, string][] = [
+    [0, "0 tok"],
+    [388, "388 tok"],
+    [999, "999 tok"],
+    [1000, "1.0K tok"],
+    [575_600, "575.6K tok"],
+    [999_949, "999.9K tok"],
+    [999_950, "1.0M tok"],
+    [11_234_567, "11.2M tok"],
+  ];
+  for (const [n, out] of cases) assert.equal(compactTokens(n), out, String(n));
+});
+
+test("D4 H11 visible tokens: every row and TOTAL show a tok count, with and without prices; the cost text is unchanged; the tooltip splits the four counters", () => {
+  const g = (agent: string, o: Partial<Totals>) => ({ ...totals({ records: 1, ...o }), agent, model: "m" });
+  const report = (cost: number | null, unpriced: number) => ({
+    groups: [
+      g("coordinator", { input_tokens: 388, cache_creation_input_tokens: 823_288, cache_read_input_tokens: 10_000_000, output_tokens: 61_093, cost_usd: cost, unpriced_records: unpriced }),
+      g("qa", { input_tokens: 12, cache_creation_input_tokens: 0, cache_read_input_tokens: 575_000, output_tokens: 588, cost_usd: cost === null ? null : 0.21, unpriced_records: unpriced }),
+    ],
+    total: totals({ records: 2, input_tokens: 400, cache_creation_input_tokens: 823_288, cache_read_input_tokens: 10_575_000, output_tokens: 61_681, cost_usd: cost === null ? null : cost + 0.21, unpriced_records: unpriced * 2 }),
+  });
+  for (const [cost, unpriced, totalText] of [[1.06, 0, "$1.27"], [null, 1, "no price"]] as const) {
+    const flow = tokenFlow({ report: report(cost, unpriced) });
+    assert.equal(flow.totalTokens, 400 + 823_288 + 10_575_000 + 61_681, "totalTokens is the four-counter sum");
+    assert.deepEqual(
+      flow.rows.map((r) => [r.agent, r.input, r.cacheWrite, r.cacheRead, r.output]),
+      [
+        ["coordinator", 388, 823_288, 10_000_000, 61_093],
+        ["qa", 12, 0, 575_000, 588],
+      ],
+    );
+    const v = tokensView(detail({ usage: { report: report(cost, unpriced) } }));
+    const out = texts(v);
+    assert.ok(out.includes("10.9M tok") && out.includes("575.6K tok"), `row counts: ${out.join("|")}`);
+    assert.ok(out.includes("11.5M tok"), "TOTAL count");
+    assert.equal(out.at(-1), totalText, "the total cost text is unchanged");
+    const spans = all(v).filter((n): n is Exclude<VNode, { text: string }> => !("text" in n) && n.attrs.class === "flow-tokens");
+    assert.equal(spans.length, 3, "a count on both rows and on TOTAL");
+    assert.equal(spans[0].attrs.title, "input 388 · cache write 823288 · cache read 10000000 · output 61093");
+  }
+  const partly = tokenFlow({ report: report(0.21, 1) });
+  assert.equal(partly.rows[1].cost, "$0.21 + no price");
+});
+
+test("D4 registration panel: per-key status as text, the summary line, the halt text, the button, and no button without keys", () => {
+  const keys = [
+    { key: "reg TK-1 review r1 i1", file: "review-report.md", line: 10 },
+    { key: "reg TK-1 review r1 i2", file: "review-report.md", line: 11 },
+    { key: "reg TK-1 qa r1 i1", file: "qa-report.md", line: 4 },
+  ];
+  assert.deepEqual(texts(registrationView([], null, "idle")), ["no keys to register"]);
+  assert.deepEqual(texts(registrationView(null, null, "idle")), ["no task selected"], "no detail loaded yet");
+  const fresh = texts(registrationView(keys, null, "idle"));
+  assert.ok(fresh.includes("reg TK-1 review r1 i1 · review-report.md:10 · not checked"));
+  assert.ok(fresh.includes("not checked yet") && fresh.includes("CHECK REGISTRATION"));
+  assert.equal(registrationSummary({ schema: 1, checkedAt: null }), "not checked yet");
+
+  const result = {
+    schema: 1 as const,
+    checkedAt: "2026-11-23T16:05:09.000Z",
+    outcome: "missing" as const,
+    calls: 3,
+    keys: [
+      { key: "reg TK-1 review r1 i1", status: "registered", issue: 104, state: "open" },
+      { key: "reg TK-1 review r1 i2", status: "missing" },
+    ],
+  };
+  const out = texts(registrationView(keys, result, "idle"));
+  assert.ok(out.includes("reg TK-1 review r1 i1 · review-report.md:10 · registered #104 (open)"));
+  assert.ok(out.includes("reg TK-1 review r1 i2 · review-report.md:11 · missing"));
+  assert.ok(out.includes("reg TK-1 qa r1 i1 · qa-report.md:4 · not checked"), "a key the result lacks");
+  assert.ok(out.includes("MISSING · 3 gh call(s) · checked 16:05:09"));
+  const closed = { ...result, outcome: "registered" as const, keys: [{ key: "reg TK-1 review r1 i1", status: "registered", issue: 7, state: "closed" }] };
+  assert.ok(texts(registrationView(keys.slice(0, 1), closed, "idle")).includes("reg TK-1 review r1 i1 · review-report.md:10 · registered #7 (closed)"));
+  assert.ok(registrationSummary(closed).startsWith("REGISTERED · "));
+
+  const halt = { schema: 1 as const, checkedAt: "2026-11-23T16:05:09Z", outcome: "halt" as const, calls: 0, halt: { template: "T6", reason: "missing", text: "gh: command not found" }, keys: [{ key: "reg TK-1 review r1 i1", status: "unchecked" }] };
+  const h = texts(registrationView(keys.slice(0, 1), halt, "idle"));
+  assert.ok(h.includes("gh: command not found") && h.includes("reg TK-1 review r1 i1 · review-report.md:10 · unchecked"));
+  assert.ok(h.some((x) => x.startsWith("HALT · 0 gh call(s)")));
+
+  const running = registrationView(keys, null, "running");
+  const button = all(running).find((n): n is Exclude<VNode, { text: string }> => !("text" in n) && n.tag === "button");
+  assert.equal(button?.attrs.disabled, "");
+  assert.equal(button?.attrs["data-action"], "registration");
+  assert.ok(texts(running).includes("CHECKING…"));
+  // Review r1 L2: while another task's check runs, this task's button is disabled and says why.
+  const busy = registrationView(keys, null, "busy");
+  const busyButton = all(busy).find((n): n is Exclude<VNode, { text: string }> => !("text" in n) && n.tag === "button");
+  assert.equal(busyButton?.attrs.disabled, "");
+  assert.ok(texts(busy).includes("ANOTHER CHECK RUNNING"));
+});
+
+test("D4 registration panel: hostile key or file text stays a text node", () => {
+  const evilKey = "<b>reg</b><img src=x onerror=alert(1)>";
+  const v = registrationView([{ key: evilKey, file: "<i>f</i>", line: 1 }], { schema: 1, checkedAt: "2026-11-23T16:05:09Z", outcome: "missing", calls: 1, keys: [{ key: evilKey, status: "missing" }] }, "idle");
+  assert.ok(texts(v).includes(`${evilKey} · <i>f</i>:1 · missing`));
+  assert.ok(!all(v).some((n) => !("text" in n) && ["b", "img", "i"].includes(n.tag)), "no element built from the text");
 });

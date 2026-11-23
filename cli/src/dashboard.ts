@@ -1,15 +1,22 @@
 /**
- * `base-ai dashboard` (BASE-101-D1, epic #101): a local, read-only `node:http` server over `.ai/tasks/`, bound to
- * 127.0.0.1 only. No network beyond this listener, no write, no CORS. The page, its script and its stylesheet come
+ * `base-ai dashboard` (BASE-101-D1, epic #101): a local `node:http` server over `.ai/tasks/`, bound to 127.0.0.1
+ * only, that reads only and writes nothing, except the opt-in registration check below (BASE-101-D4), whose runner
+ * is the dashboard's only outbound call. No CORS. The page, its script and its stylesheet come
  * from memory (dashboard-assets.ts, BASE-101-D2), so `default-src 'self'` holds with no inline code. BASE-101-D3 adds
  * `GET /events`, a same-origin Server-Sent Events stream fed by per-directory watchers (dashboard-watch.ts).
+ * BASE-101-D4 adds the one write-like route, `POST /api/tasks/<id>/registration`, which runs `pipeline debt`'s check
+ * on demand through an injected runner factory (this module starts no process itself). It is the only path that
+ * accepts POST, and only with the `X-Base-AI: 1` header, which a cross-site form or <img> cannot send.
  *
- * Every request is checked in a fixed order: Host (403, against DNS rebinding), method (405), path (404), id (400).
+ * Every request is checked in a fixed order: Host (403, against DNS rebinding), method (405), path (404), id (400);
+ * the registration POST then adds guard (403), keys (422) and busy (409).
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { join } from "node:path";
 import { APP_CSS, APP_JS, INDEX_HTML } from "./dashboard-assets.js";
 import { isTaskId, listTaskIds, listTasks, taskDetail } from "./dashboard-data.js";
 import { realTimers, startTaskWatcher, type LiveEvent, type Timers, type WatchFn } from "./dashboard-watch.js";
+import { checkRegistration, haltText, taskKeys, type DebtReport, type Runner } from "./pipeline-registration.js";
 import { DEFAULT_EDITOR_URL } from "./source.js";
 import type { Pricing } from "./usage.js";
 
@@ -89,6 +96,33 @@ export interface HandlerOptions {
   editorUrl: string;
   /** Opens an event stream on a GET /events that passed the Host and method checks (BASE-101-D3). */
   events?: (res: ServerResponse) => void;
+  /** BASE-101-D4: the cached result of a listed task, and a guarded POST that runs a check. */
+  registration?: {
+    cached(id: string): unknown;
+    post(req: IncomingMessage, res: ServerResponse, id: string): void;
+  };
+}
+
+/** The only path that accepts POST (BASE-101-D4 H1). */
+const REGISTRATION_PATH = /^\/api\/tasks\/([^/?]+)\/registration$/;
+
+/**
+ * H2: the POST needs `X-Base-AI: 1`; a present Origin must be this server, a present Sec-Fetch-Site must be
+ * same-origin (absent ones are allowed, so curl works); a body is refused unread. Null when the request passes.
+ */
+export function registrationGuard(req: IncomingMessage, port: number): { status: number; error: string } | null {
+  if (req.headers["x-base-ai"] !== "1") return { status: 403, error: "missing X-Base-AI header" };
+  const origin = req.headers.origin;
+  if (origin !== undefined && origin !== `http://${HOST}:${port}` && origin !== `http://localhost:${port}`) {
+    return { status: 403, error: "cross-site request refused" };
+  }
+  const site = req.headers["sec-fetch-site"];
+  if (site !== undefined && site !== "same-origin") return { status: 403, error: "cross-site request refused" };
+  const length = req.headers["content-length"];
+  if ((length !== undefined && length !== "0") || req.headers["transfer-encoding"] !== undefined) {
+    return { status: 400, error: "no body expected" };
+  }
+  return null;
 }
 
 export function createDashboardHandler(opts: HandlerOptions): (req: IncomingMessage, res: ServerResponse) => void {
@@ -96,11 +130,12 @@ export function createDashboardHandler(opts: HandlerOptions): (req: IncomingMess
     const port = opts.port();
     const host = (req.headers.host ?? "").toLowerCase();
     if (host !== `${HOST}:${port}` && host !== `localhost:${port}`) return sendJson(req, res, 403, { error: "forbidden host" });
-    if (req.method !== "GET" && req.method !== "HEAD") {
-      return sendJson(req, res, 405, { error: "method not allowed" }, { Allow: "GET, HEAD" });
-    }
     // The raw path up to "?": no URL normalisation, so dot segments are never resolved.
     const path = (req.url ?? "").split("?")[0];
+    const registration = opts.registration === undefined ? null : REGISTRATION_PATH.exec(path);
+    if (req.method !== "GET" && req.method !== "HEAD" && !(req.method === "POST" && registration !== null)) {
+      return sendJson(req, res, 405, { error: "method not allowed" }, { Allow: registration === null ? "GET, HEAD" : "GET, HEAD, POST" });
+    }
     // A fixed label, never the untrusted path, goes to stderr.
     let route = "unknown";
     try {
@@ -136,6 +171,22 @@ export function createDashboardHandler(opts: HandlerOptions): (req: IncomingMess
       if (path === "/api/tasks") {
         route = "/api/tasks";
         return sendJson(req, res, 200, opts.data.list());
+      }
+      if (REGISTRATION_PATH.test(path)) {
+        // Without a runner factory the route does not exist, as /events without its stream.
+        if (registration === null || opts.registration === undefined) return sendJson(req, res, 404, { error: "not found" });
+        route = "/api/tasks/:id/registration";
+        let id: string;
+        try {
+          id = decodeURIComponent(registration[1]);
+        } catch {
+          return sendJson(req, res, 400, { error: "invalid task id" });
+        }
+        if (!isTaskId(id) || !opts.data.ids().includes(id)) return sendJson(req, res, 400, { error: "invalid task id" });
+        if (req.method !== "POST") return sendJson(req, res, 200, opts.registration.cached(id));
+        const refused = registrationGuard(req, port);
+        if (refused !== null) return sendJson(req, res, refused.status, { error: refused.error });
+        return opts.registration.post(req, res, id);
       }
       if (path.startsWith("/api/tasks/")) {
         route = "/api/tasks/:id";
@@ -180,6 +231,42 @@ export interface DashboardOptions {
   timers?: Timers;
   maxClients?: number;
   heartbeatMs?: number;
+  /** BASE-101-D4: makes the runner for one check; absent, the registration route does not exist. */
+  registration?: (signal: AbortSignal) => Runner;
+  /** The whole-run deadline (5 minutes); the 60-second per-call timeout is the runner's. */
+  registrationDeadlineMs?: number;
+  /** The clock for `checkedAt`; injectable for tests. */
+  now?: () => Date;
+}
+
+/** What a check returns and what GET serves: keys, issue numbers and states only; no file, line, path or stderr. */
+export interface RegistrationResult {
+  schema: 1;
+  ticket: string | null;
+  outcome: DebtReport["outcome"];
+  repo: string | null;
+  calls: number;
+  checkedAt: string;
+  halt?: { template: string; reason: string; text: string };
+  keys: { key: string; status: string; issue?: number; state?: string }[];
+}
+
+export function registrationResult(r: DebtReport, checkedAt: string): RegistrationResult {
+  const out: RegistrationResult = {
+    schema: 1,
+    ticket: r.ticket,
+    outcome: r.outcome,
+    repo: r.repo,
+    calls: r.calls,
+    checkedAt,
+    keys: r.keys.map((k) => ({ key: k.key, status: k.status, ...(k.issue === undefined ? {} : { issue: k.issue, state: k.state }) })),
+  };
+  if (r.halt) {
+    // H7: T5 is the git remote read; T6 and T7 are gh calls.
+    const tool = r.halt.template === "T5" ? "git" : "gh";
+    out.halt = { template: r.halt.template, reason: r.halt.reason, text: `${tool}: ${haltText(r.halt.reason)}` };
+  }
+  return out;
 }
 
 export interface Dashboard {
@@ -216,12 +303,56 @@ export function startDashboard(o: DashboardOptions): Dashboard {
   let watcher: { close(): void } | null = null;
   let heartbeat: unknown = null;
 
+  // BASE-101-D4: one check at a time across all tasks (H5); the last result per task, in memory only (H6).
+  const results = new Map<string, RegistrationResult>();
+  let running: { abort: AbortController; deadline: unknown } | null = null;
+  const now = o.now ?? (() => new Date());
+  const factory = o.registration;
+  const registration =
+    factory === undefined
+      ? undefined
+      : {
+          cached: (id: string): unknown => {
+            // Ids no longer listed are dropped, so the map never outgrows the task folders.
+            const listed = new Set(listTaskIds(o.root).ids);
+            for (const k of Array.from(results.keys())) if (!listed.has(k)) results.delete(k);
+            return results.get(id) ?? { schema: 1, checkedAt: null };
+          },
+          post: (req: IncomingMessage, res: ServerResponse, id: string): void => {
+            const keys = taskKeys(o.root, join(".ai", "tasks", id));
+            if (keys.kind === "keys") return sendJson(req, res, 422, { error: "keys not computed" });
+            if (running !== null) return sendJson(req, res, 409, { error: "a registration check is already running" });
+            const abort = new AbortController();
+            const run = { abort, deadline: timers.setTimeout(() => abort.abort(), o.registrationDeadlineMs ?? 300_000) };
+            running = run;
+            // Review r1 L1: `catch` after `then`, so a throw while building the reply still answers 500; and a run
+            // that `stop()` cut short (running no longer this run) neither caches nor replies.
+            void checkRegistration(keys.report, [], factory(abort.signal))
+              .then((report) => {
+                if (running !== run) return;
+                const result = registrationResult(report, now().toISOString());
+                results.set(id, result);
+                if (!res.writableEnded) sendJson(req, res, 200, result);
+              })
+              .catch(() => {
+                if (running !== run) return;
+                o.err("base-ai dashboard: internal error on /api/tasks/:id/registration");
+                if (!res.writableEnded) sendJson(req, res, 500, { error: "internal error" });
+              })
+              .finally(() => {
+                timers.clearTimeout(run.deadline);
+                if (running === run) running = null;
+              });
+          },
+        };
+
   const handler = createDashboardHandler({
     port: () => bound,
     data: o.data ?? dashboardData(o.root, o.pricing),
     err: o.err,
     editorUrl: o.editorUrl ?? DEFAULT_EDITOR_URL,
     events: openStream,
+    registration,
   });
   const server = createServer(handler);
   // Node's default reply to a malformed request carries none of the security headers: send our own.
@@ -241,7 +372,13 @@ export function startDashboard(o: DashboardOptions): Dashboard {
   const stop = () => {
     o.proc.off("SIGINT", stop);
     o.proc.off("SIGTERM", stop);
-    // Watchers and timers first, then the open streams, then D1's socket teardown.
+    // A running check first (its child is killed), then watchers and timers, the open streams, D1's socket teardown.
+    if (running !== null) {
+      running.abort.abort();
+      timers.clearTimeout(running.deadline);
+      running = null;
+    }
+    results.clear();
     watcher?.close();
     watcher = null;
     if (heartbeat !== null) timers.clearInterval(heartbeat);

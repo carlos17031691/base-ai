@@ -82,6 +82,17 @@ export interface TaskDetailView {
   };
   files: { name: string; path: string; present: boolean }[];
   usage: UsageView;
+  /** The To register keys with their file and line (D1); registration status comes from RegistrationView. */
+  keys?: { key: string; file: string; line: number }[];
+}
+/** GET/POST /api/tasks/<id>/registration (BASE-101-D4); `checkedAt: null` before any check. */
+export interface RegistrationView {
+  schema: 1;
+  checkedAt: string | null;
+  outcome?: "registered" | "missing" | "halt";
+  calls?: number;
+  halt?: { template: string; reason: string; text: string };
+  keys?: { key: string; status: string; issue?: number; state?: string }[];
 }
 export interface QueueState {
   query: string;
@@ -409,22 +420,35 @@ export function checksView(detail: TaskDetailView | null): VElement {
   ]);
 }
 
+/** A token count in a compact form (BASE-101-D4 H11): `388 tok`, `575.6K tok`, `11.2M tok`. */
+export function compactTokens(n: number): string {
+  if (n < 1000) return `${n} tok`;
+  // 999,950 and above would round to "1000.0K", so they switch to millions.
+  if (n < 999_950) return `${(n / 1000).toFixed(1)}K tok`;
+  return `${(n / 1_000_000).toFixed(1)}M tok`;
+}
+
 /** Token flow by agent (merged across models), with the ticket total and the "no price" rules. */
 export function tokenFlow(usage: UsageView): {
   status: "ok" | "empty" | "error";
   message: string;
-  rows: { agent: string; tokens: number; share: number; cost: string }[];
+  rows: { agent: string; tokens: number; share: number; cost: string; input: number; cacheWrite: number; cacheRead: number; output: number }[];
   total: string;
+  totalTokens: number;
 } {
   if (usage.error !== undefined || usage.report === undefined) {
-    return { status: "error", message: `usage unavailable: ${usage.error ?? "no report"}`, rows: [], total: "" };
+    return { status: "error", message: `usage unavailable: ${usage.error ?? "no report"}`, rows: [], total: "", totalTokens: 0 };
   }
   const { groups, total } = usage.report;
-  if (total.records === 0) return { status: "empty", message: "no usage data", rows: [], total: "" };
-  const byAgent = new Map<string, { tokens: number; cost: number; priced: number; unpriced: number }>();
+  if (total.records === 0) return { status: "empty", message: "no usage data", rows: [], total: "", totalTokens: 0 };
+  const byAgent = new Map<string, { tokens: number; cost: number; priced: number; unpriced: number; input: number; cacheWrite: number; cacheRead: number; output: number }>();
   for (const g of groups) {
-    const a = byAgent.get(g.agent) ?? { tokens: 0, cost: 0, priced: 0, unpriced: 0 };
+    const a = byAgent.get(g.agent) ?? { tokens: 0, cost: 0, priced: 0, unpriced: 0, input: 0, cacheWrite: 0, cacheRead: 0, output: 0 };
     a.tokens += g.input_tokens + g.cache_creation_input_tokens + g.cache_read_input_tokens + g.output_tokens;
+    a.input += g.input_tokens;
+    a.cacheWrite += g.cache_creation_input_tokens;
+    a.cacheRead += g.cache_read_input_tokens;
+    a.output += g.output_tokens;
     if (g.cost_usd !== null) {
       a.cost += g.cost_usd;
       a.priced += 1;
@@ -438,8 +462,13 @@ export function tokenFlow(usage: UsageView): {
     tokens: a.tokens,
     share: a.tokens / max,
     cost: money(a.priced > 0 ? a.cost : null, a.unpriced),
+    input: a.input,
+    cacheWrite: a.cacheWrite,
+    cacheRead: a.cacheRead,
+    output: a.output,
   })).sort((x, y) => y.tokens - x.tokens || (x.agent < y.agent ? -1 : 1));
-  return { status: "ok", message: "", rows, total: money(total.cost_usd, total.unpriced_records) };
+  const totalTokens = total.input_tokens + total.cache_creation_input_tokens + total.cache_read_input_tokens + total.output_tokens;
+  return { status: "ok", message: "", rows, total: money(total.cost_usd, total.unpriced_records), totalTokens };
 }
 
 export function tokensView(detail: TaskDetailView | null): VElement {
@@ -454,12 +483,70 @@ export function tokensView(detail: TaskDetailView | null): VElement {
         h("li", { class: "flow-row" }, [
           h("span", { class: "flow-agent" }, [t(r.agent)]),
           h("span", { class: "flow-bar", "aria-hidden": "true" }, [h("span", { class: `flow-fill w${Math.round(r.share * 20) * 5}` })]),
-          h("span", { class: "flow-cost", title: `${r.tokens} tokens` }, [t(r.cost)]),
+          h("span", { class: "flow-tokens", title: `input ${r.input} · cache write ${r.cacheWrite} · cache read ${r.cacheRead} · output ${r.output}` }, [
+            t(compactTokens(r.tokens)),
+          ]),
+          h("span", { class: "flow-cost" }, [t(r.cost)]),
         ]),
       ),
     ),
-    h("p", { class: "flow-total" }, [h("span", {}, [t("TOTAL")]), h("span", {}, [t(flow.total)])]),
+    h("p", { class: "flow-total" }, [
+      h("span", {}, [t("TOTAL")]),
+      h("span", { class: "flow-tokens" }, [t(compactTokens(flow.totalTokens))]),
+      h("span", {}, [t(flow.total)]),
+    ]),
   ]);
+}
+
+/** One key's registration status as text (BASE-101-D4): from the last check, or "not checked". */
+export function keyStatus(key: string, result: RegistrationView | null): string {
+  const k = result?.keys?.find((x) => x.key === key);
+  if (k === undefined) return "not checked";
+  if (k.status === "registered") return `registered #${k.issue} (${k.state})`;
+  return k.status;
+}
+
+/** The summary line of the last check: `REGISTERED · 3 gh call(s) · checked 14:05:09`. */
+export function registrationSummary(result: RegistrationView | null): string {
+  if (result === null || result.checkedAt === null || result.outcome === undefined) return "not checked yet";
+  const head = result.outcome === "registered" ? "REGISTERED" : result.outcome === "missing" ? "MISSING" : "HALT";
+  const time = /T(\d\d:\d\d:\d\d)/.exec(result.checkedAt)?.[1] ?? "--:--:--";
+  return `${head} · ${result.calls ?? 0} gh call(s) · checked ${time}`;
+}
+
+/**
+ * The registration panel (BASE-101-D4 H6): every To register key with its status, the last check's summary and
+ * halt text, and a CHECK REGISTRATION button (absent when the task has no keys). Text nodes only. `check` is
+ * "running" for this task's own check and "busy" while another task's runs (review r1 L2: one run at a time,
+ * so the button says so instead of doing nothing).
+ */
+export function registrationView(
+  keys: { key: string; file: string; line: number }[] | null,
+  result: RegistrationView | null,
+  check: "idle" | "running" | "busy",
+): VElement {
+  // Null while no detail is loaded, as every other detail panel: "no keys" would be a claim about an unread task.
+  if (keys === null) return h("div", { class: "registration" }, [h("p", { class: "empty" }, [t("no task selected")])]);
+  if (keys.length === 0) return h("div", { class: "registration" }, [h("p", { class: "empty" }, [t("no keys to register")])]);
+  const outcome = result?.outcome ?? "none";
+  const children: VNode[] = [
+    h(
+      "ul",
+      { class: "reg-keys" },
+      keys.map((k) => {
+        const status = keyStatus(k.key, result);
+        return h("li", { class: `reg-key reg-${status.startsWith("registered") ? "ok" : status === "missing" ? "missing" : "other"}` }, [
+          t(`${k.key} · ${k.file}:${k.line} · ${status}`),
+        ]);
+      }),
+    ),
+    h("p", { class: `reg-summary reg-outcome-${outcome}` }, [t(registrationSummary(result))]),
+  ];
+  if (result?.halt !== undefined) children.push(h("p", { class: "reg-halt bad" }, [t(result.halt.text)]));
+  const attrs: Record<string, string> = { type: "button", class: "reg-check", "data-action": "registration" };
+  if (check !== "idle") attrs.disabled = "";
+  children.push(h("button", attrs, [t(check === "running" ? "CHECKING…" : check === "busy" ? "ANOTHER CHECK RUNNING" : "CHECK REGISTRATION")]));
+  return h("div", { class: "registration" }, children);
 }
 
 /**

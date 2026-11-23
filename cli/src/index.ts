@@ -16,7 +16,7 @@ import { devUp, devStop, devStatus } from "./dev.js";
 import { checkTask, renderText } from "./pipeline-check.js";
 import { loadTask } from "./pipeline-files.js";
 import { spawnRunner } from "./pipeline-gh.js";
-import { checkRegistration, renderDebt } from "./pipeline-registration.js";
+import { debtForTask, renderDebt } from "./pipeline-registration.js";
 import { loadDashboardConfig, loadUsageConfig } from "./source.js";
 import { guardHookProcess, readUsageReport, runUsageRecord } from "./usage-files.js";
 import { renderUsageReport, stderrLine } from "./usage.js";
@@ -49,7 +49,8 @@ Commands:
                                                      naming each failed check. Offline.
   pipeline debt <task-dir> [--issues n,…] [--json]  Check each To register key against GitHub issues (opt-in network, gh);
                                                      exit 0 registered, 1 missing, 2 could not check
-  dashboard [--port N]                              Serve the read-only pipeline HUD and JSON API over .ai/tasks/ on 127.0.0.1 (default port 4747)
+  dashboard [--port N]                              Serve the pipeline HUD and JSON API over .ai/tasks/ on 127.0.0.1 (default port 4747);
+                                                     it reads only, except the opt-in CHECK REGISTRATION (gh)
   usage record                                      Record a Claude Code turn's tokens from a Stop/SubagentStop hook (stdin) into
                                                      .ai/tasks/<ticket>/usage.jsonl; always exits 0, nothing on stdout
   usage report <task-dir> [--json]                  Show a task's recorded tokens per agent and model, with USD cost from
@@ -76,7 +77,7 @@ function parseArgs(argv: string[]) {
 
 const str = (v: string | true | undefined) => (typeof v === "string" ? v : undefined);
 
-function main(argv: string[]): number {
+function main(argv: string[]): number | Promise<number> {
   const { flags, pos } = parseArgs(argv);
   const root = resolve(str(flags.root) ?? process.cwd());
   const [cmd, sub, ...rest] = pos;
@@ -240,6 +241,8 @@ function main(argv: string[]): number {
       port,
       pricing,
       editorUrl,
+      // BASE-101-D4 H3: the only process runner; dashboard.ts itself imports no child_process.
+      registration: (signal) => spawnRunner({ signal }),
       out: (l) => console.log(l),
       err: (l) => console.error(l),
       proc: process,
@@ -333,16 +336,15 @@ function main(argv: string[]): number {
       console.error(usage);
       return 1;
     }
-    const report = checkTask(loadTask(root, dir));
-    const k16 = report.checks.find((c) => c.id === "K16");
-    if (k16?.status !== "pass") {
-      console.error(`keys not computed: K16 ${k16?.status ?? "missing"}`);
-      return 1;
-    }
     const issues = issuesArg === undefined ? [] : (str(issuesArg) as string).split(",").map(Number);
-    const debt = checkRegistration(report, issues, spawnRunner());
-    console.log(flags.json === true ? JSON.stringify(debt, null, 2) : renderDebt(debt));
-    return debt.outcome === "registered" ? 0 : debt.outcome === "missing" ? 1 : 2;
+    return debtForTask(root, dir, issues, spawnRunner()).then((r) => {
+      if (r.kind === "keys") {
+        console.error(`keys not computed: K16 ${r.status}`);
+        return 1;
+      }
+      console.log(flags.json === true ? JSON.stringify(r.report, null, 2) : renderDebt(r.report));
+      return r.report.outcome === "registered" ? 0 : r.report.outcome === "missing" ? 1 : 2;
+    });
   }
 
   if (cmd === "pipeline" && sub === "check") {
@@ -368,7 +370,20 @@ function main(argv: string[]): number {
 }
 
 try {
-  process.exitCode = main(process.argv.slice(2));
+  const code = main(process.argv.slice(2));
+  if (typeof code === "number") process.exitCode = code;
+  else {
+    // `pipeline debt` is async (BASE-101-D4 H3): the same exit code, and the same "✖ <message>" on a failure.
+    void code.then(
+      (c) => {
+        process.exitCode = c;
+      },
+      (e: unknown) => {
+        console.error(`✖ ${(e as Error).message}`);
+        process.exitCode = 1;
+      },
+    );
+  }
 } catch (e) {
   // L6 (b): the parsed command, so `--root <dir> usage record` is recognised as well.
   const { pos } = parseArgs(process.argv.slice(2));
