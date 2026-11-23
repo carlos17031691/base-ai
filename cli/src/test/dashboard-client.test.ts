@@ -343,3 +343,186 @@ test("no HTML sink and no network beyond same-origin fetch in the UI sources and
   assert.deepEqual(routes, ["`/api/tasks/${encodeURIComponent(id)}`", '"/api/tasks"', '"/api/meta"']);
   assert.equal(clientSrc.match(/\.fetch\(/g)?.length, 1, "fetch is called in loadJson only");
 });
+
+/** A fake EventSource: records the URL and lets a test emit open, error, task and list by hand. */
+class FakeSource {
+  static last: FakeSource | null = null;
+  readyState = 0;
+  readonly handlers = new Map<string, ((e: { data?: unknown }) => void)[]>();
+  constructor(readonly url: string) {
+    FakeSource.last = this;
+  }
+  addEventListener(type: string, fn: (e: { data?: unknown }) => void) {
+    this.handlers.set(type, [...(this.handlers.get(type) ?? []), fn]);
+  }
+  emit(type: string, data?: unknown) {
+    if (type === "open") this.readyState = 1;
+    for (const fn of this.handlers.get(type) ?? []) fn({ data });
+  }
+}
+async function liveBoot() {
+  const f = fakeWin();
+  f.win.EventSource = FakeSource;
+  const ctx = await boot(f.win);
+  const es = FakeSource.last as FakeSource;
+  const header = () => (f.doc.getElementById("header-stats") as FakeEl).text;
+  const drain = async () => {
+    for (let i = 0; i < 20; i++) await settle();
+  };
+  return { ...f, ctx, es, header, drain };
+}
+
+test("D3 subscribe: EventSource('/events') after the first load; RECONNECTING until open, then LIVE and a full reload", async () => {
+  const { es, calls, header, drain } = await liveBoot();
+  assert.equal(es.url, "/events");
+  assert.match(header(), / RECONNECTING 127\.0\.0\.1:4747/);
+  assert.doesNotMatch(header(), /(^|\s)LIVE\b/);
+  calls.length = 0;
+  es.emit("open");
+  await drain();
+  assert.match(header(), /● LIVE 127\.0\.0\.1:4747/);
+  assert.deepEqual(calls, ["/api/tasks", "/api/tasks/TK-1"], "open runs a full refresh (H6)");
+});
+
+test("D3 reload rules: task for the selected id reloads list and detail; for another id only the list; list reloads both; bad data is ignored", async () => {
+  const { es, calls, ctx, drain } = await liveBoot();
+  es.emit("open");
+  await drain();
+  calls.length = 0;
+  es.emit("task", JSON.stringify({ id: "TK-1" }));
+  await drain();
+  assert.deepEqual(calls, ["/api/tasks", "/api/tasks/TK-1"]);
+  calls.length = 0;
+  es.emit("task", JSON.stringify({ id: "TK-2" }));
+  await drain();
+  assert.deepEqual(calls, ["/api/tasks"], "another task: the list only");
+  assert.equal(ctx.state.detail?.id, "TK-1", "the detail is kept");
+  calls.length = 0;
+  es.emit("list", "{}");
+  await drain();
+  assert.deepEqual(calls, ["/api/tasks", "/api/tasks/TK-1"]);
+  calls.length = 0;
+  for (const bad of ["not json", "null", '{"id":7}', "[]", undefined]) es.emit("task", bad);
+  await drain();
+  assert.deepEqual(calls, [], "malformed task data is ignored");
+  assert.equal(client.eventId('{"id":"TK-9"}'), "TK-9");
+});
+
+test("D3 reconnect: error while CONNECTING shows RECONNECTING; the next open reloads and keeps the selection; CLOSED shows OFFLINE", async () => {
+  const { es, calls, ctx, header, drain } = await liveBoot();
+  es.emit("open");
+  await drain();
+  ctx.state.q.selected = "TK-2";
+  es.readyState = 0;
+  es.emit("error");
+  assert.match(header(), / RECONNECTING /);
+  calls.length = 0;
+  es.emit("open");
+  await drain();
+  assert.match(header(), / LIVE /);
+  assert.deepEqual(calls, ["/api/tasks", "/api/tasks/TK-2"]);
+  assert.equal(ctx.state.q.selected, "TK-2");
+  es.readyState = 2;
+  es.emit("error");
+  assert.match(header(), / OFFLINE /);
+  assert.doesNotMatch(header(), /(^|\s)LIVE\b/);
+});
+
+test("D3 serialised reloads: events during a reload set one pending flag, so exactly one more full refresh follows", async () => {
+  const { es, win, calls, ctx, drain } = await liveBoot();
+  es.emit("open");
+  await drain();
+  let release: () => void = () => {};
+  const gate = new Promise<void>((r) => (release = r));
+  const fetch = win.fetch;
+  let first = true;
+  win.fetch = async (path: string) => {
+    if (first && path === "/api/tasks") {
+      first = false;
+      await gate;
+    }
+    return fetch(path);
+  };
+  calls.length = 0;
+  es.emit("list", "{}");
+  await settle();
+  for (let i = 0; i < 5; i++) es.emit("task", JSON.stringify({ id: "TK-2" }));
+  es.emit("list", "{}");
+  assert.equal(ctx.pending, true);
+  release();
+  await drain();
+  assert.deepEqual(calls, ["/api/tasks", "/api/tasks/TK-1", "/api/tasks", "/api/tasks/TK-1"], "one queued refresh, never overlapping");
+  assert.equal(ctx.busy, false);
+  assert.equal(ctx.pending, false);
+});
+
+test("D3 REFRESH stays and goes through the same serialiser; without EventSource the header says OFFLINE and boot still loads", async () => {
+  const { win, doc, calls } = fakeWin();
+  const ctx = await boot(win);
+  assert.equal(ctx.state.live, "offline");
+  assert.match((doc.getElementById("header-stats") as FakeEl).text, /● OFFLINE 127\.0\.0\.1:4747/);
+  assert.deepEqual(calls, ["/api/meta", "/api/tasks", "/api/tasks/TK-1"]);
+  calls.length = 0;
+  const refreshBtn = { getAttribute: (n: string) => (n === "data-action" ? "refresh" : null) } as unknown as client.ElLike;
+  await client.onAction(ctx, refreshBtn, []);
+  assert.deepEqual(calls, ["/api/tasks", "/api/tasks/TK-1"]);
+  ctx.busy = true;
+  await client.onAction(ctx, refreshBtn, []);
+  assert.equal(ctx.pending, true, "a refresh asked for during a reload is queued");
+});
+
+test("D3 APP_JS in node:vm subscribes to the relative /events route when the window has EventSource", async () => {
+  const { win, calls } = fakeWin();
+  FakeSource.last = null;
+  win.EventSource = FakeSource;
+  runInNewContext(APP_JS, { window: win, encodeURIComponent, Date, Math, Object, Array, Map, Set, JSON, Promise, Number, String, Error, RegExp, Boolean });
+  const created = () => FakeSource.last as FakeSource | null;
+  for (let i = 0; i < 20 && created() === null; i++) await settle();
+  assert.equal(created()?.url, "/events");
+  assert.ok(calls.includes("/api/tasks"));
+  const src = readFileSync(join(SRC, "dashboard-client.ts"), "utf8");
+  assert.deepEqual(Array.from(src.matchAll(/new Source\((.+?)\)/g), (m) => m[1]), ['"/events"'], "the only stream is same-origin /events");
+});
+
+test("review r1 L3: boot's first load and a card select go through the serialiser, so they never overlap another reload", async () => {
+  // A REFRESH during the first load is queued, not run alongside it.
+  let release: () => void = () => {};
+  const gate = new Promise<void>((r) => (release = r));
+  const f = fakeWin();
+  const fetch = f.win.fetch;
+  f.win.fetch = async (path: string) => {
+    if (path === "/api/tasks") await gate;
+    return fetch(path);
+  };
+  const booting = boot(f.win);
+  for (let i = 0; i < 5; i++) await settle();
+  f.calls.length = 0;
+  f.doc.fire("click", { target: f.doc.byAction("refresh")[0] });
+  await settle();
+  assert.equal(f.calls.length, 0, "a REFRESH click during the first load starts no second load");
+  f.win.fetch = fetch;
+  release();
+  const ctx = await booting;
+  // The first load's list fetch (held by the gate) and exactly one queued refresh after it.
+  assert.equal(f.calls.filter((c) => c === "/api/tasks").length, 2, "the queued refresh runs once, after the first load");
+  assert.equal(ctx.busy, false);
+
+  // A select while a reload runs is queued: one full refresh follows, which loads the newly selected detail.
+  let release2: () => void = () => {};
+  const gate2 = new Promise<void>((r) => (release2 = r));
+  f.win.fetch = async (path: string) => {
+    if (path === "/api/tasks") await gate2;
+    return fetch(path);
+  };
+  f.calls.length = 0;
+  const running = client.serialized(ctx, () => client.refresh(ctx));
+  await settle();
+  const card = { getAttribute: (n: string) => (n === "data-action" ? "select" : n === "data-id" ? "TK-2" : null) } as unknown as client.ElLike;
+  await client.onAction(ctx, card, []);
+  assert.equal(ctx.pending, true, "the select's detail load is queued behind the running reload");
+  assert.ok(!f.calls.includes("/api/tasks/TK-2"), "no detail load overlaps the running reload");
+  release2();
+  await running;
+  assert.equal(ctx.state.detail?.id, "TK-2");
+  assert.equal(ctx.pending, false);
+});

@@ -8,7 +8,8 @@ import { connect, createServer as createNetServer, type AddressInfo } from "node
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DEFAULT_PORT, clientErrorReply, parsePort, startDashboard, type DashboardData } from "../dashboard.js";
+import { DEFAULT_PORT, clientErrorReply, parsePort, startDashboard, type DashboardData, type DashboardOptions } from "../dashboard.js";
+import type { Timers, WatchFn } from "../dashboard-watch.js";
 
 const CLI = join(dirname(fileURLToPath(import.meta.url)), "..", "index.js");
 const SECURITY = {
@@ -59,20 +60,92 @@ function rawNoHost(port: number): Promise<string> {
 
 const fakeProc = () => Object.assign(new EventEmitter(), {}) as EventEmitter & { on: EventEmitter["on"]; off: EventEmitter["off"] };
 
-async function withServer(fn: (port: number, ctx: { lines: string[]; errs: string[]; proc: EventEmitter; stopped: Promise<void> }) => Promise<void>, data?: DashboardData) {
+type Extra = Pick<DashboardOptions, "watch" | "maxClients" | "heartbeatMs" | "timers">;
+
+/** Real timeouts (for the debounce), but a hand-driven heartbeat interval whose clearing is recorded. */
+function fakeIntervals() {
+  const intervals: { fn: () => void; ms: number; handle: object }[] = [];
+  const cleared: unknown[] = [];
+  const timers: Timers = {
+    setTimeout: (fn, ms) => setTimeout(fn, ms),
+    clearTimeout: (h) => clearTimeout(h as NodeJS.Timeout),
+    setInterval: (fn, ms) => {
+      const handle = { unref: () => handle };
+      intervals.push({ fn, ms, handle });
+      return handle;
+    },
+    clearInterval: (h) => void cleared.push(h),
+  };
+  return { timers, intervals, cleared };
+}
+async function withServer(
+  fn: (port: number, ctx: { lines: string[]; errs: string[]; proc: EventEmitter; stopped: Promise<void>; root: string }) => Promise<void>,
+  data?: DashboardData,
+  extra: Extra = {},
+) {
   const r = root();
   const lines: string[] = [];
   const errs: string[] = [];
   const proc = fakeProc();
-  const d = startDashboard({ root: r, port: 0, pricing: {}, out: (l) => lines.push(l), err: (l) => errs.push(l), proc, data });
+  const d = startDashboard({ root: r, port: 0, pricing: {}, out: (l) => lines.push(l), err: (l) => errs.push(l), proc, data, ...extra });
   try {
     const port = await d.ready;
-    await fn(port, { lines, errs, proc, stopped: d.stopped });
+    await fn(port, { lines, errs, proc, stopped: d.stopped, root: r });
   } finally {
-    d.server.closeAllConnections?.();
-    await new Promise((res) => d.server.close(() => res(undefined)));
+    // A server still running is stopped as the CLI stops it, so its watchers, timers and streams are closed too.
+    if (proc.listenerCount("SIGTERM") > 0) {
+      proc.emit("SIGTERM");
+      await d.stopped;
+    } else {
+      d.server.closeAllConnections?.();
+      await new Promise((res) => d.server.close(() => res(undefined)));
+    }
     rmSync(r, { recursive: true, force: true });
   }
+}
+
+/** An open GET /events stream: its status, headers and everything received so far. */
+interface Stream {
+  status: number;
+  headers: IncomingHttpHeaders;
+  text: () => string;
+  ended: Promise<void>;
+  close: () => void;
+}
+function openEvents(port: number): Promise<Stream> {
+  return new Promise((resolve, reject) => {
+    const req = request({ host: "127.0.0.1", port, path: "/events", headers: { Host: `127.0.0.1:${port}` }, agent: false }, (res) => {
+      let text = "";
+      res.setEncoding("utf8");
+      res.on("data", (c) => (text += c));
+      const ended = new Promise<void>((r) => res.on("end", () => r()).on("close", () => r()));
+      resolve({ status: res.statusCode ?? 0, headers: res.headers, text: () => text, ended, close: () => req.destroy() });
+    });
+    req.on("error", reject);
+    req.end();
+  });
+}
+
+async function until(cond: () => boolean, ms = 2000): Promise<void> {
+  const t0 = Date.now();
+  while (!cond()) {
+    if (Date.now() - t0 > ms) throw new Error("timed out");
+    await new Promise((r) => setTimeout(r, 10));
+  }
+}
+
+/** A fake watch: one listener per watched path, fired by hand; `closed` counts the handles closed. */
+function fakeWatch() {
+  const listeners = new Map<string, () => void>();
+  let opened = 0;
+  let closed = 0;
+  const watch: WatchFn = (path, listener) => {
+    listeners.set(path, listener);
+    opened++;
+    const handle = { close: () => void closed++, on: () => handle };
+    return handle;
+  };
+  return { watch, listeners, counts: () => ({ opened, closed }) };
 }
 
 test("start: listens on 127.0.0.1 only, prints the URL, and GET /healthz returns 200", async () => {
@@ -99,7 +172,7 @@ test("start: the server address is 127.0.0.1, and parsePort defaults to 4747 and
   for (const v of ["65536", "-1", "abc", "1.5", "0x10", "", "123456", true] as const) assert.equal(parsePort(v), null, String(v));
 });
 
-test("task list and detail routes return the JSON API shapes; / is a script-free page; others are 404", async () => {
+test("task list and detail routes return the JSON API shapes; / is the HUD page; others are 404", async () => {
   await withServer(async (port) => {
     const list = await get(port, "/api/tasks");
     assert.equal(list.status, 200);
@@ -412,6 +485,146 @@ test("D2 H2: an invalid dashboard.editor_url makes the CLI exit 1 at start with 
       c.child.kill("SIGKILL");
     }
   } finally {
+    rmSync(r, { recursive: true, force: true });
+  }
+});
+
+test("D3 /events: 200 text/event-stream with D1's security headers, no CORS and a retry line; HEAD has no body; Host and method guards first", async () => {
+  await withServer(async (port) => {
+    const st = await openEvents(port);
+    try {
+      assert.equal(st.status, 200);
+      assert.equal(st.headers["content-type"], "text/event-stream; charset=utf-8");
+      for (const [k, v] of Object.entries(SECURITY)) assert.equal(st.headers[k], v, k);
+      assert.ok(!Object.keys(st.headers).some((k) => k.startsWith("access-control-")));
+      assert.equal(st.headers["content-length"], undefined);
+      await until(() => st.text().includes("retry: 2000\n\n"));
+      assert.ok(st.text().startsWith("retry: 2000\n\n"));
+    } finally {
+      st.close();
+    }
+    const head = await get(port, "/events", { method: "HEAD" });
+    assert.equal(head.status, 200);
+    assert.equal(head.headers["content-type"], "text/event-stream; charset=utf-8");
+    assert.equal(head.body, "");
+    assert.equal((await get(port, "/events", { host: "evil.example:80" })).status, 403);
+    assert.equal((await get(port, "/events", { method: "POST" })).status, 405);
+  });
+});
+
+test("D3 events: a change in a task directory reaches every open stream once as event task; a new directory as event list", async () => {
+  const w = fakeWatch();
+  await withServer(
+    async (port, { root: r }) => {
+      const a = await openEvents(port);
+      const b = await openEvents(port);
+      try {
+        await until(() => a.text().includes("retry") && b.text().includes("retry"));
+        const task = w.listeners.get(join(r, ".ai", "tasks", "TK-1"));
+        task?.();
+        task?.();
+        const frame = 'event: task\ndata: {"id":"TK-1"}\n\n';
+        await until(() => a.text().includes(frame) && b.text().includes(frame));
+        mkdirSync(join(r, ".ai", "tasks", "TK-2"));
+        w.listeners.get(join(r, ".ai", "tasks"))?.();
+        await until(() => a.text().includes("event: list\ndata: {}\n\n") && b.text().includes("event: list\ndata: {}\n\n"));
+        assert.equal(a.text().split(frame).length - 1, 1, "two raw events in one window give one frame");
+        assert.ok(!a.text().includes(r), "no path reaches a stream");
+      } finally {
+        a.close();
+        b.close();
+      }
+    },
+    undefined,
+    { watch: w.watch },
+  );
+});
+
+test("D3 heartbeat: one shared 25 s interval; each tick sends ': ping' to every open stream (fake timer)", async () => {
+  const f = fakeIntervals();
+  await withServer(
+    async (port) => {
+      const a = await openEvents(port);
+      const b = await openEvents(port);
+      try {
+        await until(() => a.text().includes("retry") && b.text().includes("retry"));
+        assert.deepEqual(f.intervals.map((i) => i.ms), [25_000], "one heartbeat timer, 25 s");
+        assert.ok(!a.text().includes(": ping"));
+        f.intervals[0].fn();
+        await until(() => a.text().includes(": ping\n\n") && b.text().includes(": ping\n\n"));
+      } finally {
+        a.close();
+        b.close();
+      }
+    },
+    undefined,
+    { timers: f.timers, watch: fakeWatch().watch },
+  );
+});
+
+test("D3 client cap: with 10 streams open the 11th gets 503 JSON; after one closes a new stream gets 200", async () => {
+  await withServer(
+    async (port) => {
+      const open: Stream[] = [];
+      try {
+        for (let i = 0; i < 10; i++) open.push(await openEvents(port));
+        assert.ok(open.every((s) => s.status === 200));
+        assert.equal((await get(port, "/events", { method: "HEAD" })).status, 200, "HEAD is not counted");
+        const over = await get(port, "/events");
+        assert.equal(over.status, 503);
+        assert.equal(over.headers["content-type"], "application/json; charset=utf-8");
+        assert.deepEqual(JSON.parse(over.body), { error: "too many event streams" });
+        for (const [k, v] of Object.entries(SECURITY)) assert.equal(over.headers[k], v, k);
+        open.shift()?.close();
+        let again: Stream | null = null;
+        for (let i = 0; i < 50 && (again === null || again.status !== 200); i++) {
+          again?.close();
+          again = await openEvents(port);
+          if (again.status !== 200) await new Promise((r) => setTimeout(r, 20));
+        }
+        assert.equal(again?.status, 200);
+        open.push(again as Stream);
+      } finally {
+        for (const s of open) s.close();
+      }
+    },
+    undefined,
+    { watch: fakeWatch().watch },
+  );
+});
+
+test("D3 stop: SIGTERM with open streams ends them, closes every watcher, clears the heartbeat and still resolves stopped", async () => {
+  const w = fakeWatch();
+  const f = fakeIntervals();
+  await withServer(
+    async (port, { proc, stopped, errs }) => {
+      const a = await openEvents(port);
+      const b = await openEvents(port);
+      proc.emit("SIGTERM");
+      await Promise.all([a.ended, b.ended, stopped]);
+      assert.deepEqual([proc.listenerCount("SIGINT"), proc.listenerCount("SIGTERM")], [0, 0]);
+      assert.equal(w.counts().closed, w.counts().opened, "every watcher closed");
+      assert.deepEqual(f.cleared, [f.intervals[0].handle], "the heartbeat interval is cleared");
+      assert.ok(errs.includes("base-ai dashboard: stopped"));
+    },
+    undefined,
+    { watch: w.watch, timers: f.timers },
+  );
+});
+
+test("D3 spawned CLI: with an /events stream open, SIGTERM still exits 0", async () => {
+  const r = root();
+  const c = spawnCli(["--root", r, "--port", "0"]);
+  try {
+    const port = await c.url;
+    const st = await openEvents(port);
+    await until(() => st.text().includes("retry"));
+    c.child.kill("SIGTERM");
+    assert.equal(await c.exit, 0);
+    await st.ended;
+    assert.match(c.err(), /base-ai dashboard: stopped/);
+  } finally {
+    c.child.kill("SIGKILL");
     rmSync(r, { recursive: true, force: true });
   }
 });

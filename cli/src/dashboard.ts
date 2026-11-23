@@ -1,13 +1,15 @@
 /**
  * `base-ai dashboard` (BASE-101-D1, epic #101): a local, read-only `node:http` server over `.ai/tasks/`, bound to
  * 127.0.0.1 only. No network beyond this listener, no write, no CORS. The page, its script and its stylesheet come
- * from memory (dashboard-assets.ts, BASE-101-D2), so `default-src 'self'` holds with no inline code.
+ * from memory (dashboard-assets.ts, BASE-101-D2), so `default-src 'self'` holds with no inline code. BASE-101-D3 adds
+ * `GET /events`, a same-origin Server-Sent Events stream fed by per-directory watchers (dashboard-watch.ts).
  *
  * Every request is checked in a fixed order: Host (403, against DNS rebinding), method (405), path (404), id (400).
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { APP_CSS, APP_JS, INDEX_HTML } from "./dashboard-assets.js";
 import { isTaskId, listTaskIds, listTasks, taskDetail } from "./dashboard-data.js";
+import { realTimers, startTaskWatcher, type LiveEvent, type Timers, type WatchFn } from "./dashboard-watch.js";
 import { DEFAULT_EDITOR_URL } from "./source.js";
 import type { Pricing } from "./usage.js";
 
@@ -49,6 +51,7 @@ const JSON_TYPE = "application/json; charset=utf-8";
 const HTML_TYPE = "text/html; charset=utf-8";
 const JS_TYPE = "text/javascript; charset=utf-8";
 const CSS_TYPE = "text/css; charset=utf-8";
+const EVENT_TYPE = "text/event-stream; charset=utf-8";
 
 function send(req: IncomingMessage, res: ServerResponse, status: number, body: string, type: string, extra: Record<string, string> = {}): void {
   const payload = Buffer.from(body, "utf8");
@@ -84,6 +87,8 @@ export interface HandlerOptions {
   err: (line: string) => void;
   /** The validated `dashboard.editor_url` template, served by /api/meta (BASE-101-D2 H2). */
   editorUrl: string;
+  /** Opens an event stream on a GET /events that passed the Host and method checks (BASE-101-D3). */
+  events?: (res: ServerResponse) => void;
 }
 
 export function createDashboardHandler(opts: HandlerOptions): (req: IncomingMessage, res: ServerResponse) => void {
@@ -114,6 +119,15 @@ export function createDashboardHandler(opts: HandlerOptions): (req: IncomingMess
       if (path === "/api/meta") {
         route = "/api/meta";
         return sendJson(req, res, 200, { schema: 1, editorUrl: opts.editorUrl });
+      }
+      if (path === "/events" && opts.events !== undefined) {
+        route = "/events";
+        // HEAD: the stream's status and headers, no body, and not counted against the cap.
+        if (req.method === "HEAD") {
+          res.writeHead(200, { ...SECURITY_HEADERS, "Content-Type": EVENT_TYPE });
+          return void res.end();
+        }
+        return opts.events(res);
       }
       if (path === "/healthz") {
         route = "/healthz";
@@ -161,6 +175,11 @@ export interface DashboardOptions {
   editorUrl?: string;
   /** Defaults to the task data of `root`; injectable for tests. */
   data?: DashboardData;
+  /** BASE-101-D3: injectable watch function and timers, the stream cap (10) and the heartbeat period (25 s). */
+  watch?: WatchFn;
+  timers?: Timers;
+  maxClients?: number;
+  heartbeatMs?: number;
 }
 
 export interface Dashboard {
@@ -173,11 +192,36 @@ export interface Dashboard {
 
 export function startDashboard(o: DashboardOptions): Dashboard {
   let bound = o.port;
+  const timers = o.timers ?? realTimers;
+  const maxClients = o.maxClients ?? 10;
+  const streams = new Set<ServerResponse>();
+  /** H1: `retry: 2000` first; no `id:` field, because every reconnect reloads the full state. */
+  const openStream = (res: ServerResponse) => {
+    if (streams.size >= maxClients) {
+      const body = JSON.stringify({ error: "too many event streams" });
+      res.writeHead(503, { ...SECURITY_HEADERS, "Content-Type": JSON_TYPE, "Content-Length": String(Buffer.byteLength(body)) });
+      return void res.end(body);
+    }
+    res.writeHead(200, { ...SECURITY_HEADERS, "Content-Type": EVENT_TYPE });
+    res.flushHeaders();
+    res.write("retry: 2000\n\n");
+    streams.add(res);
+    res.on("close", () => streams.delete(res));
+  };
+  const broadcast = (e: LiveEvent) => {
+    // The id is a listed directory name that passed isTaskId, so the JSON has no newline and no path.
+    const frame = e.kind === "task" ? `event: task\ndata: ${JSON.stringify({ id: e.id })}\n\n` : "event: list\ndata: {}\n\n";
+    for (const res of streams) res.write(frame);
+  };
+  let watcher: { close(): void } | null = null;
+  let heartbeat: unknown = null;
+
   const handler = createDashboardHandler({
     port: () => bound,
     data: o.data ?? dashboardData(o.root, o.pricing),
     err: o.err,
     editorUrl: o.editorUrl ?? DEFAULT_EDITOR_URL,
+    events: openStream,
   });
   const server = createServer(handler);
   // Node's default reply to a malformed request carries none of the security headers: send our own.
@@ -197,6 +241,13 @@ export function startDashboard(o: DashboardOptions): Dashboard {
   const stop = () => {
     o.proc.off("SIGINT", stop);
     o.proc.off("SIGTERM", stop);
+    // Watchers and timers first, then the open streams, then D1's socket teardown.
+    watcher?.close();
+    watcher = null;
+    if (heartbeat !== null) timers.clearInterval(heartbeat);
+    heartbeat = null;
+    for (const res of streams) res.end();
+    streams.clear();
     server.close(() => {
       o.err("base-ai dashboard: stopped");
       resolveStopped();
@@ -219,6 +270,12 @@ export function startDashboard(o: DashboardOptions): Dashboard {
       bound = typeof addr === "object" && addr !== null ? addr.port : o.port;
       o.proc.on("SIGINT", stop);
       o.proc.on("SIGTERM", stop);
+      watcher = startTaskWatcher({ root: o.root, onEvent: broadcast, err: o.err, watch: o.watch, timers });
+      // H3: one shared heartbeat comment keeps idle streams open through proxies; it never keeps the process alive.
+      heartbeat = timers.setInterval(() => {
+        for (const res of streams) res.write(": ping\n\n");
+      }, o.heartbeatMs ?? 25_000);
+      (heartbeat as { unref?: () => void }).unref?.();
       o.out(`base-ai dashboard: http://${HOST}:${bound}/ (Ctrl+C to stop)`);
       resolve(bound);
     });

@@ -89,6 +89,8 @@ export interface QueueState {
   expanded: boolean;
   selected: string | null;
 }
+/** The live-refresh state of the header (BASE-101-D3 H5): LIVE only while the event stream is open. */
+export type LiveState = "live" | "reconnecting" | "offline";
 export type KeyAction = { action: "focus"; index: number } | { action: "search" } | { action: "none" };
 
 /** An HTML element node. */
@@ -247,11 +249,12 @@ export function headerStats(tasks: TaskEntryView[]): { tasks: number; active: nu
   return { tasks: tasks.length, active: tasks.filter((x) => x.state !== "validated").length, cost: label };
 }
 
-/** The header's status line. */
-export function headerView(tasks: TaskEntryView[], host: string, updated: string | null): VElement {
+/** The header's status line; "LIVE" appears only for the `live` state. */
+export function headerView(tasks: TaskEntryView[], host: string, updated: string | null, live: LiveState): VElement {
   const st = headerStats(tasks);
+  const label = live === "live" ? "LIVE" : live === "reconnecting" ? "RECONNECTING" : "OFFLINE";
   return h("div", { class: "header-stats" }, [
-    h("span", { class: "where" }, [h("span", { class: "dot", "aria-hidden": "true" }, [t("●")]), t(` ${host}`)]),
+    h("span", { class: `where live-${live}`, role: "status" }, [h("span", { class: "dot", "aria-hidden": "true" }, [t("●")]), t(` ${label} ${host}`)]),
     h("span", { class: "updated" }, [t(updated === null ? "not loaded" : `updated ${updated}`)]),
     h("span", { class: "totals" }, [t(`${st.tasks} TASKS · ${st.active} ACTIVE · ${st.cost}`)]),
   ]);
@@ -506,7 +509,7 @@ export function palette(): Record<string, string> {
 /** WCAG 2 contrast ratio of two `#rrggbb` colours. */
 export function contrastRatio(a: string, b: string): number {
   const lum = (hex: string) => {
-    const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+    const c = [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
     return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
   };
   const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
