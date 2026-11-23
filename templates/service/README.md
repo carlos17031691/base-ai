@@ -20,7 +20,7 @@ Independent service created with `base-ai service new {{name}} <repo>`.
 
 ## Dependency audit
 
-CI runs [OSV-Scanner](https://google.github.io/osv-scanner/) at a pinned version (its SHA-256 is checked before it runs) over every lockfile in the repository, then `.github/scripts/dependency-audit.cjs` applies the policy:
+CI runs [OSV-Scanner](https://google.github.io/osv-scanner/) at a pinned version (its SHA-256 is checked before it runs) over every lockfile in the repository (those matching a `.gitignore` rule included), then `.github/scripts/dependency-audit.cjs` applies the policy:
 
 1. **What fails the build:** a High or Critical advisory (CVSS 7.0 or more), or an advisory with no score, in a production dependency. A scanner error or an invalid accepted file fails the build too.
 2. **What is only reported:** Low and Medium advisories, and advisories in packages used for development only. They are printed in the job log and the job summary and do not fail the build.

@@ -16,12 +16,12 @@ const ENTRY_KEYS = ["accepted", "expires", "id", "reason"];
 
 /**
  * Lockfile-controlled text made safe to print: one line, at most 200 characters, and never a workflow command.
- * Both command forms are broken by content (`::` and `##[`), so the result is safe wherever it lands in a line
- * and whatever whitespace the runner trims.
+ * Both command forms are broken by content: no two colons stay adjacent and `##[` becomes `## [`, so the result
+ * is safe wherever it lands in a line and whatever whitespace the runner trims.
  */
 function sanitize(text) {
   const flat = String(text).replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, " ")
-    .replace(/::/g, ": :")
+    .replace(/:(?=:)/g, ": ")
     .replace(/##\[/g, "## [");
   return flat.slice(0, 200);
 }

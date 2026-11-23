@@ -146,7 +146,8 @@ test("sanitize: lockfile-controlled text stays on one line, is cut to 200 charac
   assert.equal(sanitize("::set-output name=x::y"), ": :set-output name=x: :y");
   assert.equal(sanitize("  ::warning::w"), "  : :warning: :w", "leading whitespace does not help");
   assert.equal(sanitize("a ##[error]b ####[group]"), "a ## [error]b #### [group]");
-  assert.equal(sanitize(":::::"), ": :: ::");
+  assert.equal(sanitize(":::::"), ": : : : :");
+  for (const n of [2, 3, 4, 5, 9]) assert.ok(!sanitize(`a${":".repeat(n)}b`).includes("::"), `${n} colons`);
   assert.equal(sanitize("x".repeat(500)).length, 200);
   for (const code of [0, 13, 27, 127, 133, 8232, 8233]) assert.equal(sanitize(`a${String.fromCharCode(code)}b`), "a b", String(code));
   assert.equal(sanitize(42), "42");
@@ -315,7 +316,8 @@ test("the same gate in both workflows: one audit step each, the same pinned vers
   const s = names(serviceSteps);
   assert.ok(s.indexOf(STEP) === s.findIndex((n) => n.startsWith("actions/setup-node@")) + 1 && s.indexOf(STEP) === s.indexOf("Install dependencies") - 1);
   assert.ok(rootSteps.find((x) => x.name === STEP)?.run?.includes("--lockfile package-lock.json"));
-  assert.ok(serviceSteps.find((x) => x.name === STEP)?.run?.includes("--recursive --allow-no-lockfiles"));
+  // --no-ignore: a tracked lockfile that matches a .gitignore rule is still scanned.
+  assert.ok(serviceSteps.find((x) => x.name === STEP)?.run?.includes("--recursive --allow-no-lockfiles --no-ignore "));
 
   // The template's actions stay pinned by commit.
   const uses = serviceSteps.flatMap((x) => (x.uses === undefined ? [] : [x.uses]));

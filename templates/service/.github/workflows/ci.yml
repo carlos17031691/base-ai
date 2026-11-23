@@ -45,7 +45,7 @@ jobs:
           chmod +x "$RUNNER_TEMP/osv-scanner"
           : > "$RUNNER_TEMP/osv-scanner-empty.toml" # an explicit empty config: an osv-scanner.toml in the repository is never read
           set +e
-          "$RUNNER_TEMP/osv-scanner" scan source --config "$RUNNER_TEMP/osv-scanner-empty.toml" --recursive --allow-no-lockfiles --format json --output-file "$RUNNER_TEMP/osv-results.json" .
+          "$RUNNER_TEMP/osv-scanner" scan source --config "$RUNNER_TEMP/osv-scanner-empty.toml" --recursive --allow-no-lockfiles --no-ignore --format json --output-file "$RUNNER_TEMP/osv-results.json" .
           scanner_exit=$?
           set -e
           node .github/scripts/dependency-audit.cjs --results "$RUNNER_TEMP/osv-results.json" --accepted .github/dependency-audit-accepted.json --scanner-exit "$scanner_exit"
