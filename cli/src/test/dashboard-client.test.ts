@@ -707,3 +707,24 @@ test("review r1 L2: a registration error stays under its own task; while one che
   await running;
   assert.equal(doc.byAction("registration")[0].text, "CHECK REGISTRATION");
 });
+
+test("D5 satellites in the DOM: after boot the ring holds an aria-hidden g built with the page's SVG namespace; INDEX_HTML and ringView share the viewBox", async () => {
+  const { win, doc } = fakeWin();
+  await boot(win);
+  const ring = doc.getElementById("ring") as FakeEl;
+  const group = ring.all().find((e) => e.getAttribute("class") === "satellites");
+  assert.ok(group !== undefined, "the satellite group is mounted inside #ring");
+  assert.deepEqual([group?.tagName, group?.namespaceURI, group?.getAttribute("aria-hidden")], ["g", SVG_NS, "true"]);
+  assert.ok(doc.created.includes(`${SVG_NS}:g`) && !doc.created.includes("html:g"));
+  // Two active fixture tasks (TK-1 selected, TK-2), so two satellites and one beam.
+  assert.equal(group?.all().filter((e) => (e.getAttribute("class") ?? "").startsWith("sat ")).length, 2);
+  assert.equal(group?.all().filter((e) => e.getAttribute("class") === "beam").length, 1);
+  assert.ok(!group?.all().some((e) => e.getAttribute("data-action") !== null || e.getAttribute("tabindex") !== null));
+
+  const viewBox = view.ringView([], null, null).attrs.viewBox;
+  assert.equal(viewBox, "-110 0 620 400");
+  assert.ok(INDEX_HTML.includes(`viewBox="${viewBox}"`));
+  for (const fn of ["satellites", "satelliteLabel", "satellitesView"]) assert.ok(appFunctions().some((f) => f.name === fn), fn);
+  assert.match(APP_CSS, /@media \(prefers-reduced-motion: reduce\)\{[^}]*animation:none !important;transition:none !important\}\}\n$/, "still the last rule");
+  assert.match(APP_CSS, /\.beam\{[^}]*animation:glow/);
+});

@@ -34,7 +34,7 @@ export const INDEX_HTML = `<!doctype html>
 <main class="center">
 <section class="panel ring-panel" data-panel="ring" aria-labelledby="h-ring">
 <h2 id="h-ring" class="sr-only">Pipeline stages</h2>
-<svg id="ring" class="ring" viewBox="-80 0 560 400" role="img" aria-label="Pipeline stages"></svg>
+<svg id="ring" class="ring" viewBox="-110 0 620 400" role="img" aria-label="Pipeline stages"></svg>
 <p id="detail-error" class="error" role="status"></p>
 </section>
 <div class="lower">
@@ -77,6 +77,9 @@ export function appFunctions(): ((...args: never[]) => unknown)[] {
     view.headerView,
     view.ringArcs,
     view.arcPath,
+    view.satelliteLabel,
+    view.satellites,
+    view.satellitesView,
     view.ringView,
     view.timelineRows,
     view.timelineView,
@@ -180,7 +183,7 @@ h2 .note{font-size:11px;letter-spacing:0;margin-left:6px}
 .pill.actor{color:${c.amber}}
 .group-toggle{width:100%;text-align:right;background:${c.bg};border:1px solid ${c.line};border-radius:6px;padding:6px 10px;color:${c.muted};letter-spacing:.06em}
 .ring-panel{display:flex;flex-direction:column;align-items:center}
-.ring{width:100%;max-width:600px;height:auto}
+.ring{width:100%;max-width:664px;height:auto}
 .ring-track{fill:none;stroke:${c.line};stroke-width:2;stroke-dasharray:2 6}
 .ring-core{fill:none;stroke:${c.cyan};stroke-width:6;filter:drop-shadow(0 0 8px ${c.cyan})}
 .arc{fill:none;stroke-width:14;stroke-linecap:butt;opacity:.55;transition:opacity .3s}
@@ -196,6 +199,17 @@ h2 .note{font-size:11px;letter-spacing:0;margin-left:6px}
 .arc-label.state-completed{fill:${c.cyan}}
 .arc-label.state-validated{fill:${c.green}}
 .arc-label.state-other{fill:${c.violet}}
+.orbit{fill:none;stroke:${c.line};stroke-width:1}
+.sat circle{stroke:${c.bg};stroke-width:2}
+.sat text{fill:${c.bg};font-size:9px;font-weight:700;font-family:ui-monospace,monospace}
+.sat.state-pending circle,.sat.state-blocked circle{fill:${c.amber}}
+.sat.state-in_progress circle{fill:${c.blue}}
+.sat.state-completed circle{fill:${c.cyan}}
+.sat.state-other circle{fill:${c.violet}}
+.sat.selected circle{stroke:${c.cyan};filter:drop-shadow(0 0 6px ${c.cyan})}
+.sat.selected{animation:glow 2.4s ease-in-out infinite}
+.beam{stroke:${c.cyan};stroke-width:2;stroke-linecap:round;filter:drop-shadow(0 0 4px ${c.cyan});animation:glow 2.4s ease-in-out infinite}
+.sat-more{fill:${c.muted};font-size:11px;font-family:ui-monospace,monospace}
 .core-id{fill:${c.text};font-size:26px;font-weight:600;font-family:ui-monospace,monospace}
 .core-title{fill:${c.muted};font-size:15px}
 .core-pill{fill:${c.amber};font-size:11px;letter-spacing:.02em}
