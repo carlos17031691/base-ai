@@ -39,6 +39,8 @@ export interface AiSource {
   definitionBudgets?: Record<string, number>;
   /** `budgets.definition_totals`: cap per role on the definition plus its reference files; absent when not configured. */
   definitionTotals?: Record<string, number>;
+  /** `budgets.always_on`: enforced cap on the always-on context; absent when not configured (BASE-079-T6). */
+  alwaysOnBudget?: number;
   /** `usage.hook` of config.yaml (BASE-101-U2); read only at the root. */
   usageHook?: UsageHook;
 }
@@ -73,6 +75,16 @@ function parseRoleBudgets(cfg: Record<string, unknown>, key: string, file: strin
     }
   }
   return defs as Record<string, number>;
+}
+
+/** Reads the optional `budgets.always_on` (positive integer); throws naming the key on any other value. */
+function parseAlwaysOnBudget(cfg: Record<string, unknown>, file: string): number | undefined {
+  const budgets = cfg.budgets;
+  if (typeof budgets !== "object" || budgets === null || Array.isArray(budgets)) return undefined;
+  const value = (budgets as Record<string, unknown>).always_on;
+  if (value === undefined) return undefined;
+  if (!Number.isInteger(value) || (value as number) <= 0) throw new Error(`${file}: "budgets.always_on" must be a positive integer`);
+  return value as number;
 }
 
 export interface UsageConfig {
@@ -161,6 +173,7 @@ export function loadSource(dir: string): AiSource {
   const agents = parseTargets(cfg.agents ?? "all", cfgPath);
   const definitionBudgets = parseRoleBudgets(cfg, "definitions", cfgPath);
   const definitionTotals = parseRoleBudgets(cfg, "definition_totals", cfgPath);
+  const alwaysOnBudget = parseAlwaysOnBudget(cfg, cfgPath);
 
   const rulesPath = join(ai, "rules.md");
   const baseRules = existsSync(rulesPath) ? readFileSync(rulesPath, "utf8").trim() : "";
@@ -201,6 +214,7 @@ export function loadSource(dir: string): AiSource {
     usageHook: usage.hook,
     ...(definitionBudgets ? { definitionBudgets } : {}),
     ...(definitionTotals ? { definitionTotals } : {}),
+    ...(alwaysOnBudget !== undefined ? { alwaysOnBudget } : {}),
   };
 }
 
