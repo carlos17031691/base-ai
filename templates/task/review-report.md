@@ -36,6 +36,18 @@
 |---|---|---|---|
 |  |  |  |  |
 
+## Security
+
+<!-- Required in every round (`### Security` in a re-review round). The supervisor checks this form. -->
+
+- Trust boundary touched: <!-- no | yes — network, processes, external input, secrets (those that apply) -->
+- Method: <!-- STRIDE (after yes) | OWASP checklist (after no) -->
+- Findings: <!-- none | ids of this round's security findings, e.g. H1, L2 -->
+
+| Category | Result | Basis |
+|---|---|---|
+| <!-- STRIDE: Spoofing, Tampering, Repudiation, Information disclosure, Denial of service, Elevation of privilege. OWASP checklist: Input validation & injection, Authn/authz & isolation, Secrets & data protection, Abuse resistance, Supply chain --> | <!-- finding ids, none or n/a --> | <!-- `file:line` examined, or why it does not apply --> |
+
 ## Checklist
 
 - [ ] Ticket traceability: branch name and commits reference ticket ID

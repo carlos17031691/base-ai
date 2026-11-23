@@ -185,7 +185,7 @@ test("task list and detail routes return the JSON API shapes; / is the HUD page;
     const detail = await get(port, "/api/tasks/TK-1");
     assert.equal(detail.status, 200);
     const d = JSON.parse(detail.body);
-    assert.deepEqual([d.id, d.checks.length, d.transitions.length], ["TK-1", 18, 0]);
+    assert.deepEqual([d.id, d.checks.length, d.transitions.length], ["TK-1", 19, 0]);
 
     const page = await get(port, "/");
     assert.equal(page.status, 200);
@@ -632,8 +632,10 @@ test("D3 spawned CLI: with an /events stream open, SIGTERM still exits 0", async
 
 // ---- BASE-101-D4: POST /api/tasks/<id>/registration ----
 // A task whose review marks one key To register (K16 passes); TK-1 from root() stays broken (K16 not computed).
+// A valid Security section (BASE-124-B, K19), appended to review fixtures that must stay consistent.
+const SEC = "\n## Security\n\n- Trust boundary touched: no\n- Method: OWASP checklist\n- Findings: none\n\n| Category | Result | Basis |\n|---|---|---|\n| Input validation & injection | none | src/x.ts:1 |\n| Authn/authz & isolation | n/a | no auth code |\n| Secrets & data protection | none | src/x.ts:2 |\n| Abuse resistance | n/a | no endpoint |\n| Supply chain | none | no dependency change |\n";
 const C4 = "2026-01-01T00:03:00Z";
-function writeKeyedTask(r: string, id = "TK-2", review = `Round: 1\n${C4}\n## Verdict: approved\n| L1 | x | To register |\n| L2 | y | To register |\n`) {
+function writeKeyedTask(r: string, id = "TK-2", review = `Round: 1\n${C4}\n## Verdict: approved\n| L1 | x | To register |\n| L2 | y | To register |\n${SEC}`) {
   const dir = join(r, ".ai", "tasks", id);
   mkdirSync(dir, { recursive: true });
   const transitions = [
@@ -927,7 +929,7 @@ test("review r1 L3: zero keys at the route: 200, outcome registered, 0 calls, no
   const g = fakeGh();
   await withServer(
     async (port, { root: r }) => {
-      writeKeyedTask(r, "TK-2", `Round: 1\n${C4}\n## Verdict: approved\n`);
+      writeKeyedTask(r, "TK-2", `Round: 1\n${C4}\n## Verdict: approved\n${SEC}`);
       const res = await get(port, regPath(), POST_OK);
       const body = JSON.parse(res.body);
       assert.deepEqual([res.status, body.outcome, body.calls, body.keys], [200, "registered", 0, []]);

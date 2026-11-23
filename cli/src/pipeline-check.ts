@@ -3,11 +3,12 @@
  *
  * Pure domain logic: it receives the raw contents of the task files and computes the
  * mechanical facts the supervisor otherwise re-derives in prose (supervisor.md C1–C4,
- * C6–C13, the C15 decisions.md coverage (BASE-071-P2) and the C16 marker count).
+ * C6–C13, the C15 decisions.md coverage (BASE-071-P2), the C16 marker count and the C19
+ * form of the latest review round's Security section (BASE-124-B)).
  * No I/O here; see pipeline-files.ts.
  */
 
-export const RULE = "supervisor.md@682c6e4";
+export const RULE = "supervisor.md@e2c6781";
 export const MAX_FILE_BYTES = 2 * 1024 * 1024;
 
 /** A task file as read by the I/O layer, which never throws. */
@@ -399,6 +400,86 @@ function coveredBy(b: DecisionBlock): string[] {
   });
 }
 
+const SECURITY_LABELS = ["Trust boundary touched", "Method", "Findings"] as const;
+const SECURITY_FIELD = new RegExp(`^(?:[-*] )?(?:\\*\\*(${SECURITY_LABELS.join("|")}):\\*\\*|(${SECURITY_LABELS.join("|")}):)(.*)$`);
+const BOUNDARY_KINDS = ["network", "processes", "external input", "secrets"];
+const CATEGORY_KEYWORDS = {
+  STRIDE: [["spoof"], ["tamper"], ["repudiat"], ["information"], ["denial"], ["elevation"]],
+  // The template says "Abuse resistance"; the `security` skill titles the same item "Resilience against abuse".
+  "OWASP checklist": [["input"], ["auth"], ["secret"], ["abuse", "resilience"], ["supply"]],
+};
+
+/** Removes closed HTML comments in one pass; an opener with no closer ends the scan (linear on any input). */
+function stripComments(text: string): string {
+  let out = "";
+  let from = 0;
+  for (;;) {
+    const open = text.indexOf("<!--", from);
+    const close = open === -1 ? -1 : text.indexOf("-->", open + 4);
+    if (close === -1) return out + text.slice(from);
+    out += text.slice(from, open);
+    from = close + 3;
+  }
+}
+const FINDING_ID = /\b[HML]\d+\b/g;
+
+/**
+ * The form of a review round's Security section (supervisor.md C19, BASE-124-B): one heading, the three
+ * field lines, a method that follows the boundary, one filled row per category of that method, and finding
+ * ids that agree between the `Findings` line and the rows. Structure only. Returns the first problem in
+ * fixed words, labels and counts — never text from the report — or null.
+ */
+function securityProblem(r: Report, round: Round): string | null {
+  // Outside code fences and with HTML comments removed, so an unfilled template section does not count.
+  const lines = stripComments(roundText(r, round)).split("\n");
+  const headings = lines.flatMap((l, i) => (/^#{2,3} Security\s*$/.test(l) ? [i] : []));
+  if (headings.length !== 1) return `${headings.length} Security headings`;
+  const rest = lines.slice(headings[0] + 1);
+  const end = rest.findIndex((l) => /^#{1,3} /.test(l));
+  const section = end === -1 ? rest : rest.slice(0, end);
+  const plain = (v: string) => v.replace(/[*`]/g, "").trim();
+
+  const fields = new Map<string, string[]>();
+  for (const l of section) {
+    const m = SECURITY_FIELD.exec(l);
+    if (!m) continue;
+    const label = m[1] ?? m[2];
+    if (!fields.has(label)) fields.set(label, []);
+    (fields.get(label) as string[]).push(plain(m[3]));
+  }
+  for (const label of SECURITY_LABELS) {
+    const values = fields.get(label) ?? [];
+    if (values.length !== 1) return `${label}: ${values.length} lines`;
+    if (values[0] === "") return `${label} is empty`;
+  }
+  const value = (label: (typeof SECURITY_LABELS)[number]) => (fields.get(label) as string[])[0];
+
+  const boundary = value("Trust boundary touched").toLowerCase();
+  const touched = boundary.startsWith("yes") && BOUNDARY_KINDS.some((k) => boundary.includes(k));
+  if (boundary !== "no" && !touched) return "Trust boundary touched is neither no nor yes with a kind";
+  const method = touched ? "STRIDE" : "OWASP checklist";
+  if (value("Method").toLowerCase() !== method.toLowerCase()) return "Method does not match Trust boundary touched";
+
+  const cells = (l: string) => l.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+  const table = section.filter((l) => l.trim().startsWith("|")).map(cells);
+  const separator = table.findIndex((row) => row.every((c) => /^:?-+:?$/.test(c)));
+  const rows = separator === -1 ? table : table.filter((_, i) => i !== separator && i !== separator - 1);
+  const keywords = CATEGORY_KEYWORDS[method];
+  if (rows.length !== keywords.length) return `category rows: expected ${keywords.length}, found ${rows.length}`;
+  for (const names of keywords) {
+    const n = rows.filter((row) => names.some((k) => plain(row[0] ?? "").toLowerCase().startsWith(k))).length;
+    if (n !== 1) return `category rows: ${n} for one ${method} category`;
+  }
+  if (rows.some((row) => row.length < 3 || plain(row[1]) === "" || plain(row[2]) === "")) return "a category row has an empty Result or Basis";
+
+  const ids = (text: string) => [...new Set(text.match(FINDING_ID) ?? [])].sort((a, b) => a.localeCompare(b));
+  const cited = ids(value("Findings"));
+  const inRows = ids(rows.map((row) => row[1]).join(" "));
+  if (cited.length === 0 && value("Findings").toLowerCase() !== "none") return "Findings is neither none nor finding ids";
+  if (cited.join(",") !== inRows.join(",")) return `finding ids differ: ${cited.length} in Findings, ${inRows.length} in the rows`;
+  return null;
+}
+
 const fileProblem = (f: FileRead, name: string) =>
   f.kind === "missing" ? `${name} is missing` : f.kind === "error" ? `${name}: ${f.reason}` : "";
 
@@ -464,7 +545,7 @@ export function nextActor(i: NextActorInput): NextActor {
   }
 }
 
-/** Runs K1–K18 on one task directory. Never throws on malformed input. */
+/** Runs K1–K19 on one task directory. Never throws on malformed input. */
 export function checkTask(input: TaskInput): CheckReport {
   const results = new Map<string, CheckResult>();
   const facts: TaskFacts = {
@@ -741,7 +822,20 @@ export function checkTask(input: TaskInput): CheckReport {
     return uncovered.length ? `uncovered: ${uncovered.map((ev) => `${ev.timestamp} (${ev.kind})`).join(", ")}` : true;
   });
 
-  const order = Array.from({ length: 18 }, (_, i) => `K${i + 1}`);
+  // K19 review.security: the gate applies while the task is `completed`; in any other state it is skipped,
+  // so directories validated before the rule existed keep passing (BASE-124-B H2).
+  if (st && st.state !== "completed") put("K19", "review.security", "C19", "skip", `state is ${st.state}`);
+  else {
+    // K10 too: a round for an older completion is the reviewer's to replace, not a malformed task (review L2).
+    run("K19", "review.security", "C19", ["K1", "K8", "K9", "K10"], () => {
+      const r = review as Report;
+      const n = r.rounds.length;
+      const problem = securityProblem(r, r.rounds[n - 1]);
+      return problem === null ? true : `round ${n}: ${problem}`;
+    });
+  }
+
+  const order = Array.from({ length: 19 }, (_, i) => `K${i + 1}`);
   const checks = order.map((id) => results.get(id) as CheckResult);
   facts.nextActor = nextActor({
     checks,

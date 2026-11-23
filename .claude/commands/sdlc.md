@@ -21,11 +21,11 @@ Blockers, failing verdicts, send-backs, `improvement` and the next actor: `pipel
 1. **Gate 1 — Problem, requirements & ticket traceability:** scope (root vs. `src/<name>` repo); Story/Epic/Task ID (e.g. `PROJ-123`, `CU-86a1b2`, `#45`); human approval of plan and acceptance criteria **before** modifying repository files, then `plan.md` is immutable ("Locked plans"); requirements, non-functional constraints and criteria unambiguous and verifiable by QA.
 2. **Gate 2 — Working branch & architecture design:** branch from `development` referencing the ticket (`git checkout -b feat/PROJ-123-slug development`); never work on `main`, `master` or `development`. RFC (`rfc`) for cross-service or high-impact changes, ADR (`adr`) for durable decisions; boundaries, contracts and failure modes (`architecture`, `security`).
 3. **Gate 3 — Implementation & clean code:** small cohesive changes (SOLID, KISS, YAGNI, service conventions); domain isolated from infrastructure; explicit types and errors; zero hardcoded secrets; nothing outside the locked plan.
-4. **Gate 4 — Automated verification:** unit tests (domain, edge cases); integration/contract tests (adapters, boundaries); lint, typecheck and tests pass deterministically (`base-ai doctor` green when `.ai/` changes).
+4. **Gate 4 — Automated verification:** unit tests (domain, edge cases); integration/contract tests (adapters, boundaries); lint, typecheck and tests pass deterministically; dependency audit green (no High/Critical advisory in production dependencies; `security` skill) (`base-ai doctor` green when `.ai/` changes).
 5. **Gate 5 — Code review, Quality Gates & Pull Request:**
    - Pipeline first: reviewer, qa, the human registers `To register` items as tech debt, supervisor sets `validated` (not PR approval).
    - Commits carry the ticket ID (`feat(PROJ-123): ...`); the PR targets **`development`** (`staging`), never a feature PR to `main` or `master`.
-   - Publish the `review` + `security` audit and the review/QA reports on the PR (`.ai/tasks/` is git-ignored).
+   - Publish the review/QA reports on the PR (`.ai/tasks/` is git-ignored). Its "Security audit" quotes the latest review round's Security section, unchanged, naming the round; the author never writes it.
    - Dual gates: Sonar (SAST, coverage >= 80%) and CodeRabbit (`.coderabbit.yaml`). **High**/**Medium** fixed in code before human approval; **Low** only as a registered tech-debt issue. After `validated`: "Finding raised after validation".
    - **Zero unresolved conversations** (CodeRabbit or human) before merge; branch protection per the `review` skill.
    - Slack (`SLACK_WEBHOOK_URL`): PR opened with ticket ID, CI failure, "ready for human review" once tests and Sonar pass.
