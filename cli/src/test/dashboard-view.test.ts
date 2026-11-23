@@ -23,6 +23,9 @@ import {
   ringArcs,
   ringPill,
   ringView,
+  satelliteLabel,
+  satellites,
+  satellitesView,
   roundRow,
   roundsView,
   stateLabel,
@@ -459,4 +462,133 @@ test("D4 registration panel: hostile key or file text stays a text node", () => 
   const v = registrationView([{ key: evilKey, file: "<i>f</i>", line: 1 }], { schema: 1, checkedAt: "2026-11-23T16:05:09Z", outcome: "missing", calls: 1, keys: [{ key: evilKey, status: "missing" }] }, "idle");
   assert.ok(texts(v).includes(`${evilKey} · <i>f</i>:1 · missing`));
   assert.ok(!all(v).some((n) => !("text" in n) && ["b", "img", "i"].includes(n.tag)), "no element built from the text");
+});
+
+// ---- BASE-101-D5: orbital satellites and the beam ----
+// n active tasks, newest first as A<n>…A1 (queue order is updated_at descending), plus one validated task.
+const fleet = (n: number) =>
+  Array.from({ length: n }, (_, i) => entry(`T-A${i + 1}`, ["completed", "in_progress", "pending"][i % 3], { updated_at: `2026-01-${String(i + 1).padStart(2, "0")}T00:00:00Z` })).concat([
+    entry("T-V1", "validated", { updated_at: null }),
+  ]);
+const dist = (x: number, y: number) => Math.hypot(x - 200, y - 200);
+const el = (n: VNode) => n as Exclude<VNode, { text: string }>;
+
+test("D5 satellites mirror the active tasks: 0, 3, 6 and 8 active give 0, 3, 6 and 6 satellites in queue order, then +N", () => {
+  assert.deepEqual(satellites([entry("T-V1", "validated")], null), { items: [], more: 0, beam: null, marker: null });
+  const three = satellites(fleet(3), null);
+  assert.deepEqual([three.items.map((i) => i.id), three.more, three.marker], [["T-A3", "T-A2", "T-A1"], 0, null]);
+  const six = satellites(fleet(6), null);
+  assert.deepEqual([six.items.length, six.more], [6, 0]);
+  const eight = satellites(fleet(8), null);
+  assert.deepEqual(eight.items.map((i) => i.id), ["T-A8", "T-A7", "T-A6", "T-A5", "T-A4", "T-A3"]);
+  assert.equal(eight.more, 2);
+  assert.deepEqual(eight.items.map((i) => i.state).slice(0, 3), ["in_progress", "completed", "pending"]);
+  // The same order as the queue's active list: no rule of its own.
+  assert.deepEqual(eight.items.map((i) => i.id), orderQueue(fleet(8)).active.slice(0, 6).map((x) => x.id));
+  // A query or a mode never reaches it: the signature has neither.
+  assert.equal(satellites.length, 2);
+  assert.ok(texts(el(satellitesView(fleet(8), null) as VNode)).includes("+2"), "the marker text");
+});
+
+test("D5 slots: seven fixed slots at 315 + k x 360 / 7 degrees, 171 from the centre; the marker takes the seventh", () => {
+  const { items, marker } = satellites(fleet(8), null);
+  items.forEach((i, k) => {
+    assert.ok(Math.abs(i.angle - ((315 + (k * 360) / 7) % 360)) < 1e-9, `slot ${k}`);
+    assert.ok(Math.abs(dist(i.x, i.y) - 171) < 1e-9, `radius of slot ${k}`);
+  });
+  assert.ok(items[0].x < 200 && items[0].y < 200, "the first satellite is at the upper left");
+  assert.ok(marker !== null && Math.abs(dist(marker.x, marker.y) - 171) < 1e-9);
+  const a6 = ((315 + (6 * 360) / 7) % 360) - 90;
+  assert.ok(marker !== null && Math.abs(marker.x - (200 + 171 * Math.cos((a6 * Math.PI) / 180))) < 1e-9, "the marker is at slot 6");
+});
+
+test("D5 the beam follows the selection: a selected active task always has a satellite, even beyond the first 6; a validated or absent selection has no beam", () => {
+  const far = satellites(fleet(8), "T-A1");
+  assert.deepEqual(far.items.map((i) => i.id), ["T-A8", "T-A7", "T-A6", "T-A5", "T-A4", "T-A1"], "rank 8 takes the 6th place");
+  assert.deepEqual(far.items.filter((i) => i.selected).map((i) => i.id), ["T-A1"]);
+  assert.equal(far.more, 2);
+  const chosen = far.items[5];
+  assert.ok(far.beam !== null);
+  if (far.beam !== null) {
+    assert.ok(Math.abs(dist(far.beam.x1, far.beam.y1) - 160) < 1e-9 && Math.abs(dist(far.beam.x2, far.beam.y2) - 121) < 1e-9, "from 160 to 121");
+    const ang = (x: number, y: number) => Math.atan2(y - 200, x - 200);
+    assert.ok(Math.abs(ang(far.beam.x1, far.beam.y1) - ang(chosen.x, chosen.y)) < 1e-9 && Math.abs(ang(far.beam.x2, far.beam.y2) - ang(chosen.x, chosen.y)) < 1e-9, "on the satellite's angle");
+  }
+  const near = satellitesView(fleet(8), "T-A7") as VNode;
+  assert.equal(els(near, (a) => a.class === "beam").length, 1);
+  assert.equal(els(near, (a) => (a.class ?? "").includes(" selected")).length, 1);
+  for (const sel of ["T-V1", null, "NOPE"]) {
+    const none = satellites(fleet(8), sel);
+    assert.deepEqual([none.items.filter((i) => i.selected).length, none.beam], [0, null], String(sel));
+    assert.equal(els(satellitesView(fleet(8), sel) as VNode, (a) => a.class === "beam").length, 0);
+  }
+});
+
+test("D5 aria-hidden: orbit, beam, satellites and marker sit in one aria-hidden group with nothing focusable or clickable; the ring's aria-label is the same as without them", () => {
+  const g = el(satellitesView(fleet(8), "T-A8") as VNode);
+  assert.deepEqual([g.tag, g.ns, g.attrs.class, g.attrs["aria-hidden"]], ["g", "svg", "satellites", "true"]);
+  assert.deepEqual(
+    g.children.map((c) => el(c).attrs.class),
+    ["orbit", "beam", "sat state-in_progress selected", "sat state-completed", "sat state-pending", "sat state-in_progress", "sat state-completed", "sat state-pending", "sat-more"],
+  );
+  for (const n of all(g)) {
+    if ("text" in n) continue;
+    assert.equal(n.ns, "svg");
+    for (const [k, v] of Object.entries(n.attrs)) {
+      assert.ok(!["data-action", "tabindex", "href", "style"].includes(k) && !k.startsWith("on"), `${n.tag} ${k}`);
+      assert.ok(!v.includes("url("), `${n.tag} ${k}`);
+    }
+  }
+  const sat = el(g.children[2]);
+  assert.deepEqual(sat.children.map((c) => el(c).tag), ["title", "circle", "text"]);
+  assert.deepEqual([texts(sat.children[0]), el(sat.children[1]).attrs.r, texts(sat.children[2])], [["T-A8"], "11", ["A8"]]);
+
+  // The ring: the group is after the arcs and before the core; the label ignores it.
+  const tasks = fleet(8);
+  const ring = ringView(tasks, tasks[7], null);
+  const classes = ring.children.map((c) => el(c).attrs.class ?? "");
+  const at = classes.indexOf("satellites");
+  assert.ok(at > classes.lastIndexOf("arc-label state-validated") && at === classes.indexOf("ring-core") - 1);
+  assert.deepEqual(classes.slice(classes.indexOf("ring-core") + 1), ["core-id", "core-title", "core-pill"], "the core texts are still last");
+  const allValidated = tasks.map((x) => ({ ...x, state: "validated" }));
+  const mixedLabel = ringView(tasks, null, null).attrs["aria-label"];
+  assert.equal(mixedLabel, "PENDING (2), IN PROGRESS (3), COMPLETED (3), VALIDATED (1)");
+  assert.ok(!mixedLabel.includes("T-A") && !mixedLabel.includes("+2"), "no satellite text in the label");
+  assert.equal(ringView(allValidated, null, null).attrs["aria-label"], "PENDING (0), IN PROGRESS (0), COMPLETED (0), VALIDATED (9)");
+});
+
+test("D5 no active task: no satellite group, from the view and in the ring", () => {
+  const validated = [entry("T-V1", "validated"), entry("T-V2", "validated")];
+  assert.equal(satellitesView(validated, "T-V1"), null);
+  assert.equal(satellitesView([], null), null);
+  assert.equal(els(ringView(validated, validated[0], null), (a) => a.class === "satellites").length, 0);
+});
+
+test("D5 hostile id: the label and the title are text nodes; satelliteLabel takes the last segment, cut to 3", () => {
+  const cases: [string, string][] = [
+    ["BASE-101-D5", "D5"],
+    ["#45", "#45"],
+    ["CU-86a1b2", "86…"],
+    ["X-", "X-"],
+    ["PLAIN", "PL…"],
+  ];
+  for (const [id, label] of cases) assert.equal(satelliteLabel(id), label, id);
+  const evilId = "<b>x</b>";
+  const g = satellitesView([entry(evilId, "pending")], evilId) as VNode;
+  assert.ok(texts(g).includes(evilId), "the title holds the full id as text");
+  assert.ok(texts(g).includes(satelliteLabel(evilId)));
+  assert.ok(!all(g).some((n) => !("text" in n) && n.tag === "b"), "no element built from the id");
+});
+
+test("D5 geometry: arc labels are 192 from the centre and the viewBox is -110 0 620 400", () => {
+  const ring = ringView(fleet(4), null, null);
+  assert.equal(ring.attrs.viewBox, "-110 0 620 400");
+  const labels = els(ring, (a) => (a.class ?? "").startsWith("arc-label"));
+  assert.ok(labels.length >= 3);
+  for (const l of labels) assert.ok(Math.abs(dist(Number(l.attrs.x), Number(l.attrs.y)) - 192) < 0.1, l.attrs.class);
+});
+
+test("D5 palette: the dark label text meets AA (4.5:1) on every satellite colour", () => {
+  const c = palette();
+  for (const fill of ["amber", "blue", "cyan", "violet"]) assert.ok(contrastRatio(c.bg, c[fill]) >= 4.5, `bg on ${fill}: ${contrastRatio(c.bg, c[fill]).toFixed(2)}`);
 });
