@@ -18,7 +18,7 @@
 - [ ] Domain logic is isolated from infrastructure/transport (`architecture` skill).
 - [ ] No cross-service filesystem imports; API/event contracts remain backward-compatible or versioned.
 - [ ] Automated tests added/updated (coverage >= 80%, happy path, edge cases, failure modes) and passing (`testing` skill).
-- [ ] The "Security audit" below is quoted from the reviewer's report, not written by the author (`security` skill).
+- [ ] The "Security audit" above is quoted from the reviewer's report, not written by the author (`security` skill).
 - [ ] Sonar & CodeRabbit dual gates verified: all **High** and **Medium** findings resolved and re-verified.
 - [ ] Any **Low** findings accepted without changes logged as project issues / technical debt (list Issue # below).
 - [ ] All review conversations and comments explicitly addressed and marked resolved (Zero Unresolved Conversations rule).

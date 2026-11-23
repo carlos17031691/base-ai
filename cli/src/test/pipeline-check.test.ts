@@ -877,3 +877,33 @@ test("K19 report shape and next actor: 19 checks in order, source C19, and a fai
   const early = checkTask(input({ review: ok(BARE), qa: { kind: "missing" } }, status({ checklist: { tests_pass: true, lint_pass: false, types_pass: true, review_verdict: "approved", qa_verdict: null } }, t)));
   assert.deepEqual(early.facts.nextActor, { role: "human", reason: "check K19 review.security failed" });
 });
+
+test("K19 review round 2 fixes: the skill's category name, a stale round after a new completion, and a crafted round in bounded time", () => {
+  // L3: "Resilience against abuse" (the security skill's title) names the same category as "Abuse resistance".
+  const skillNames = [...OWASP.slice(0, 3), "Resilience against abuse", OWASP[4]];
+  assert.equal(k19(BARE + sec({ cats: skillNames })).status, "pass");
+  assert.equal(k19(BARE + sec({ cats: [...skillNames.slice(0, 4), "Abuse resistance"] })).detail, "round 1: category rows: 2 for one OWASP checklist category");
+
+  // L2: after a send-back and a new completion the old round is the reviewer's to replace: K19 is skipped, not failed.
+  const C2 = "2026-01-01T00:04:20Z";
+  const t = baseTransitions().slice(0, 5);
+  t[4].note = `review round 1: changes_requested; reviewed implementer completion ${C}`;
+  t.push({ from: "completed", to: "in_progress", agent: "implementer", timestamp: "2026-01-01T00:04:10Z", note: "re-entered" });
+  t.push({ from: "in_progress", to: "completed", agent: "implementer", timestamp: C2, note: "done again" });
+  const stale = checkTask(input(
+    { review: ok(BARE.replace("## Verdict: approved", "## Verdict: changes_requested")), qa: { kind: "missing" } },
+    status({ checklist: { tests_pass: true, lint_pass: false, types_pass: true, review_verdict: "changes_requested", qa_verdict: null } }, t),
+  ));
+  assert.equal(statusOf(stale, "K9"), "pass", check(stale, "K9").detail);
+  assert.deepEqual([check(stale, "K19").status, check(stale, "K19").detail], ["skip", "depends on K10"]);
+  assert.deepEqual(stale.facts.nextActor, { role: "reviewer", round: 2, reason: "review not bound to latest completion" });
+
+  // L1: unclosed comment openers and repeated field lines up to the 2 MiB file limit stay linear.
+  const openers = BARE + "## Security\n" + "<!--".repeat(500_000);
+  const fieldLines = BARE + "## Security\n" + "- Method: x\n".repeat(170_000);
+  const started = Date.now();
+  assert.equal(k19(openers).status, "fail");
+  assert.equal(k19(fieldLines).detail, "round 1: Trust boundary touched: 0 lines");
+  assert.equal(k19(`${BARE}<!-- a --> <!-->\n${sec()}`).status, "pass", "closed comments are removed, <!--> included");
+  assert.ok(Date.now() - started < 5000, `took ${Date.now() - started} ms`);
+});

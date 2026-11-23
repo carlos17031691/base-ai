@@ -404,9 +404,23 @@ const SECURITY_LABELS = ["Trust boundary touched", "Method", "Findings"] as cons
 const SECURITY_FIELD = new RegExp(`^(?:[-*] )?(?:\\*\\*(${SECURITY_LABELS.join("|")}):\\*\\*|(${SECURITY_LABELS.join("|")}):)(.*)$`);
 const BOUNDARY_KINDS = ["network", "processes", "external input", "secrets"];
 const CATEGORY_KEYWORDS = {
-  STRIDE: ["spoof", "tamper", "repudiat", "information", "denial", "elevation"],
-  "OWASP checklist": ["input", "auth", "secret", "abuse", "supply"],
+  STRIDE: [["spoof"], ["tamper"], ["repudiat"], ["information"], ["denial"], ["elevation"]],
+  // The template says "Abuse resistance"; the `security` skill titles the same item "Resilience against abuse".
+  "OWASP checklist": [["input"], ["auth"], ["secret"], ["abuse", "resilience"], ["supply"]],
 };
+
+/** Removes closed HTML comments in one pass; an opener with no closer ends the scan (linear on any input). */
+function stripComments(text: string): string {
+  let out = "";
+  let from = 0;
+  for (;;) {
+    const open = text.indexOf("<!--", from);
+    const close = open === -1 ? -1 : text.indexOf("-->", open + 4);
+    if (close === -1) return out + text.slice(from);
+    out += text.slice(from, open);
+    from = close + 3;
+  }
+}
 const FINDING_ID = /\b[HML]\d+\b/g;
 
 /**
@@ -417,7 +431,7 @@ const FINDING_ID = /\b[HML]\d+\b/g;
  */
 function securityProblem(r: Report, round: Round): string | null {
   // Outside code fences and with HTML comments removed, so an unfilled template section does not count.
-  const lines = roundText(r, round).replace(/<!--[\s\S]*?-->/g, "").split("\n");
+  const lines = stripComments(roundText(r, round)).split("\n");
   const headings = lines.flatMap((l, i) => (/^#{2,3} Security\s*$/.test(l) ? [i] : []));
   if (headings.length !== 1) return `${headings.length} Security headings`;
   const rest = lines.slice(headings[0] + 1);
@@ -428,7 +442,10 @@ function securityProblem(r: Report, round: Round): string | null {
   const fields = new Map<string, string[]>();
   for (const l of section) {
     const m = SECURITY_FIELD.exec(l);
-    if (m) fields.set(m[1] ?? m[2], [...(fields.get(m[1] ?? m[2]) ?? []), plain(m[3])]);
+    if (!m) continue;
+    const label = m[1] ?? m[2];
+    if (!fields.has(label)) fields.set(label, []);
+    (fields.get(label) as string[]).push(plain(m[3]));
   }
   for (const label of SECURITY_LABELS) {
     const values = fields.get(label) ?? [];
@@ -449,8 +466,8 @@ function securityProblem(r: Report, round: Round): string | null {
   const rows = separator === -1 ? table : table.filter((_, i) => i !== separator && i !== separator - 1);
   const keywords = CATEGORY_KEYWORDS[method];
   if (rows.length !== keywords.length) return `category rows: expected ${keywords.length}, found ${rows.length}`;
-  for (const k of keywords) {
-    const n = rows.filter((row) => plain(row[0] ?? "").toLowerCase().startsWith(k)).length;
+  for (const names of keywords) {
+    const n = rows.filter((row) => names.some((k) => plain(row[0] ?? "").toLowerCase().startsWith(k))).length;
     if (n !== 1) return `category rows: ${n} for one ${method} category`;
   }
   if (rows.some((row) => row.length < 3 || plain(row[1]) === "" || plain(row[2]) === "")) return "a category row has an empty Result or Basis";
@@ -528,7 +545,7 @@ export function nextActor(i: NextActorInput): NextActor {
   }
 }
 
-/** Runs K1–K18 on one task directory. Never throws on malformed input. */
+/** Runs K1–K19 on one task directory. Never throws on malformed input. */
 export function checkTask(input: TaskInput): CheckReport {
   const results = new Map<string, CheckResult>();
   const facts: TaskFacts = {
@@ -809,7 +826,8 @@ export function checkTask(input: TaskInput): CheckReport {
   // so directories validated before the rule existed keep passing (BASE-124-B H2).
   if (st && st.state !== "completed") put("K19", "review.security", "C19", "skip", `state is ${st.state}`);
   else {
-    run("K19", "review.security", "C19", ["K1", "K8", "K9"], () => {
+    // K10 too: a round for an older completion is the reviewer's to replace, not a malformed task (review L2).
+    run("K19", "review.security", "C19", ["K1", "K8", "K9", "K10"], () => {
       const r = review as Report;
       const n = r.rounds.length;
       const problem = securityProblem(r, r.rounds[n - 1]);
