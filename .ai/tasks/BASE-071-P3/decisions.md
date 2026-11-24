@@ -23,3 +23,11 @@
 - Covers: 2026-11-24T19:34:20Z (implementer `completed → in_progress` re-entry and its `in_progress → completed` at 2026-11-24T19:34:40Z)
 - Decision: After review round 1 (approved; Low L1, L2), the human chose to fix both small own-ticket Lows in this PR and register them as fixed. (L1) The coordinator, as owner of the skills row, changes `.ai/skills/sdlc/skill.md:35` to say "ready for human review" fires once the `cli` (tests, Sonar) and `task-dirs` jobs pass, then runs `ai sync`. (L2) The implementer re-enters to add one sentence each to `README.md` (the `pipeline ci` bullet) and `docs/task-state-machine.md:117`: a base `status.json` over 2 MiB fails A1 naming `base` (exit 1, not a G4 halt), and a directory id outside `^[A-Za-z0-9#._-]+$` fails `D0 dir.name` (JSON `name`). Then review round 2 and QA round 2. L1 is registered on #106 and L2 on #104, both as fixed.
 - Affects: .ai/skills/sdlc/skill.md and its exports, README.md, docs/task-state-machine.md; AC7
+
+## D4
+- Decided: 2026-11-24T19:51:33Z
+- Decided by: human
+- Recorded by: coordinator
+- Covers: none
+- Decision: Steering acknowledged: the supervisor's first run halted at C17 on the plan's supervisor step, which states the result of one of the supervisor's own gates in advance. The human acknowledges it; the supervisor evaluates that gate on its own evidence as usual. A note asking planners not to pre-state gate results in the supervisor's step goes on #106.
+- Affects: plan.md:171
