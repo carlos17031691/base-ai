@@ -136,6 +136,7 @@ Read `.ai/tasks/<ticket-id>/status.json`, `.ai/tasks/<ticket-id>/plan.md` and, i
 | `state` is `completed`, the plan is locked, and `review-report.md` and `status.json` do not agree (consistency check below) | Halt. Write nothing — the human must reconcile the two files |
 | `state` is `completed`, the plan is locked, and `review-report.md` is absent or still the unfilled template | Round 1 |
 | `state` is `completed`, the plan is locked, a previous round exists, and `transitions[]` has an implementer `→ completed` entry newer than the one the last round reviewed | Round N+1 (re-review) |
+| `state` is `completed`, the plan is locked, a previous round exists, the latest round is `approved`, there is no newer implementer completion, and the invocation asks for a delta re-review naming Low finding ids of `review-report.md` (a named id that is not one of its Lows is a halt) | Delta round (`reviewer/re-review.md`) |
 | `state` is `completed`, the plan is locked, a previous round exists, and there is no newer implementer completion | Halt. Write nothing — this completion was already reviewed |
 
 How to read the conditions:
@@ -255,9 +256,9 @@ Get the timestamp with `date -u +%Y-%m-%dT%H:%M:%SZ`.
 - an **Acceptance criteria** table (Step 5)
 - in the Low table, `To register` in the tech-debt column, followed by the title, description and suggested grouping of each Low finding (Step 6)
 - the git-ignore statement from Step 2
-- the **Security** section (Step 4), in the form of the `## Security` section of `templates/task/review-report.md`, added when the report's copy lacks it: the three lines, then one table row per category of the method applied — never an empty cell, a row left out or "see round N". The supervisor refuses a round whose section is missing or malformed, and you cannot review a completion twice: check the section against the form before Step 8.
+- the **Security** section (Step 4), in the form of the `## Security` section of `templates/task/review-report.md`, added when the report's copy lacks it: the three lines, then one table row per category of the method applied — never an empty cell, a row left out or "see round N". The supervisor refuses a round whose section is missing or malformed, and a completion is not reviewed twice except by a delta round: check the section against the form before Step 8.
 
-**Round N+1 (re-review).** → **In a reference file:** read `.claude/agents/reviewer/re-review.md` now, in full, before you write the round.
+**Round N+1 (re-review), and the delta round.** → **In a reference file:** read `.claude/agents/reviewer/re-review.md` now, in full, before you write the round.
 
 ### Step 8 — Record and hand off
 

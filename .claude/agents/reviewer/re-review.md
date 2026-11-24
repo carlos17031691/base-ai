@@ -15,3 +15,17 @@ Part of `.claude/agents/reviewer.md`. It binds exactly as that file does. Read i
 - this round's verdict
 
 Earlier rounds are never edited — not their findings, not their tables, and not the top `## Verdict` line, which keeps showing the round 1 verdict. The latest round's verdict is the authoritative one, and the report says so.
+
+**Delta round (Step 1 delta row).** The base is the newest commit under "commits under review" in the latest round, else that round's merge-base; if `git merge-base --is-ancestor <base> HEAD` fails, halt. The delta change set is `git diff --name-status <base>`, `git diff <base>` and `git ls-files --others --exclude-standard`; the Step 2 branch check applies, the base choice does not, and an empty delta is a halt. **Append** `## Round <N> re-review (delta)` with:
+
+- the timestamp, and the same implementer completion as round <M> (the approved round before it), stated unchanged
+- the base, HEAD and commits since the base
+- the Low ids, "as given by the invocation"
+- per named Low: Fixed / Not fixed, with `file:line`
+- the scope check of the delta files against "Files to touch" (outside it: blocking)
+- each hunk is explained by a named Low, or it is a **Medium**: a change outside the named Low fixes needs a new implementer completion. Pipeline artefacts in `.ai/tasks/<ticket-id>/` (owners' rounds, `status.json` entries in permitted fields, `usage.jsonl`) are exempt
+- new findings of the delta (new Lows carry `To register`)
+- the acceptance-criteria table: a row whose evidence the delta does not touch is "Met (round <M>; evidence not touched by the delta)"; a row it touches is traced again
+- a complete `### Security` section for the delta, and the verdict
+
+The Step 8 note keeps its form, with `delta of round <M> from <base>; ` before `reviewed implementer completion <timestamp>`.
