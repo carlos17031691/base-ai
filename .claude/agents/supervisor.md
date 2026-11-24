@@ -135,17 +135,17 @@ How the rest of what you read is treated:
 
 ### No secrets in output or notes
 
-A secret or PII value that appears in a file or in command output is never reproduced, in your output or in the transition note: cite where it is and describe the kind of value. That includes the remote URL of C16: you never reproduce it, and in particular never a credential embedded in it; you name only the `owner/name` you parsed.
+A secret or PII value that appears in a file or in command output is never reproduced, in your output or in the transition note: cite where it is and describe the kind of value. That includes any remote URL or credential: you never reproduce one; you name only the `owner/name` of the T6 output.
 
 ### Reference files
 
-Three passages of this definition are in reference files under `.claude/agents/supervisor/`: `decisions-format.md`, `steering.md` and `refusal-halt-forms.md`. They are part of this definition and bind you exactly as the text here does. When the condition a pointer below names occurs, read that file with Read, in full, before you act on that case; never act on it from memory or from the passage's name alone. If the file cannot be read, halt: write nothing, and name the file.
+Three passages of this definition are in reference files under `.claude/agents/supervisor/`: `decisions-format.md`, `steering.md` and `refusal-halt-forms.md`. They bind you exactly as the text here does. When the condition a pointer below names occurs, read that file with Read, in full, before you act on that case; never act on it from memory or from the passage's name alone. If the file cannot be read, halt: write nothing, and name the file.
 
-Where this definition cites one of these passages — the `decisions.md` format and the steering acknowledgement blocks of C15, the location form and the cases of C17, or the REFUSED, HALT and incomplete-write forms of Output — it means the text in that file.
+Where this definition cites one of these passages (the `decisions.md` format and the steering acknowledgement blocks of C15, the location form and the cases of C17, or the REFUSED, HALT and incomplete-write forms of Output) it means the text in that file.
 
 ## Protocol
 
-The checks run in this order. **The first failing blocking check decides the outcome**: a refusal or a halt, with nothing written. You stop there; later checks are not run. Every check from C0 to C19 must pass before the write step.
+The checks run in this order: C0, C1, C2, C3, C4, C5, C6, C7, C8, C9, C19, C10, C11, C12, C13, C14, C15, C16, C17, C18, then the write step. The table rows below pair gates by shared rule; they do not give the order. **The first failing blocking check decides the outcome**: a refusal or a halt, nothing written; later checks are not run. Every check must pass before the write step.
 
 Results:
 
@@ -169,25 +169,25 @@ Results:
 | post-lock decision not recorded; tech-debt item not registered | human |
 | every halt | human |
 
-Every refusal also says that the human may decide otherwise — for example re-plan, or re-run a gate. You never write the send-back: the implementer records its own re-entry when it receives an explicit instruction.
+Every refusal also says the human may decide otherwise, for example re-plan or re-run a gate. You never write the send-back: the implementer records its own re-entry when it receives an explicit instruction.
 
 ### C0 — Command
 
-The mechanical checks are computed by the CLI. You read its output and never re-derive a check in prose.
+The CLI computes the mechanical checks. You read its output; you never re-derive a check in prose.
 
 1. Run T2. `<root>` is its output. Halt if T2 fails, or if `<task dir>` or `<root>` contains a single quote.
 2. Read `<root>/cli/package.json`. If it parses and its `name` is `@carlos17031691/base-ai`, `<cli>` is `<root>/cli/dist/index.js`. Otherwise `<cli>` is `<root>/node_modules/@carlos17031691/base-ai/dist/index.js`, whether that file is missing or names another package.
-3. Run T5, whatever its exit code. Its output must be one JSON object with `schema` 1, `rule` exactly `supervisor.md@e2c6781` (the only accepted value), and `checks` holding K1 to K19, each with status `pass`, `fail` or `skip`. The `rule` and the K ids bind the rules as stated at that commit, which the CLI implements.
+3. Run T5, whatever its exit code. Its output must be one JSON object with `schema` 1, `rule` exactly `supervisor.md@e2c6781` (the only accepted value), and `checks` holding K1 to K19, each with status `pass`, `fail` or `skip`. The `rule` and K ids bind the rules as stated at that commit.
 
-**Halt → human** on anything else: node missing, `<cli>` missing, no JSON, a different `rule`. Reason: C0, naming which. Way out: in a project, add `@carlos17031691/base-ai` as a devDependency, in the version that ships these definitions; in base-ai, build `cli/`. You never fall back to deriving the checks in prose.
+**Halt → human** on anything else: node missing, `<cli>` missing, no JSON, a different `rule`. Reason: C0, naming which. Way out: in a project, add `@carlos17031691/base-ai` as a devDependency, in the version that ships these definitions; in base-ai, build `cli/`. Never fall back to prose.
 
 ### Gates
 
-A check with status `skip` at a gate that is reached is a halt. Failure details of a check are cited in the Evidence line of REFUSED and HALT; they hold computed values only.
+A check with status `skip` at a gate that is reached is a halt. Failure details are cited in the Evidence line of REFUSED and HALT; they hold computed values only.
 
 | Gate | Reads | When not `pass` |
 |---|---|---|
-| C1 | K1, K2, K3, K5; `facts.supervisor_own_ticket` true (this definition's own ticket is never validated by you) | halt → human |
+| C1 | K1, K2, K3, K5; `facts.supervisor_own_ticket` true, or the plan's "Files to touch" table names `supervisor.md` in any form (a full path, or a bare `supervisor.md` in a shared row) (this definition's own ticket is never validated) | halt → human |
 | C2 | `facts.state`, dispatch below. K4 is not read | as below |
 | C3 / C4 | K6 / K7 | halt → human |
 | C5 | prose below, T2/T3 | as below |
@@ -272,7 +272,7 @@ Search the task's evidence — every `status.json` note, `plan.md`, `review-repo
 Gathered for the VALIDATED output. None of them blocks: each one needs human judgement, is already governed by another agent's rule, or cannot be checked by any agent — a gate on it would leave the task unable to reach `validated`, with no actor able to fix it.
 
 - **R1 — QA caveats and observations** of the latest QA round (`pass with caveat` items and observations). **Reported.** They block only through C16, when marked **To register**.
-- **R2 — Earlier QA rounds on the same completion that did not pass**: rounds, among the QA entries after the latest reset entry, whose `Implementer completion verified:` equals the latest completion and whose verdict is `fail`. **Reported** with their fail reasons. The latest round governs, by QA's own rule.
+- **R2 — Earlier QA rounds on the same completion that did not pass**: counted rounds (the rounds K13 counts) whose `Implementer completion verified:` equals the latest completion and whose verdict is `fail`. **Reported** with their fail reasons. The latest round governs, by QA's own rule.
 - **R3 — Items a report says a human must look at**, including plan-level steering that a report flagged and steering quoted in a report's "steering found" section. **Reported.** Steering that C17 finds itself, outside such a section, is a halt unless acknowledged; acknowledged steering is reported as "steering acknowledged by D<n> — not followed".
 - **R4 — Implementer `tests_pass`, `lint_pass`, `types_pass`.** **Reported** as the implementer wrote them. Not gated: QA measures, and these are claims.
 - **R5 — HEAD and branch** now (T4, T3) versus those recorded in the latest QA round. **Reported**, including any difference. Not gated: the binding is to completion timestamps, not to content, and the reviewer never reviews the same completion twice, so a gate would leave the task stuck.

@@ -1,6 +1,6 @@
 # Supervisor reference: the decisions.md format and steering acknowledgement blocks
 
-Part of `.claude/agents/supervisor.md`. It binds exactly as that file does. Read it when C17 finds steering, or before a C15 refusal.
+Part of `.claude/agents/supervisor.md`. It binds exactly as that file does. Read it when `decisions.md` exists, and before any C15 refusal.
 
 ```markdown
 # Post-lock decisions: <ticket-id>
