@@ -140,3 +140,108 @@ Coordinator evidence E1 (not an acceptance criterion) was read: `evidence/check-
 - [x] No files touched outside the plan.md "Files to touch" list
 
 Not verified (outside read-only reach): CI status, SonarCloud coverage and quality gate, CodeRabbit and PR conversations, the test run and coverage (QA, AC1), and whether Claude Code honours the frontmatter `effort` key (plan post-merge verification).
+
+## Round 2 re-review (delta)
+
+- Reviewed at: 2026-11-24T21:06:00Z
+- Implementer completion reviewed: 2026-11-24T20:53:26Z — the same completion as round 1 (the approved round before this one), unchanged. `transitions[]` has no implementer `→ completed` entry after it.
+- Delta of round 1.
+- Branch: `feat/BASE-140-A-planner-effort-lows-delta` (Step 2 branch check: not detached, not a protected branch, contains the ticket id)
+- Base: `386bee8` — the newest commit under "commits under review" in round 1 (round 1 was not a delta). `git merge-base --is-ancestor 386bee8 HEAD` succeeds.
+- HEAD: `db253523eca0678595af6a4b6bb21e4fb13eed6d`
+- Commits since the base (`git log --oneline 386bee8..HEAD`):
+  - `db25352 fix(BASE-140-A): delta round routing in Step 2, base after a delta, doc wording (review r1 L1-L3)`
+  - `e56cdd9 chore(BASE-140-A): review round 1 (approved, 5 Lows)`
+- Uncommitted: none. Untracked: none.
+- Base choice: not applicable to a delta round (for the record, `development` and `origin/development` both at `ac440e6`).
+- Low ids, as given by the invocation: L1, L2, L3. L4 and L5 are not part of this delta and stay open (to register, as in round 1).
+- This round's verdict is the authoritative one; the `## Verdict` line at the top remains the round 1 verdict.
+
+**Git-ignore statement (#56).** As in round 1: `.ai/tasks/` is git-ignored on `development`, so `plan.md` and `status.json` cannot be checked against a committed baseline. The branch history of the task files is visible but written by the same pipeline. Round 1 of this report is unchanged since `e56cdd9` (`db25352` does not touch `review-report.md`; working tree clean).
+
+### Named Low findings
+
+| Low | Status | Evidence (`file:line`) |
+|---|---|---|
+| L1 | Fixed | `.claude/agents/reviewer/re-review.md:3` now reads "Round N+1 or the delta row". `.claude/agents/reviewer.md:162` adds "In a delta round only check 1 below applies; the base and change set are those of `reviewer/re-review.md`", so Step 2 routes to the delta base before any diff and the base-choice halt no longer applies. The routing sentence removed from `re-review.md:19` ("the Step 2 branch check applies, the base choice does not") is now carried by `reviewer.md:162`, with the same meaning |
+| L2 | Fixed | `.claude/agents/reviewer/re-review.md:19`: "The base is the latest round's HEAD if it was a delta, else its newest commit under 'commits under review', else its merge-base". A delta round records its HEAD (`re-review.md:22`), so a second delta has a defined base |
+| L3 | Fixed | `docs/task-state-machine.md:30`: "against the newest commit the approved round reviewed (`reviewer/re-review.md`)", which matches `re-review.md:19` and points to it |
+
+### Scope check (delta)
+
+| Changed file | Where the plan lists it | Result |
+|---|---|---|
+| `.claude/agents/reviewer.md` | Files to touch (implementer — D3) | In scope |
+| `.claude/agents/reviewer/re-review.md` | Files to touch (implementer — D3) | In scope |
+| `docs/task-state-machine.md` | Files to touch (implementer — D3, D5) | In scope |
+| `.ai/tasks/BASE-140-A/review-report.md` | Files to touch (pipeline roles) | In scope |
+| `.ai/tasks/BASE-140-A/status.json` | Files to touch (pipeline roles) | In scope |
+| `.ai/tasks/BASE-140-A/usage.jsonl` | Files to touch (usage hook) | In scope |
+
+### Hunk check
+
+| Hunk | Explained by |
+|---|---|
+| `reviewer.md:162` (Step 2 delta sentence) | L1 |
+| `re-review.md:3` (delta row named) | L1 |
+| `re-review.md:19` (base after a delta; routing sentence removed) | L2; the removal is L1 (the routing moved to `reviewer.md:162`) |
+| `task-state-machine.md:30` (base wording) | L3 |
+| `.ai/tasks/BASE-140-A/review-report.md` (round 1), `status.json` (`updated_at`, `review_verdict`, one appended reviewer entry), `usage.jsonl` (three appended records) | Exempt pipeline artefacts. `status.json` changes only reviewer-permitted fields; `usage.jsonl` records carry only ids, model, effort enum and token counts |
+
+Every hunk is explained by a named Low or is an exempt artefact.
+
+### Findings
+
+#### High
+
+| # | File:line | Finding | Required fix |
+|---|---|---|---|
+| — | — | none | — |
+
+#### Medium
+
+| # | File:line | Finding | Required fix |
+|---|---|---|---|
+| — | — | none | — |
+
+#### Low
+
+| # | File:line | Suggestion | Tech-debt ticket |
+|---|---|---|---|
+| — | — | none new in the delta | — |
+
+Note (not a finding): the reviewer definition total is now 30999 bytes against the 31000 limit of AC8 (`definition_totals.reviewer` 7750 × 4), so the next edit to any reviewer file will need a budget decision.
+
+### Acceptance criteria
+
+| Criterion | Evidence (`file:line`) | Result |
+|---|---|---|
+| AC1 — Tests and coverage | Not touched by the delta (no code or test file changed). Execution is QA's | Not verified by the reviewer (QA, step 6) |
+| AC2 — Planner model and effort | — | Met (round 1; evidence not touched by the delta) |
+| AC3 — Effort recorded; old records parse | — | Met (round 1; evidence not touched by the delta) |
+| AC4 — Reviewer delta trigger | Traced again: the AC4 grep prints `reviewer.md:139` (delta row, still between the Round N+1 row at `:138` and the halt row at `:140`), `:162` (new Step 2 sentence, not a Step 1 row), `:259`, `:261`; no line contains "cannot review a completion twice" | Met |
+| AC5 — Delta round content | Traced again: `re-review.md:19` (`is-ancestor`, base rule), `:19` (`Round <N> re-review (delta)`), `:26` ("outside the named Low", hunk Medium), items `:21-29`, note `:31` unchanged | Met |
+| AC6 — Pipeline guidance and docs | Traced again for the doc: `task-state-machine.md:25` (transition line) and `:30` (paragraph, QA round 1 or same-completion re-verification; supervisor K10/K11, K14/K15 unchanged). Skill and export not touched by the delta | Met |
+| AC7 — R3 defaults | — | Met (round 1; evidence not touched by the delta) |
+| AC8 — Budgets | Traced again: `wc -c` reviewer.md 25481 ≤ 26000; reviewer.md + base-choice 1505 + halt 984 + re-review 3029 = 30999 ≤ 31000; `config.yaml` and `planner.md` not touched by the delta | Met |
+| AC9 — Mechanical rules unchanged | Delta touches none of the 13 paths (`git diff --name-status 386bee8`) | Met |
+| AC10 — Scope | Delta files all in "Files to touch" (scope check above); untracked: none | Met |
+
+### Security
+
+- Trust boundary touched: yes — external input
+- Method: STRIDE
+- Findings: none
+
+| Category | Result | Basis |
+|---|---|---|
+| Spoofing | none | `reviewer.md:139` still requires named ids that are Lows of `review-report.md`; the delta does not change who may trigger a delta round or how ids are validated |
+| Tampering | none | `re-review.md:19` now also reads a delta round's recorded HEAD from report text; this is the same ungrounded-text exposure as the open round 1 security finding (to register on #106) and is not a new finding. The `is-ancestor` halt still bounds the base to an ancestor of HEAD |
+| Repudiation | none | Fixes are committed as `db25352` with the ticket id and the Low ids in the message; this round appends one reviewer entry with `delta of round 1 from 386bee8` |
+| Information disclosure | none | The delta changes only instruction prose; the appended `usage.jsonl` records hold ids, model, effort enum and token counts, no prompt text or secrets |
+| Denial of service | none | No loop or retry added; an empty delta or a non-ancestor base still halts (`re-review.md:19`) |
+| Elevation of privilege | none | `reviewer.md:162` narrows Step 2 in a delta round to the branch check; the write list and the forbidden list are unchanged. Out-of-scope files and unexplained hunks still block (`re-review.md:25-26`) |
+
+### Verdict: approved
+
+The three named Lows are fixed, every delta hunk is explained, and there are no new findings. L4 and L5 of round 1 stay open and must be registered as tech debt before human approval.
