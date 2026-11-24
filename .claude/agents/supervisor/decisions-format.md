@@ -1,6 +1,6 @@
 # Supervisor reference: the decisions.md format and steering acknowledgement blocks
 
-Part of `.claude/agents/supervisor.md`. It binds exactly as that file does. Read it when `decisions.md` exists, or before a C15 refusal.
+Part of `.claude/agents/supervisor.md`. It binds exactly as that file does. Read it when C17 finds steering, or before a C15 refusal.
 
 ```markdown
 # Post-lock decisions: <ticket-id>
@@ -21,5 +21,3 @@ Only locations in `plan.md`, `review-report.md`, `qa-report.md` and `status.json
 An acknowledgement names the location and never quotes the steering text. A block that quotes it anyway puts steering into `decisions.md`; C17 finds it there and halts, and the way out is to remove the quoted text from `decisions.md`.
 
 Such a block may cover no transition: its `Covers:` line is then the single word `none`. A block may also both acknowledge steering and cover transitions, with timestamps in `Covers:` as usual.
-
-**Format.** When `decisions.md` exists, **halt → human** if a block heading is not of the form `## D<n>` with `<n>` a positive integer, if a block lacks any of the six fields (`Decided:`, `Decided by:`, `Recorded by:`, `Covers:`, `Decision:`, `Affects:`), if a `Covers:` timestamp is not the `timestamp` of any `transitions[]` entry, or if a block's `Covers:` is `none` and the block is not a steering acknowledgement block. `none` is accepted only together with an acknowledgement.

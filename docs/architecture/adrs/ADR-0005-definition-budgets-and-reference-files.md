@@ -67,3 +67,7 @@ The size had to come down without changing or weakening any rule, and in a way a
 ## Addendum (BASE-079-T3): deletion maps carry their own base, role and ranges
 
 A deletion map may be an object `{ "base": "<sha>", "role": "<role>", "ranges": [[first, last], ...], "entries": [...] }`. `check:relocation` fails unless `base` is a prefix of the commit it is given (resolved with `git rev-parse`) and `role` matches its role argument, so line ranges can no longer be applied to a different base without warning. Every entry needs a non-empty `where`. The bare array form of BASE-079-T2 still works with the ranges the script holds for it (`qa` at `47ead24`), so that check can still be reproduced; new maps use the object form.
+
+## Addendum (BASE-071-P4): rules moved into a command are not a slimming
+
+P4 removes from `supervisor.md` the prose of the gates that `base-ai pipeline check` and `pipeline debt` compute (K1–K19, the C16 key match). That is not a slimming under the relocation method: the rules are executed by a command and bound to the definition by a rule id (`supervisor.md@e2c6781`), not moved to a carrier line or a reference file. `check:relocation` does not apply to this change. Equivalence is reviewed through the gate table of `supervisor.md` (each gate, the checks it reads, its result and who acts), against the definition at `d7b001c`; a guard test fails unless the definition states the rule id of the command.
