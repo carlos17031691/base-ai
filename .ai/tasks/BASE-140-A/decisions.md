@@ -15,3 +15,11 @@
 - Covers: 2026-11-24T20:53:24Z
 - Decision: Send-back to the implementer before any review round was recorded. The reviewer's round 1 run halted on the timestamps (D1) without writing, and found that AC8 was not met: planner.md was 6013 bytes against 4 × 1500 = 6000. The human chose to send the task back so the implementer could cut at least 13 bytes from the D4 sentence, instead of recording a round 1 changes_requested only for that. The planner budget in .ai/config.yaml stays at 1500, as H2 says.
 - Affects: .claude/agents/planner.md, AC8
+
+## D3
+- Decided: 2026-11-24T22:09:40Z
+- Decided by: human
+- Recorded by: coordinator
+- Covers: none
+- Decision: Steering acknowledged: the supervisor's first run halted at C17 on the plan's supervisor step, which states the result of one of the supervisor's own gates in advance. The human acknowledges it ("adelante", 2026-11-24); the supervisor evaluates that gate on its own evidence as usual.
+- Affects: plan.md:157
