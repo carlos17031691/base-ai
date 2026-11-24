@@ -907,3 +907,39 @@ test("K19 review round 2 fixes: the skill's category name, a stale round after a
   assert.equal(k19(`${BARE}<!-- a --> <!-->\n${sec()}`).status, "pass", "closed comments are removed, <!--> included");
   assert.ok(Date.now() - started < 5000, `took ${Date.now() - started} ms`);
 });
+
+// ---- R5: delta re-review for own-ticket Lows (BASE-140-A D3); no rule change ----
+
+const DELTA_BASE = "abc1234";
+const DELTA_NOTE = `review round 2: approved; High 0, Medium 0, Low 0; delta of round 1 from ${DELTA_BASE}; reviewed implementer completion ${C}`;
+const DELTA_REVIEW = `${REVIEW}\n## Round 2 re-review (delta)\n\nImplementer completion: ${C} (unchanged)\nBase: ${DELTA_BASE}\nLow fixes as given by the invocation: L1 — Fixed\n\n**Round 2 verdict:** approved\n${SEC3}`;
+const deltaEntry = (ts: string): T => ({ from: "completed", to: "completed", agent: "reviewer", timestamp: ts, note: DELTA_NOTE });
+
+test("R5 (a) a delta round after an approved round, bound to the same completion, passes K9–K11, K18 and K19; next is qa round 1", () => {
+  const t = baseTransitions().slice(0, 5);
+  t.push(deltaEntry("2026-01-01T00:04:30Z"));
+  const r = checkTask(input({ review: ok(DELTA_REVIEW), qa: { kind: "missing" } }, status({ checklist: { ...status().checklist, qa_verdict: null } }, t)));
+  for (const id of ["K9", "K10", "K11", "K18", "K19"]) assert.equal(statusOf(r, id), "pass", `${id}: ${check(r, id).detail}`);
+  assert.equal(r.facts.review.rounds, 2);
+  assert.equal(r.facts.latestCompletion, C);
+  assert.deepEqual(r.facts.nextActor, { role: "qa", round: 1, reason: "no QA round" });
+});
+
+test("R5 (b) a QA pass recorded before the delta round no longer counts: K14 fails and next is qa round 2", () => {
+  const t = baseTransitions();
+  t.push(deltaEntry("2026-01-01T00:05:30Z"));
+  const r = checkTask(input({ review: ok(DELTA_REVIEW) }, status({}, t)));
+  assert.match(check(r, "K14").detail, /before the latest reviewer entry/);
+  assert.equal(r.facts.nextActor.role, "qa");
+  assert.equal(r.facts.nextActor.round, 2);
+});
+
+test("R5 (c) a QA round after the delta round: every check passes with no decisions.md", () => {
+  const t = baseTransitions().slice(0, 5);
+  t.push(deltaEntry("2026-01-01T00:04:30Z"));
+  t.push({ from: "completed", to: "completed", agent: "qa", timestamp: "2026-01-01T00:05:00Z", note: `qa round 1: pass; criteria; verified implementer completion ${C}` });
+  const r = checkTask(input({ review: ok(DELTA_REVIEW) }, status({}, t)));
+  assert.equal(r.ok, true, renderText(r));
+  assert.ok(r.checks.every((c) => c.status === "pass"), renderText(r));
+  assert.equal(r.facts.nextActor.role, "supervisor");
+});

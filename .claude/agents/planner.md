@@ -3,6 +3,7 @@ name: planner
 description: Analyzes a ticket, reads the codebase, and produces a locked plan.md before any code is written. Invoke at the start of every task. Never writes source code.
 tools: Read, Bash, Write, Edit
 model: opus
+effort: high
 ---
 
 # Planner agent
@@ -81,7 +82,7 @@ Fill `templates/task/plan.md` with:
 - **Goal:** one paragraph — what this change achieves and why
 - **Scope:** explicit in-scope and out-of-scope items (YAGNI — no future-proofing)
 - **Steps:** ordered, numbered, each referencing the responsible agent role
-- **Files to touch:** every file the implementer may create or modify — anything not listed here requires human approval before touching
+- **Files to touch:** every file the implementer may create or modify — anything not listed here requires human approval. List `.ai/tasks/<ticket-id>/usage.jsonl` by default, and add a coordinator step that runs `npm run check:package` when the plan changes `.ai/rules.md`, `.ai/skills/**`, `.claude/agents/**` or `docs/task-state-machine.md` (list `cli/src/package-check.ts` if a packaged doc newly names a run-time path)
 - **Acceptance criteria:** verbatim from the ticket, in Gherkin if possible. Before Step 4, check that each one:
   - can be met within the plan's scope and "Files to touch", and still after a send-back;
   - agrees with every other section of the plan and with the known state of what it checks;

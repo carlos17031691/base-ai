@@ -32,7 +32,7 @@ Every task lives in `.ai/tasks/<ticket-id>/`; its state is in `status.json`. Sta
 | `pending` → `pending` (lock) | planner, or the coordinator for the human | The human approves the plan: `plan_locked: true` and a lock entry (`agent` `"planner"` or `"human"`, note saying `approved` or `locked`). The planner locks only on approval given to it directly; otherwise the coordinator records the human's approval as an `agent: "human"` entry |
 | `pending` → `in_progress` | implementer | Claims a locked plan; asserts `plan_locked`, never writes it |
 | `in_progress` → `completed` | implementer | Every file of its effective allow-list written; checklist populated |
-| `completed` → `completed` | reviewer, then qa | One entry per review round and per QA round, each naming the implementer completion it covers; no state change |
+| `completed` → `completed` | reviewer, then qa | One entry per review round and per QA round, each naming the implementer completion it covers; no state change. A delta round (own-ticket Low fixes after an approved round) names the same completion as the approved round before it |
 | `completed` → `validated` | supervisor only | Every supervisor gate met for the same latest completion. Not PR approval |
 | `completed` → `in_progress` | implementer | Only on an explicit send-back instruction from the human, or a supervisor refusal relayed by the human/coordinator. A failing verdict alone is not an instruction |
 | any → `blocked` | planner or implementer | With a `blocker` description. The reviewer, QA, supervisor and improvement agent never set it: they halt and write nothing |
@@ -51,7 +51,7 @@ Every task lives in `.ai/tasks/<ticket-id>/`; its state is in `status.json`. Sta
 | `blocked` | human |
 | `completed`, no review round for the latest completion | reviewer |
 | `completed`, review `changes_requested` | human: send back to the implementer, or decide otherwise |
-| `completed`, review `approved`, no QA round for the latest completion | qa |
+| `completed`, review `approved`, no QA round for the latest completion, or the latest QA round comes before the latest review round | qa |
 | `completed`, QA `fail` | human: send back to the implementer, or decide otherwise |
 | `completed`, latest review round without a valid Security section | human: send back for a new completion, or decide otherwise |
 | `completed`, review `approved` and QA `pass` | human registers every `To register` item as tech debt with its key; then supervisor. When the plan's "Files to touch" lists `.claude/agents/supervisor.md`, the supervisor halts on its own ticket and the task stays `completed` |
@@ -93,12 +93,13 @@ The coordinator:
 2. Relays send-backs and blocker clearances to the implementer as explicit instructions naming the human decision.
 3. Records every post-lock human decision in `decisions.md`. The supervisor refuses while any `agent: "human"` entry after the lock, or any re-entry not caused by a failing review or QA round, is not covered by a block.
 4. Writes the human's `status.json` changes, each with `updated_at` and an appended `agent: "human"` entry, and no other `status.json` change: the lock (`plan_locked: true`); a `blocked` reset (`state` back to the previous state, `blocker: null`); a validation withdrawal (`state: "completed"`); and a QA rounds reset (`from` and `to` both the current state, a note starting `qa rounds reset:`, and no field besides `updated_at`; see `qa.md`).
-5. Makes exactly the changes in the plan's human/coordinator-owned table (for example `.ai/rules.md`, `base-ai ai sync` outputs, `templates/**`, `.github/**`, `cli/**`, `.ai/skills/**`), and stops on anything else.
+5. Makes exactly the changes in the plan's human/coordinator-owned table (for example `.ai/rules.md`, `base-ai ai sync` outputs, `templates/**`, `.github/**`, `cli/**`, `.ai/skills/**`), and stops on anything else. The one exception is item 11 (delta round), in any file of "Files to touch".
 6. Runs the dry runs a plan lists, one at a time, in scratch task directories, keeping before/after evidence and each run's output on disk for QA.
 7. Registers tech debt in GitHub issues with the keys the supervisor checks, with the human's approval.
 8. Works one ticket per session: after a ticket's PR is merged and before the next ticket's planner runs, it starts a new session (or clears its context). Every call re-reads the whole conversation, so a session carrying several tickets pays for all of them on each call (measured over eight tickets in one session: about 228k tokens of context per call, 98% of it re-read).
 9. Keeps its context lean: it takes a task's state from `base-ai pipeline check <task-dir> --json` and a report's verdict line and findings tables, not from whole plans, reports or diffs; it gives agents file paths, never pasted content; it sends long command output to a file under the task's `evidence/` and reads the summary.
 10. Before QA, creates `.ai/tasks/<ticket-id>/evidence/`: QA keeps its check logs there and cannot create it. In base-ai itself, builds the CLI (`cli/dist/index.js`) before the supervisor runs.
+11. Fixes the ticket's own Low findings after an approved review round, on the human's instruction, with a delta round instead of a new implementer completion: it edits only files in "Files to touch", commits with the ticket id, and invokes the reviewer in delta mode naming the Low ids it fixed (`reviewer/re-review.md`). There is no implementer re-entry, no `status.json` change of its own and no `decisions.md` block. It runs the delta before QA where possible, so QA runs once; a QA round recorded before the delta no longer counts. A `changes_requested` delta goes back to the ordinary send-back. Fixed Lows still need their `To register` keys (K16).
 
 The coordinator never writes a report, a verdict field, an agent's transition or a PR's security audit (it quotes the reviewer's). It never edits `plan.md` after the lock, decides for the human, runs an agent's gate by hand, sets `validated`, or approves a PR. The human approves plans, decides every post-lock question, and approves and merges the PR.
 

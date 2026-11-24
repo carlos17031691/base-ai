@@ -18,7 +18,7 @@
 
 ## Steps
 
-<!-- Ordered list of implementation steps. Each step must reference the agent role responsible. -->
+<!-- Ordered list of implementation steps. Each step must reference the agent role responsible. When the plan changes `.ai/rules.md`, `.ai/skills/**`, `.claude/agents/**` or `docs/task-state-machine.md`, a coordinator step runs `npm run check:package`. -->
 
 1. 
 2. 
@@ -26,10 +26,11 @@
 
 ## Files to touch
 
-<!-- List every file the implementer is allowed to create or modify. Anything not listed here requires human approval to add. -->
+<!-- List every file the implementer is allowed to create or modify. Anything not listed here requires human approval to add. Keep the `usage.jsonl` row: the usage hook always writes it. List `cli/src/package-check.ts` (its `EXEMPT` list) when a packaged doc newly names a path that is created at run time. -->
 
 | File | Action (create/modify/delete) | Reason |
 |---|---|---|
+| `.ai/tasks/<ticket-id>/usage.jsonl` | modify (hook-appended, versioned) | usage hook — always written; listed by default |
 |  |  |  |
 
 ## Acceptance criteria

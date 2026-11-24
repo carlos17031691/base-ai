@@ -304,3 +304,53 @@ test("parseUsageLine returns ts for a valid UTC timestamp and null for a missing
   // usage report output does not carry ts: groups and totals are unchanged.
   assert.ok(!("ts" in buildUsageReport("T", line("2026-11-22T15:37:24Z"), {}).groups[0]));
 });
+
+// --- Reasoning effort (BASE-140-A D2) ---
+
+const line = (id: string, model: string, effort?: unknown, n = 1) => ({
+  type: "assistant",
+  ...(effort === undefined ? {} : { effort }),
+  message: { id, model, usage: { input_tokens: n, cache_creation_input_tokens: n, cache_read_input_tokens: n, output_tokens: n } },
+});
+
+test("R1 effort: kept when it is one of the five values, absent when missing or invalid", () => {
+  const ms = parse(jsonl([
+    line("e1", "m1", "high"),
+    line("e2", "m1"),
+    line("e3", "m1", "turbo"),
+    line("e4", "m1", 3),
+    line("e5", "m1", "HIGH"),
+    ...["low", "medium", "xhigh", "max"].map((e, i) => line(`v${i}`, "m1", e)),
+  ]));
+  assert.deepEqual(ms.map((m) => m.effort ?? "-"), ["high", "-", "-", "-", "-", "low", "medium", "xhigh", "max"]);
+  assert.ok(!("effort" in ms[1]), "the key is absent, not undefined-valued");
+  // The first line of an id decides; a later line of the same id does not change it.
+  assert.equal(parse(jsonl([line("r", "m1", "low"), line("r", "m1", "max", 5)]))[0].effort, "low");
+});
+
+test("R1 effort: two efforts under one model give two records in order of first appearance; effort follows model", () => {
+  const ms = parse(jsonl([line("a", "m1", "medium"), line("b", "m1", "high"), line("c", "m1", "medium"), line("d", "m1"), line("e", "m2", "high")]));
+  const rs = buildRecords(ms, ctx);
+  assert.deepEqual(rs.map((r) => [r.model, r.effort ?? "-", r.first_message_id, r.last_message_id, r.messages]), [
+    ["m1", "medium", "a", "c", 2],
+    ["m1", "high", "b", "b", 1],
+    ["m1", "-", "d", "d", 1],
+    ["m2", "high", "e", "e", 1],
+  ]);
+  assert.deepEqual(Object.keys(rs[0]), [
+    "schema", "ts", "ticket", "agent", "model", "effort", "session_id", "first_message_id", "last_message_id", "messages",
+    "input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens", "source", "attribution",
+  ]);
+  assert.ok(!("effort" in rs[2]), "no effort: the key is absent, never null or unknown");
+  assert.ok(!JSON.stringify(rs[2]).includes("effort"));
+});
+
+test("R1 old and new records: parseUsageLine and buildUsageReport give the same result with or without effort", () => {
+  const old = JSON.stringify({ schema: 1, ...rec({ input_tokens: 1_000_000, output_tokens: 10 }) });
+  const withEffort = JSON.stringify({ schema: 1, ...rec({ input_tokens: 1_000_000, output_tokens: 10 }), effort: "high" });
+  assert.deepEqual(parseUsageLine(withEffort), parseUsageLine(old));
+  assert.deepEqual(buildUsageReport("T", withEffort, PRICING), buildUsageReport("T", old, PRICING));
+  // A file mixing both kinds groups them together, by agent and model as before.
+  const mixed = buildUsageReport("T", `${old}\n${withEffort}\n`, PRICING);
+  assert.deepEqual([mixed.records, mixed.skipped_lines, mixed.groups.length, mixed.total.input_tokens], [2, 0, 1, 2_000_000]);
+});
