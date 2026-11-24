@@ -39,6 +39,8 @@ export interface AiSource {
   definitionBudgets?: Record<string, number>;
   /** `budgets.definition_totals`: cap per role on the definition plus its reference files; absent when not configured. */
   definitionTotals?: Record<string, number>;
+  /** `budgets.always_on`: enforced cap on the always-on context; absent when not configured (BASE-079-T6). */
+  alwaysOnBudget?: number;
   /** `usage.hook` of config.yaml (BASE-101-U2); read only at the root. */
   usageHook?: UsageHook;
 }
@@ -59,12 +61,20 @@ function parseTargets(raw: unknown, file: string): Agent[] {
   return list as Agent[];
 }
 
+const isMap = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+
+/** Returns `budgets` of config.yaml, or undefined when absent; throws when it is not a map. */
+function budgetsMap(cfg: Record<string, unknown>, file: string): Record<string, unknown> | undefined {
+  if (cfg.budgets === undefined) return undefined;
+  if (!isMap(cfg.budgets)) throw new Error(`${file}: "budgets" must be a map`);
+  return cfg.budgets;
+}
+
 /** Reads `budgets.<key>` (role -> positive integer); throws naming the key on any other value. */
 function parseRoleBudgets(cfg: Record<string, unknown>, key: string, file: string): Record<string, number> | undefined {
-  if (cfg.budgets === undefined) return undefined;
-  const isMap = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
-  if (!isMap(cfg.budgets)) throw new Error(`${file}: "budgets" must be a map`);
-  const defs = cfg.budgets[key];
+  const budgets = budgetsMap(cfg, file);
+  if (budgets === undefined) return undefined;
+  const defs = budgets[key];
   if (defs === undefined) return undefined;
   if (!isMap(defs)) throw new Error(`${file}: "budgets.${key}" must be a map of role to tokens`);
   for (const [role, value] of Object.entries(defs)) {
@@ -73,6 +83,14 @@ function parseRoleBudgets(cfg: Record<string, unknown>, key: string, file: strin
     }
   }
   return defs as Record<string, number>;
+}
+
+/** Reads the optional `budgets.always_on` (positive integer); throws naming the key on any other value. */
+function parseAlwaysOnBudget(cfg: Record<string, unknown>, file: string): number | undefined {
+  const value = budgetsMap(cfg, file)?.always_on;
+  if (value === undefined) return undefined;
+  if (!Number.isInteger(value) || (value as number) <= 0) throw new Error(`${file}: "budgets.always_on" must be a positive integer`);
+  return value as number;
 }
 
 export interface UsageConfig {
@@ -161,6 +179,7 @@ export function loadSource(dir: string): AiSource {
   const agents = parseTargets(cfg.agents ?? "all", cfgPath);
   const definitionBudgets = parseRoleBudgets(cfg, "definitions", cfgPath);
   const definitionTotals = parseRoleBudgets(cfg, "definition_totals", cfgPath);
+  const alwaysOnBudget = parseAlwaysOnBudget(cfg, cfgPath);
 
   const rulesPath = join(ai, "rules.md");
   const baseRules = existsSync(rulesPath) ? readFileSync(rulesPath, "utf8").trim() : "";
@@ -201,6 +220,7 @@ export function loadSource(dir: string): AiSource {
     usageHook: usage.hook,
     ...(definitionBudgets ? { definitionBudgets } : {}),
     ...(definitionTotals ? { definitionTotals } : {}),
+    ...(alwaysOnBudget !== undefined ? { alwaysOnBudget } : {}),
   };
 }
 

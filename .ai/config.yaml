@@ -8,6 +8,8 @@ agents:
   - copilot
   - codex
 budgets:
+  # Always-on context (CLAUDE.md: rules + memory) cap; ai stats exits 1 above it (BASE-079-T6).
+  always_on: 2500
   definitions:
     implementer: 3250
     improvement: 8000

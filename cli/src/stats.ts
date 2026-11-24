@@ -10,6 +10,12 @@ export interface TokenItem {
 export interface AiStatsReport {
   alwaysOnTokens: number;
   alwaysOnBudget: number;
+  /** True when `budgets.always_on` is set: the budget then sets the exit code and `--max-tokens` does not replace it. */
+  alwaysOnEnforced: boolean;
+  /** Set when an enforced always-on budget is exceeded. */
+  alwaysOnViolation: { estimatedTokens: number; budget: number } | null;
+  /** The `--max-tokens` value that `violations` are measured against; null without the flag. */
+  maxTokens: number | null;
   withinBudget: boolean;
   skillsTotalTokens: number;
   skills: TokenItem[];
@@ -138,11 +144,22 @@ export function computeAiStats(root: string, opts?: GuardrailOptions): AiStatsRe
     }
   }
 
+  // A configured always-on budget is a project decision, so a CLI flag cannot loosen it (BASE-079-T6).
+  const alwaysOnEnforced = src.alwaysOnBudget !== undefined;
+  const alwaysOnBudget = src.alwaysOnBudget ?? maxTokens ?? ALWAYS_ON_BUDGET;
+  const alwaysOnViolation =
+    alwaysOnEnforced && alwaysOnTokens > alwaysOnBudget ? { estimatedTokens: alwaysOnTokens, budget: alwaysOnBudget } : null;
+
   return {
     alwaysOnTokens,
-    alwaysOnBudget: maxTokens ?? ALWAYS_ON_BUDGET,
+    alwaysOnBudget,
+    alwaysOnEnforced,
+    alwaysOnViolation,
+    maxTokens: maxTokens ?? null,
     withinBudget:
-      violations.length === 0 && definitionViolations.length === 0 && alwaysOnTokens <= (maxTokens ?? ALWAYS_ON_BUDGET),
+      violations.length === 0 &&
+      definitionViolations.length === 0 &&
+      alwaysOnTokens <= alwaysOnBudget,
     skillsTotalTokens,
     skills,
     violations,
@@ -169,7 +186,10 @@ export function renderCiReport(report: AiStatsReport): string {
     lines.push(`| skill: ${s.name} | ${s.estimatedTokens} | $${estimateUsd(s.estimatedTokens)} | ${estimateLatencyMs(s.estimatedTokens)}ms |`);
   }
   lines.push("");
-  lines.push(`**Budget:** ${report.alwaysOnBudget} tokens/component | **Pricing basis:** Claude Sonnet input @ $${USD_PER_INPUT_MTOK}/MTok`);
+  const budgetLabel = report.alwaysOnEnforced
+    ? `always-on ${report.alwaysOnBudget} tokens (budgets.always_on)`
+    : `${report.alwaysOnBudget} tokens/component`;
+  lines.push(`**Budget:** ${budgetLabel} | **Pricing basis:** Claude Sonnet input @ $${USD_PER_INPUT_MTOK}/MTok`);
 
   if (report.definitions.length > 0) {
     lines.push("");
@@ -187,12 +207,16 @@ export function renderCiReport(report: AiStatsReport): string {
     lines.push(`| **Total** (definitions / with reference files) | | ${report.definitionsTotalTokens} / ${report.definitionsWithReferencesTokens} | |`);
   }
 
-  if (report.violations.length > 0 || report.definitionViolations.length > 0) {
+  if (report.violations.length > 0 || report.definitionViolations.length > 0 || report.alwaysOnViolation) {
     lines.push("");
     lines.push("### Violations");
     lines.push("");
+    if (report.alwaysOnViolation) {
+      const v = report.alwaysOnViolation;
+      lines.push(`- **always-on context**: ${v.estimatedTokens} tokens (budget: ${v.budget}, budgets.always_on)`);
+    }
     for (const v of report.violations) {
-      lines.push(`- **${v.name}**: ${v.estimatedTokens} tokens (exceeds ${report.alwaysOnBudget})`);
+      lines.push(`- **${v.name}**: ${v.estimatedTokens} tokens (exceeds ${report.maxTokens})`);
     }
     for (const v of report.definitionViolations) {
       lines.push(`- ${describeDefinitionViolation(v)}`);
