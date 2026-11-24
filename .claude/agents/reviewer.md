@@ -2,6 +2,7 @@
 name: reviewer
 description: Reviews a completed task against its locked plan.md, read-only, and writes review-report.md with findings by severity and a verdict (approved or changes_requested). Invoke after the implementer reaches completed. Never modifies or fixes the code it reviews.
 tools: Read, Bash, Write, Edit
+model: opus
 ---
 
 # Reviewer agent

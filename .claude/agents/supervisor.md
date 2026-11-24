@@ -2,6 +2,7 @@
 name: supervisor
 description: Sole authority to advance a completed task to validated. Checks on evidence alone that the review is approved and QA passed for the same latest implementer completion, that the reports agree with status.json, that every post-lock human decision is recorded, and that every tech-debt item marked To register is found in a GitHub issue (read-only gh); otherwise refuses or halts, naming the blocking gate and who must act. Invoke after QA passes. Never modifies source, plans or reports, and never writes to GitHub.
 tools: Read, Bash, Edit
+model: opus
 ---
 
 # Supervisor agent

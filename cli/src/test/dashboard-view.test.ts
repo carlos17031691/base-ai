@@ -402,10 +402,41 @@ test("D4 H11 visible tokens: every row and TOTAL show a tok count, with and with
     assert.equal(out.at(-1), totalText, "the total cost text is unchanged");
     const spans = all(v).filter((n): n is Exclude<VNode, { text: string }> => !("text" in n) && n.attrs.class === "flow-tokens");
     assert.equal(spans.length, 3, "a count on both rows and on TOTAL");
-    assert.equal(spans[0].attrs.title, "input 388 · cache write 823288 · cache read 10000000 · output 61093");
+    // BASE-079-T5 B8: these groups have no call, so ctx/call is n/a.
+    assert.equal(spans[0].attrs.title, "input 388 · cache write 823288 · cache read 10000000 · output 61093 · calls 0 · ctx/call n/a");
   }
   const partly = tokenFlow({ report: report(0.21, 1) });
   assert.equal(partly.rows[1].cost, "$0.21 + no price");
+});
+
+test("T5 B8 calls and ctx/call: one agent merged across models sums its calls, ctx/call excludes output, zero calls is n/a", () => {
+  const g = (agent: string, model: string, o: Partial<Totals>) => ({ ...totals(o), agent, model });
+  const groups = [
+    // coordinator over two models: calls 3 + 1 = 4; context (10 + 200 + 1190) + (0 + 0 + 600) = 2000 → 500 per call.
+    g("coordinator", "m1", { records: 2, messages: 3, input_tokens: 10, cache_creation_input_tokens: 200, cache_read_input_tokens: 1190, output_tokens: 9999 }),
+    g("coordinator", "m2", { records: 1, messages: 1, cache_read_input_tokens: 600, output_tokens: 1 }),
+    // qa: 1000 / 3 = 333.33 → 333 (rounded).
+    g("qa", "m1", { records: 4, messages: 3, cache_read_input_tokens: 1000 }),
+    g("none", "m1", { records: 1, messages: 0, input_tokens: 5 }),
+  ];
+  const report = { groups, total: totals({ records: 8, messages: 7, input_tokens: 15, cache_creation_input_tokens: 200, cache_read_input_tokens: 2790, output_tokens: 10_000 }) };
+  const flow = tokenFlow({ report });
+  assert.deepEqual(
+    flow.rows.map((r) => [r.agent, r.calls, r.ctxPerCall]),
+    [
+      ["coordinator", 4, 500],
+      ["qa", 3, 333],
+      ["none", 0, null],
+    ],
+  );
+  const titles = all(tokensView(detail({ usage: { report } })))
+    .filter((n): n is Exclude<VNode, { text: string }> => !("text" in n) && n.attrs.class === "flow-tokens" && n.attrs.title !== undefined)
+    .map((n) => n.attrs.title);
+  assert.deepEqual(titles, [
+    "input 10 · cache write 200 · cache read 1790 · output 10000 · calls 4 · ctx/call 500",
+    "input 0 · cache write 0 · cache read 1000 · output 0 · calls 3 · ctx/call 333",
+    "input 5 · cache write 0 · cache read 0 · output 0 · calls 0 · ctx/call n/a",
+  ]);
 });
 
 test("D4 registration panel: per-key status as text, the summary line, the halt text, the button, and no button without keys", () => {

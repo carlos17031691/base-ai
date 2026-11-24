@@ -1,8 +1,10 @@
+import { spawnSync } from "node:child_process";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { computeAiStats, renderCiReport } from "../stats.js";
 
 function makeProject(): string {
@@ -45,6 +47,23 @@ test("--max-tokens detects always-on context violation", () => {
   const report = computeAiStats(d, { maxTokens: 500 });
   assert.equal(report.withinBudget, false);
   assert.ok(report.violations.some((v) => v.name === "always-on"));
+});
+
+test("T5 B11: with claude configured, always-on is the CLAUDE.md text (no indexes); without it, rules plus the skill index", () => {
+  const rules = `# Global Rules\n${"r".repeat(400)}\n\n## Available agents\n\n${"a".repeat(800)}`;
+  const skill = `---\nid: adr\ndescription: ${"d".repeat(400)}\n---\nWrite an ADR.`;
+  const project = (agents?: string) => {
+    const d = makeProject();
+    writeFileSync(join(d, ".ai/rules.md"), rules);
+    writeFileSync(join(d, ".ai/skills/adr/skill.md"), skill);
+    if (agents !== undefined) writeFileSync(join(d, ".ai/config.yaml"), `agents: ${agents}\n`);
+    return d;
+  };
+  const claudeText = `# Global Rules\n${"r".repeat(400)}`;
+  const fullText = `${rules}\n\n- **adr**: ${"d".repeat(400)}`;
+  assert.equal(computeAiStats(project()).alwaysOnTokens, Math.ceil(claudeText.length / 4), "all agents include claude");
+  assert.equal(computeAiStats(project("[claude, cursor]")).alwaysOnTokens, Math.ceil(claudeText.length / 4));
+  assert.equal(computeAiStats(project("[cursor, copilot]")).alwaysOnTokens, Math.ceil(fullText.length / 4));
 });
 
 test("--max-tokens passes when all components are within budget", () => {
@@ -243,4 +262,92 @@ test("an invalid definition_totals value throws naming the key", () => {
   const d = makeProject();
   setBudgets(d, "budgets:\n  definition_totals:\n    qa: -3\n");
   assert.throws(() => computeAiStats(d), /budgets\.definition_totals\.qa/);
+});
+
+// BASE-079-T6: budgets.always_on makes the always-on budget enforceable.
+const CLI = resolve(dirname(fileURLToPath(import.meta.url)), "..", "index.js");
+
+test("T6 budgets.always_on exceeded is a violation and withinBudget is false", () => {
+  const d = makeProject();
+  setBudgets(d, "budgets:\n  always_on: 5\n");
+  const report = computeAiStats(d);
+  assert.equal(report.alwaysOnEnforced, true);
+  assert.equal(report.alwaysOnBudget, 5);
+  assert.deepEqual(report.alwaysOnViolation, { estimatedTokens: report.alwaysOnTokens, budget: 5 });
+  assert.equal(report.withinBudget, false);
+});
+
+test("T6 budgets.always_on not exceeded is no violation", () => {
+  const d = makeProject();
+  setBudgets(d, "budgets:\n  always_on: 2500\n");
+  const report = computeAiStats(d);
+  assert.equal(report.alwaysOnEnforced, true);
+  assert.equal(report.alwaysOnBudget, 2500);
+  assert.equal(report.alwaysOnViolation, null);
+  assert.equal(report.withinBudget, true);
+});
+
+test("T6 --max-tokens larger than budgets.always_on does not replace it", () => {
+  const d = makeProject();
+  setBudgets(d, "budgets:\n  always_on: 5\n");
+  const report = computeAiStats(d, { maxTokens: 5000 });
+  assert.equal(report.alwaysOnBudget, 5);
+  assert.notEqual(report.alwaysOnViolation, null);
+  assert.deepEqual(report.violations, []);
+  assert.equal(report.withinBudget, false);
+});
+
+test("T6 without budgets.always_on the figures are as before and nothing is enforced", () => {
+  const d = makeProject();
+  writeFileSync(join(d, ".ai/rules.md"), "word ".repeat(4000));
+  const report = computeAiStats(d);
+  assert.ok(report.alwaysOnTokens > 2500);
+  assert.equal(report.alwaysOnEnforced, false);
+  assert.equal(report.alwaysOnBudget, 2500);
+  assert.equal(report.alwaysOnViolation, null);
+  assert.equal(report.withinBudget, false);
+  assert.equal(computeAiStats(d, { maxTokens: 9000 }).alwaysOnBudget, 9000);
+});
+
+test("T6 an invalid budgets.always_on throws naming the key", () => {
+  for (const value of ["0", "-1", "1.5", '"x"']) {
+    const d = makeProject();
+    setBudgets(d, `budgets:\n  always_on: ${value}\n`);
+    assert.throws(() => computeAiStats(d), /"budgets\.always_on" must be a positive integer/);
+  }
+});
+
+test("T6 renderCiReport shows the enforced budget and its violation", () => {
+  const d = makeProject();
+  setBudgets(d, "budgets:\n  always_on: 5\n");
+  const md = renderCiReport(computeAiStats(d));
+  assert.match(md, /\*\*Budget:\*\* always-on 5 tokens \(budgets\.always_on\)/);
+  assert.match(md, /- \*\*always-on context\*\*: \d+ tokens \(budget: 5, budgets\.always_on\)/);
+  assert.doesNotMatch(md, /All components within budget/);
+});
+
+test("T6 renderCiReport labels --max-tokens violations with --max-tokens, not budgets.always_on", () => {
+  const d = makeProject();
+  mkdirSync(join(d, ".ai/skills/big"), { recursive: true });
+  writeFileSync(join(d, ".ai/skills/big/skill.md"), `---\nid: big\ndescription: Big skill\n---\n${"x".repeat(20_000)}`);
+  setBudgets(d, "budgets:\n  always_on: 2500\n");
+  const report = computeAiStats(d, { maxTokens: 1000 });
+  assert.equal(report.maxTokens, 1000);
+  const md = renderCiReport(report);
+  assert.match(md, /- \*\*big\*\*: \d+ tokens \(exceeds 1000\)/);
+  assert.doesNotMatch(md, /exceeds 2500/);
+});
+
+test("T6 ai stats exits 1 on an enforced excess, with or without --max-tokens and --ci, and 0 without the key", () => {
+  const d = makeProject();
+  const run = (...args: string[]) => spawnSync(process.execPath, [CLI, "ai", "stats", "--root", d, ...args], { encoding: "utf8" });
+  setBudgets(d, "budgets:\n  always_on: 5\n");
+  const plain = run();
+  assert.equal(plain.status, 1);
+  assert.match(plain.stdout, /\(budget: 5, budgets\.always_on\)/);
+  assert.match(plain.stdout, /always-on context: \d+ tokens \(budget: 5, budgets\.always_on\)/);
+  assert.equal(run("--max-tokens", "5000").status, 1);
+  assert.equal(run("--max-tokens", "5000", "--ci").status, 1);
+  setBudgets(d, "");
+  assert.equal(run().status, 0);
 });

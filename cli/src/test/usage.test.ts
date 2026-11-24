@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   buildUsageReport,
+  contextPerCall,
   formatCost,
   parsePricing,
   parseUsageLine,
@@ -224,7 +225,7 @@ test("model without a price: tokens are shown and the cost is no price, never 0"
   assert.equal(recordCost(rec({ model: "toString" }), PRICING), null, "no prototype lookup");
   const report = buildUsageReport("T-1", JSON.stringify({ schema: 1, ...r }) + "\n", PRICING);
   const text = renderUsageReport(report);
-  assert.match(text, /in 42, cache write 0, cache read 0, out 0; no price/);
+  assert.match(text, /in 42, cache write 0, cache read 0, out 0; calls 1, ctx\/call 42; no price/);
   assert.doesNotMatch(text, /\$0\.0000|; 0$/m);
   assert.equal(report.total.cost_usd, null);
 });
@@ -252,8 +253,8 @@ test("usage report text and lines: corrupt lines are skipped and counted, an emp
   assert.deepEqual([report.records, report.skipped_lines, report.total.cost_usd], [1, 2, 3]);
   assert.equal(renderUsageReport(report), [
     "usage T-2: 1 record (2 unreadable lines skipped)",
-    "  qa / claude-x: in 1000000, cache write 0, cache read 0, out 0; $3.0000",
-    "  total: in 1000000, cache write 0, cache read 0, out 0; $3.0000",
+    "  qa / claude-x: in 1000000, cache write 0, cache read 0, out 0; calls 1, ctx/call 1000000; $3.0000",
+    "  total: in 1000000, cache write 0, cache read 0, out 0; calls 1, ctx/call 1000000; $3.0000",
   ].join("\n"));
   assert.equal(renderUsageReport(buildUsageReport("T-3", "", PRICING)), "usage T-3: no usage data");
   assert.equal(parseUsageLine(JSON.stringify({ schema: 1, ...rec({ output_tokens: -1 }) })), null);
@@ -263,6 +264,22 @@ test("usage report text and lines: corrupt lines are skipped and counted, an emp
   // Review r1 L5: C1 (8-bit CSI) and bidi override and isolate controls are stripped too.
   const c1 = buildUsageReport("T-5", JSON.stringify({ schema: 1, ...rec({ agent: "a\u009b31m\u202eb\u2066c" }) }), {});
   assert.match(renderUsageReport(c1), /a\?31m\?b\?c \//);
+});
+
+test("T5 B7 calls and ctx/call: summed over a group's records, output excluded, rounded, n/a with zero calls", () => {
+  const lines = [
+    rec({ messages: 2, input_tokens: 100, cache_creation_input_tokens: 400, cache_read_input_tokens: 500, output_tokens: 7777 }),
+    rec({ messages: 1, cache_read_input_tokens: 1 }),
+    rec({ agent: "idle", messages: 0, input_tokens: 9 }),
+  ].map((r) => JSON.stringify({ schema: 1, ...r }));
+  const report = buildUsageReport("T-6", `${lines.join("\n")}\n`, PRICING);
+  const text = renderUsageReport(report).split("\n");
+  // qa: (100 + 400 + 500 + 1) / 3 = 333.67 → 334; total: 1010 / 3 = 336.67 → 337.
+  assert.match(text[1], /^  qa \/ claude-x: in 100, cache write 400, cache read 501, out 7777; calls 3, ctx\/call 334; \$/);
+  assert.match(text[2], /^  idle \/ claude-x: in 9, cache write 0, cache read 0, out 0; calls 0, ctx\/call n\/a; \$/);
+  assert.match(text[3], /^  total: .*; calls 3, ctx\/call 337; \$/);
+  assert.equal(contextPerCall({ messages: 0, input_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 0 }), null);
+  assert.deepEqual(report.groups.map((g) => g.messages), [3, 0], "--json is unchanged: messages was already there");
 });
 
 test("pricing validation: missing key, negative or non-numeric value, unknown key, bad model id", () => {

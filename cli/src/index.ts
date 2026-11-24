@@ -27,8 +27,8 @@ Commands:
   init <dir> [--ci none|github|gitlab]              Create a new project from the base-ai template
   ai sync                                           Export .ai/ to every agent's format and refresh context index
   ai stats [--max-tokens N] [--ci]                   Report token footprint (context, skills, role definitions and their reference files);
-                                                     fails if --max-tokens or a budgets.definitions / budgets.definition_totals entry
-                                                     of .ai/config.yaml is exceeded; --ci outputs Markdown
+                                                     fails if --max-tokens, budgets.always_on or a budgets.definitions /
+                                                     budgets.definition_totals entry of .ai/config.yaml is exceeded; --ci outputs Markdown
   doctor                                            Validate services.yaml and fail if AI artefacts are out of date
   context index                                     Build/refresh .ai/context-index.json across root and src/<name>
   context search <query> [--scope s] [--top k]      Retrieve ranked chunks (ADRs, RFCs, runbooks, contracts, memory)
@@ -105,7 +105,7 @@ function main(argv: string[]): number | Promise<number> {
       console.log(renderCiReport(st));
     } else {
       const status = st.withinBudget ? "✔ within budget" : "⚠ exceeds budget";
-      console.log(`Always-on context (rules + memory + skill index): ~${st.alwaysOnTokens} tokens (budget: ${st.alwaysOnBudget}) [${status}]`);
+      console.log(`Always-on context (rules + memory; plus the skill index where it is exported): ~${st.alwaysOnTokens} tokens (budget: ${st.alwaysOnBudget}${st.alwaysOnEnforced ? ", budgets.always_on" : ""}) [${status}]`);
       console.log(`On-demand skills (${st.skills.length} skills, loaded only when invoked): ~${st.skillsTotalTokens} tokens total\n`);
       for (const s of st.skills) {
         console.log(`  - ${s.name.padEnd(16)} ~${String(s.estimatedTokens).padStart(4)} tokens (${s.chars} chars)`);
@@ -130,9 +130,13 @@ function main(argv: string[]): number | Promise<number> {
       }
     }
 
-    if (st.violations.length > 0 || st.definitionViolations.length > 0) {
+    if (st.violations.length > 0 || st.definitionViolations.length > 0 || st.alwaysOnViolation) {
       if (!ci) {
         console.log("\n✖ Token budget violations:");
+        if (st.alwaysOnViolation) {
+          const v = st.alwaysOnViolation;
+          console.log(`  - always-on context: ${v.estimatedTokens} tokens (budget: ${v.budget}, budgets.always_on)`);
+        }
         for (const v of st.violations) {
           console.log(`  - ${v.name}: ${v.estimatedTokens} tokens (max: ${maxTokens})`);
         }

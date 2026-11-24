@@ -8,6 +8,8 @@ agents:
   - copilot
   - codex
 budgets:
+  # Always-on context (CLAUDE.md: rules + memory) cap; ai stats exits 1 above it (BASE-079-T6).
+  always_on: 2500
   definitions:
     implementer: 3250
     improvement: 8000
@@ -23,13 +25,23 @@ budgets:
 # SubagentStop/Stop hook of .claude/settings.json; absent means none. `init` sets none in new projects.
 usage:
   hook: claude-code
-  # This repo's price (BASE-101-D4): Anthropic's official pricing page, 2026-11-23; API-equivalent list prices, not a subscription bill.
+  # This repo's prices (BASE-101-D4; Sonnet and Fable added in BASE-079-T5): Anthropic's official pricing page, 2026-11-23; API-equivalent list prices, not a subscription bill.
   pricing:
     claude-opus-5-5:
       input: 4
       cache_write: 8 # the 1-hour cache write rate; the 5-minute rate is 5
       cache_read: 0.2
       output: 20
+    claude-sonnet-5-5:
+      input: 2
+      cache_write: 4 # the 1-hour cache write rate
+      cache_read: 0.1
+      output: 10
+    claude-fable-5-2:
+      input: 8
+      cache_write: 16 # the 1-hour cache write rate
+      cache_read: 0.2
+      output: 40
   # USD per million tokens, keyed by the exact model id of the records; all four keys are required.
   # No default prices: a model with no entry shows "no price", never 0. Example only; copy your
   # provider's current prices and the model id exactly as the records show it (no aliases, no prefixes):
