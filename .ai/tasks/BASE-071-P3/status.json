@@ -1,10 +1,10 @@
 {
   "ticket_id": "BASE-071-P3",
-  "state": "completed",
+  "state": "validated",
   "plan_locked": true,
   "assignee": null,
   "created_at": "2026-11-24T18:11:16Z",
-  "updated_at": "2026-11-24T19:41:00Z",
+  "updated_at": "2026-11-24T19:53:15Z",
   "transitions": [
     {
       "from": null,
@@ -103,6 +103,13 @@
       "agent": "qa",
       "timestamp": "2026-11-24T19:41:00Z",
       "note": "qa round 2: pass; criteria: pass 9, pass with caveat 0, fail 0, not verified 0; checks: passed 3, failed 0, no applicable check 1, forbidden to run 0; verified implementer completion 2026-11-24T19:34:40Z"
+    },
+    {
+      "from": "completed",
+      "to": "validated",
+      "agent": "supervisor",
+      "timestamp": "2026-11-24T19:53:15Z",
+      "note": "validated: review round 2 approved (entry 2026-11-24T19:36:37Z); qa round 2 pass (entry 2026-11-24T19:41:00Z); verified implementer completion 2026-11-24T19:34:40Z; decisions: D2, D3 (covering), D4 (steering acknowledged: plan.md:171); registered: 2 items in issues #104, #106; HEAD at qa round c330871906ff01f99ffb6fdbffe81783d9867b97, now 1d0630215cd29f72058c5d1a04e497fef7753d62"
     }
   ],
   "checklist": {
