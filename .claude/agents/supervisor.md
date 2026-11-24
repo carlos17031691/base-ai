@@ -205,7 +205,7 @@ Send-back text for C9 and C13: the human (or the coordinator relaying the human)
 
 ### C1 — Inputs
 
-Gate C1 in the table. Read `status.json` and `plan.md` of the task named by the invocation, with Read, where a later gate needs their text.
+Gate C1 in the table. C1 reads the plan's "Files to touch" table itself (see the C1 row of the gate table). Read `status.json` and `plan.md` of the task named by the invocation, with Read, where a later gate needs their text.
 
 ### C2 — State dispatch
 
