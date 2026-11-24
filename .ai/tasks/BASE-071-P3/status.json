@@ -4,7 +4,7 @@
   "plan_locked": true,
   "assignee": null,
   "created_at": "2026-11-24T18:11:16Z",
-  "updated_at": "2026-11-24T19:12:20Z",
+  "updated_at": "2026-11-24T19:22:26Z",
   "transitions": [
     {
       "from": null,
@@ -47,6 +47,20 @@
       "agent": "implementer",
       "timestamp": "2026-11-24T19:12:20Z",
       "note": "step 3 files written (.gitignore, README.md, docs/task-state-machine.md); checklist tests_pass, lint_pass, types_pass left false: not applicable to this step (docs and ignore rules, no runner), deferred to QA"
+    },
+    {
+      "from": "completed",
+      "to": "in_progress",
+      "agent": "implementer",
+      "timestamp": "2026-11-24T19:22:25Z",
+      "note": "re-entry authorized by human decision D2: change the reference on docs/task-state-machine.md line 117 to the trailing-slash form so check:package passes"
+    },
+    {
+      "from": "in_progress",
+      "to": "completed",
+      "agent": "implementer",
+      "timestamp": "2026-11-24T19:22:26Z",
+      "note": "D2 change made (line 117 now `.ai/tasks/`); checklist items left false: not applicable, deferred to QA"
     }
   ],
   "checklist": {
