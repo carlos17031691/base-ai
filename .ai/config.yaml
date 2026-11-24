@@ -11,15 +11,15 @@ budgets:
   # Always-on context (CLAUDE.md: rules + memory) cap; ai stats exits 1 above it (BASE-079-T6).
   always_on: 2500
   definitions:
-    implementer: 3250
+    implementer: 3500
     improvement: 8000
-    planner: 1500
+    planner: 1750
     qa: 14500
     reviewer: 6500
     supervisor: 7500
   definition_totals:
     qa: 18250
-    reviewer: 7750
+    reviewer: 9000
     supervisor: 9250
 # Token usage (BASE-101-U2). `base-ai ai sync` writes (claude-code) or removes (none) the marked
 # SubagentStop/Stop hook of .claude/settings.json; absent means none. `init` sets none in new projects.
