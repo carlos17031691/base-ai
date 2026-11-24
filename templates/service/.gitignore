@@ -42,6 +42,7 @@ obj/
 !.ai/tasks/*/qa-report.md
 !.ai/tasks/*/decisions.md
 !.ai/tasks/*/improvement-report.md
+!.ai/tasks/*/plan-review.md
 .ai/usage/
 .DS_Store
 Thumbs.db

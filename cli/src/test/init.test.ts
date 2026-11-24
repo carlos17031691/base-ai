@@ -55,6 +55,7 @@ test("init carries the pipeline: role definitions, state-machine doc, task templ
       "!.ai/tasks/*/qa-report.md",
       "!.ai/tasks/*/decisions.md",
       "!.ai/tasks/*/improvement-report.md",
+      "!.ai/tasks/*/plan-review.md",
       ".ai/usage/",
       "",
     ].join("\n"),
@@ -69,6 +70,17 @@ test("init carries the pipeline: role definitions, state-machine doc, task templ
   for (const f of ["usage.jsonl", "status.json", "plan.md", "review-report.md", "qa-report.md", "decisions.md", "improvement-report.md"]) {
     assert.ok(svc.split("\n").includes(`!.ai/tasks/*/${f}`), `service template negates ${f}`);
   }
+});
+
+test("R4 D6: plan-review.md is versioned in a new project and in the service template; evidence/ stays ignored", () => {
+  const dir = join(mkdtempSync(join(tmpdir(), "base-ai-init-")), "demo");
+  init(dir);
+  const lines = readFileSync(join(dir, ".gitignore"), "utf8").split("\n");
+  assert.equal(lines[lines.indexOf("!.ai/tasks/*/improvement-report.md") + 1], "!.ai/tasks/*/plan-review.md");
+  assert.throws(() => execFileSync("git", ["check-ignore", "-q", "--no-index", ".ai/tasks/X/plan-review.md"], { cwd: dir, stdio: "ignore" }));
+  execFileSync("git", ["check-ignore", "-q", "--no-index", ".ai/tasks/X/evidence/plan-review.md"], { cwd: dir });
+  const svc = readFileSync(join(dir, "templates/service/.gitignore"), "utf8").split("\n");
+  assert.ok(svc.includes("!.ai/tasks/*/plan-review.md"), "service template negates plan-review.md");
 });
 
 test("init supports --ci github and gitlab", () => {

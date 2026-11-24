@@ -585,6 +585,12 @@ test("K18 with an absent file fails on events, fails on an unreadable file, and 
   assert.match(renderText(checkTask(input())), /decisions: absent; events: none; covering: -; acknowledging: -/);
 });
 
+test("R4 D3: a lock note that names the approved plan review round and plan commit passes K6", () => {
+  const t = baseTransitions();
+  t[1].note = `plan approved and locked by human; plan review round 2 approved, plan.md at ${"a".repeat(40)}`;
+  assert.equal(statusOf(checkTask(input({}, status({}, t))), "K6"), "pass");
+});
+
 // ---- facts.nextActor (BASE-101-D0) ----
 
 const KEYS = [
@@ -602,6 +608,10 @@ test("nextActor rows 1–3: pending — planner without a draft, human for appro
   assert.deepEqual(na({ state: "pending", planLocked: false, reviewEntries: 0, qaEntries: 0 }, { ...UNSTARTED, K3: "fail" }), { role: "planner", reason: "plan not drafted" });
   assert.deepEqual(na({ state: "pending", planLocked: false, reviewEntries: 0, qaEntries: 0 }, UNSTARTED), { role: "human", reason: "plan approval" });
   assert.deepEqual(na({ state: "pending", reviewEntries: 0, qaEntries: 0 }, { ...UNSTARTED, K6: "pass", K18: "pass" }), { role: "implementer", reason: "plan locked; claim it" });
+});
+
+test("R4 D1.7: an unlocked pending task with a drafted plan still goes to the human (plan review is ordered, then approval)", () => {
+  assert.deepEqual(na({ state: "pending", planLocked: false, reviewEntries: 0, qaEntries: 0 }, { ...UNSTARTED, K3: "pass" }), { role: "human", reason: "plan approval" });
 });
 
 test("nextActor rows 4–5: in_progress is the implementer, blocked is the human", () => {

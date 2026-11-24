@@ -34,7 +34,7 @@ services: []
 #    ai: inherit         # inherit | none
 `;
 
-// Six task files are versioned (BASE-071-P3 D1), so CI can check them on the PR; evidence/ and anything else stay local.
+// Eight task files are versioned (BASE-071-P3 D1; plan-review.md since BASE-140-C D6), so CI can check them on the PR; evidence/ and anything else stay local.
 const GITIGNORE = [
   "src/*",
   "!src/.gitkeep",
@@ -49,6 +49,7 @@ const GITIGNORE = [
   "!.ai/tasks/*/qa-report.md",
   "!.ai/tasks/*/decisions.md",
   "!.ai/tasks/*/improvement-report.md",
+  "!.ai/tasks/*/plan-review.md",
   ".ai/usage/",
   "",
 ].join("\n");

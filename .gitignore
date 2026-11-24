@@ -13,6 +13,7 @@ src/*
 !.ai/tasks/*/qa-report.md
 !.ai/tasks/*/decisions.md
 !.ai/tasks/*/improvement-report.md
+!.ai/tasks/*/plan-review.md
 .ai/usage/
 # Legacy task directories (before BASE-071-P3) stay local; only their usage.jsonl is versioned
 .ai/tasks/BASE-046-C1/*
