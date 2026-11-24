@@ -132,3 +132,110 @@ I reviewed the whole change set against D1–D4 of the locked plan and decisions
 - [x] Domain logic isolated from infrastructure
 - [x] All acceptance criteria from plan.md are addressable by the implementation
 - [x] No files touched outside the plan.md "Files to touch" list
+
+## Round 2 re-review
+
+- Reviewed at: 2026-11-24T19:36:37Z
+- Implementer completion reviewed: 2026-11-24T19:34:40Z (implementer `in_progress → completed`, after the D3 re-entry)
+- Branch: `feat/BASE-071-P3-ci-wiring`
+- Base ref: `development` (`ea0a719d41d3c279c4f9319f8c95ced30fd92980`)
+- Merge-base: `ea0a719d41d3c279c4f9319f8c95ced30fd92980`
+- Commits under review (`git log --oneline ea0a719..HEAD`):
+  - `34a874f fix(BASE-071-P3): D3 review r1 L1 sdlc Slack condition names task-dirs, L2 document oversized base and D0 dir.name`
+  - `70ec00e chore(BASE-071-P3): QA round 1 report (pass 9/9) and status`
+  - `ae98291 chore(BASE-071-P3): review round 1 report (approved, L1-L2) and status`
+  - `87ce323 fix(BASE-071-P3): D2 trailing slash on the .ai/tasks/ reference so check:package passes`
+  - `3d3d4b9 docs(BASE-071-P3): root ignore policy with legacy and scratch blocks, README and task-state-machine; first versioned task files`
+  - `5c3b160 feat(BASE-071-P3): pipeline ci with append-only check A1, task-dirs and notify-ready CI jobs, versioned task-file ignore block`
+- Base choice: none needed (local `origin/development` and `development` both point to `ea0a719`)
+- The verdict of this round is the authoritative one; the `## Verdict` line at the top is the round 1 verdict.
+
+**Task-file versioning.** The reviewer definition's statement that `.ai/tasks/` is git-ignored (#56) is out of date for this ticket (plan H0/D1, H9). `plan.md` is unchanged since `3d3d4b9`. Between `87ce323` and `34a874f`, `status.json` changes only by appended transitions (reviewer, QA, two implementer entries) and `updated_at`, and the working tree matches `HEAD` (only `usage.jsonl` is modified uncommitted). Integrity can be checked only from the first commit of these files.
+
+### Scope of this round
+
+The delta since round 1 (`git diff --name-only 87ce323 HEAD`) is D3 only: `.ai/skills/sdlc/skill.md` and its four exports, `README.md`, `docs/task-state-machine.md`, and the task files. No code, test, workflow or ignore file changed since round 1, so round 1's review of them stands for the same lines. I checked the delta and what it could break (the AC7 grep, the exports' consistency, and that the new sentences match the code).
+
+### Status of earlier findings
+
+Round 1 had no High or Medium finding. Its two Lows, for the record:
+
+| # | Status | Evidence |
+|---|---|---|
+| L1 | Fixed | `.ai/skills/sdlc/skill.md:35` now says "ready for human review" fires "once the `cli` (tests, Sonar) and `task-dirs` jobs pass", matching `notify-ready`'s `needs: [cli, task-dirs]` (`.github/workflows/ci.yml:110-127`). The same one-line change is in all four exports (`.agents/skills/sdlc/SKILL.md:32`, `.claude/commands/sdlc.md:31`, `.cursor/rules/sdlc.mdc:32`, `.github/prompts/sdlc.prompt.md:31`), and `.ai/generated.json` holds paths only, so it needs no change |
+| L2 | Fixed | `README.md:189` and `docs/task-state-machine.md:117` each add one sentence: a base `status.json` over 2 MiB fails A1 naming `base` (exit 1, not a G4 halt), and an id outside `^[A-Za-z0-9#._-]+$` fails `D0 dir.name` (JSON `name`). This matches the code: `cli/src/pipeline-ci.ts:18` (`DIR_ID`), `:172-177` (`name: "fail"`), `:200-212` (oversized base and runner overflow become an A1 error), `:215` (a `name` failure counts as a failed directory, so exit 1) |
+
+Round 1's markers for L1 and L2 stay as written. These findings are fixed in this PR, and they are still to register, as fixed: L1 on #106 and L2 on #104 (decision D3). This round adds no new marker.
+
+### Findings
+
+#### High (Blocker — must fix before validated)
+
+| # | File:line | Finding | Required fix |
+|---|---|---|---|
+| — | — | none | — |
+
+#### Medium (Blocker — must fix before validated)
+
+| # | File:line | Finding | Required fix |
+|---|---|---|---|
+| — | — | none | — |
+
+#### Low (Non-blocking — register as tech debt)
+
+| # | File:line | Suggestion | Tech-debt ticket |
+|---|---|---|---|
+| — | — | none new in this round | — |
+
+**Not verified** (I may not run these):
+- AC1 and AC2: tests and coverage (QA round 2).
+- E1 after D3. `evidence/e1.txt` (`doctor`, `check:package`, `ai stats`) predates the D3 commit. The new sentences add no path-like reference, but only a re-run of `check:package` and `doctor` confirms they still pass. That is the coordinator's step 4 evidence.
+
+### Scope check
+
+| Changed file | Where the plan lists it | Result |
+|---|---|---|
+| `cli/src/pipeline-ci.ts`, `cli/src/test/pipeline-ci.test.ts` (A) | Files to touch | In scope |
+| `cli/src/index.ts`, `cli/src/test/pipeline-cli.test.ts`, `cli/src/init.ts`, `cli/src/test/init.test.ts` (M) | Files to touch | In scope |
+| `templates/service/.gitignore`, `.gitignore` (M) | Files to touch | In scope |
+| `.github/workflows/ci.yml` (M) | Files to touch | In scope |
+| `.ai/skills/pipeline/skill.md`, `.ai/skills/sdlc/skill.md` (M) | Files to touch | In scope |
+| `.agents/skills/{pipeline,sdlc}/SKILL.md`, `.claude/commands/{pipeline,sdlc}.md`, `.cursor/rules/{pipeline,sdlc}.mdc`, `.github/prompts/{pipeline,sdlc}.prompt.md` (M) | Files to touch (ai sync) | In scope |
+| `README.md`, `docs/task-state-machine.md` (M) | Files to touch | In scope |
+| `.ai/tasks/BASE-071-P3/{status.json,plan.md,decisions.md,review-report.md,qa-report.md,usage.jsonl}` (A, committed; `usage.jsonl` also modified uncommitted) | Files to touch | In scope |
+| `.ai/tasks/BASE-071-P3/improvement-report.md` (untracked) | Files to touch | In scope |
+
+The implementer's `status.json` changes in D3 stay within its fields: two appended transitions and `updated_at`.
+
+### Acceptance criteria
+
+| Criterion | Evidence (`file:line`) | Result |
+|---|---|---|
+| AC1 — Tests: `npm --prefix <r>/cli run test` exits 0 with the `P3` tests passing | No code or test changed since round 1; running the tests is QA's job | Not verified (QA) |
+| AC2 — Coverage ≥ 80% for `pipeline-ci.ts` and `init.ts` | Unchanged since round 1; measuring it is QA's job | Not verified (QA) |
+| AC3 — Test content covers every case in "Tests and fixtures"; the grep for `.ai/tasks/BASE-` or `"gh"` in `pipeline-ci.test.ts` prints nothing | Test files unchanged since round 1 (`git diff --name-only 87ce323 HEAD` lists none). Round 1's evidence stands: `pipeline-ci.test.ts:98-316`, `pipeline-cli.test.ts:170-209`, `init.test.ts:42-71` | Met |
+| AC4 — No `node:` import in `pipeline-ci.ts`; the check, registration, gh, files and package files and `.claude/agents` are unchanged since `ea0a719` | `git diff --name-only ea0a719 -- …` prints nothing (re-run this round); `pipeline-ci.ts:10-11` is unchanged | Met |
+| AC5 — Ignore policy: the versioned files are not ignored, evidence, scratch and legacy files are, and there are 28 legacy lines | `.gitignore` unchanged since round 1; the legacy-line grep prints `28` (re-run this round) | Met |
+| AC6 — The `task-dirs` and `notify-ready` jobs as D3 and D3b; one `pr_ready_for_review` line; the diff removes only the 3 `cli` lines | `ci.yml` unchanged since round 1; the grep finds only `.github/workflows/ci.yml:127` (re-run this round) | Met |
+| AC7 — Docs and skills: the forbidden phrases are absent; the D1 policy, `pipeline ci`, invariant 5 in CI, the cadence and the #71 line are present | The forbidden-phrase grep over `README.md`, `docs` and `.ai/skills` prints nothing (re-run after D3). The D3 sentences at `README.md:189` and `docs/task-state-machine.md:117` add to the `pipeline ci` text and remove nothing; the other items are on the lines cited in round 1 | Met |
+| AC8 — `git ls-files .ai/tasks/BASE-071-P3` lists at least `status.json`, `plan.md`, `decisions.md` and `review-report.md`, and nothing under `evidence/` | It lists `decisions.md`, `plan.md`, `qa-report.md`, `review-report.md`, `status.json` and `usage.jsonl`, and nothing under `evidence/` | Met |
+| AC9 — Scope: the diff since `ea0a719` and the untracked files are only paths from "Files to touch" | Scope check above: every changed and untracked path is listed | Met |
+
+### Security
+
+- Trust boundary touched: yes — processes, external input, secrets
+- Method: STRIDE
+- Findings: none
+
+| Category | Result | Basis |
+|---|---|---|
+| Spoofing | none | The D3 delta is documentation only and changes no identity source. The change set's base still comes from the trusted `github.event.pull_request.base.sha` through step `env` (`.github/workflows/ci.yml:102`) and is checked by `REF` and a 40-hex G1 result (`cli/src/pipeline-ci.ts:16-17,135,143-144`); the trigger is still `pull_request` (`ci.yml:6-7`). These lines are unchanged since round 1 |
+| Tampering | none | A1 by value and index (`pipeline-ci.ts:102-115`) and `--no-renames` (`:146`) are unchanged. The D3 sentences describe the existing fail-closed path for an oversized base (`:200-212`); they do not change it. The residual risk accepted by the plan stands: a PR can edit the CLI or workflow that checks it, caught only by human review |
+| Repudiation | none | No logging or attribution changed. Commits `34a874f` and the appended D3 transitions record who acted. The `agent` field is unauthenticated, as in round 1 (hash chain dropped by human decision) |
+| Information disclosure | none | The delta adds no output path. The new sentences quote only the id regex, a size and a field name, with no secret or PII. Output rendering (`pipeline-ci.ts:226-269`) and `GH_TOKEN` scoping (`ci.yml:103`, `persist-credentials: false` at `:91,121`) are unchanged |
+| Denial of service | none | The bounds are unchanged: 20 directories (`pipeline-ci.ts:13,147`), 2 MiB base and head (`:200-212`, `pipeline-files.ts:10`), and the runner's timeout and output cap (`pipeline-gh.ts` unchanged per AC4). The docs now state the oversized-base outcome correctly |
+| Elevation of privilege | none | The permissions are unchanged: `contents: read` and `issues: read` for `task-dirs`, `contents: read` for `notify-ready` (`ci.yml:82-84,113-114`), SHA pins (`:87,92,119,123`), and no `${{ }}` in `run:`. The sdlc skill line (L1) only describes the existing `needs: [cli, task-dirs]` gate and grants nothing |
+
+### Verdict (round 2 — authoritative): approved
+
+No High or Medium finding, no out-of-scope file, and every criterion I can check is met. AC1 and AC2 are left to QA round 2. Round 1's Lows L1 and L2 are fixed in this PR, and they must still be registered, as fixed (L1 on #106, L2 on #104), before human approval.
