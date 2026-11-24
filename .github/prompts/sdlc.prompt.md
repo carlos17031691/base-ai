@@ -25,7 +25,7 @@ Blockers, failing verdicts, send-backs, `improvement` and the next actor: `pipel
 5. **Gate 5 — Code review, Quality Gates & Pull Request:**
    - Pipeline first: reviewer, qa, the human registers `To register` items as tech debt, supervisor sets `validated` (not PR approval).
    - Commits carry the ticket ID (`feat(PROJ-123): ...`); the PR targets **`development`** (`staging`), never a feature PR to `main` or `master`.
-   - Publish the review/QA reports on the PR (`.ai/tasks/` is git-ignored). Its "Security audit" quotes the latest review round's Security section, unchanged, naming the round; the author never writes it.
+   - Task files are versioned and reach the PR with the branch: the coordinator commits them with each step's commit and after validation; scratch copies are named `*.scratch`. Still publish the review/QA reports on the PR. Its "Security audit" quotes the latest review round's Security section, unchanged, naming the round; the author never writes it.
    - Dual gates: Sonar (SAST, coverage >= 80%) and CodeRabbit (`.coderabbit.yaml`). **High**/**Medium** fixed in code before human approval; **Low** only as a registered tech-debt issue. After `validated`: "Finding raised after validation".
    - **Zero unresolved conversations** (CodeRabbit or human) before merge; branch protection per the `review` skill.
    - Slack (`SLACK_WEBHOOK_URL`): PR opened with ticket ID, CI failure, "ready for human review" once tests and Sonar pass.

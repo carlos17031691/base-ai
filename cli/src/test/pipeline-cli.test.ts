@@ -166,3 +166,45 @@ test("pipeline check --json carries facts.nextActor with schema 1", () => {
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("P3 pipeline ci on a real git repository: an appended transition exits 0; an edited entry 0 exits 1 naming A1", () => {
+  const root = mkdtempSync(join(tmpdir(), "pc-ci-"));
+  const git = (...args: string[]) => {
+    const r = spawnSync("git", ["-C", root, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", ...args], { encoding: "utf8" });
+    assert.equal(r.status, 0, r.stderr);
+    return r.stdout.trim();
+  };
+  const all = JSON.parse(status) as { transitions: { note: string }[] };
+  const withTransitions = (n: number, edit = false) =>
+    JSON.stringify({ ...all, ticket_id: "X-1", transitions: all.transitions.slice(0, n).map((t, i) => (edit && i === 0 ? { ...t, note: "rewritten" } : t)) });
+  try {
+    git("init", "-q", "-b", "main");
+    writeTask(root, "X-1", { ...files, "review-report.md": `Round: 1\n${C}\n## Verdict: approved\n${SEC}`, "status.json": withTransitions(5) });
+    git("add", "-A");
+    git("commit", "-q", "-m", "base");
+    const base = git("rev-parse", "HEAD");
+
+    writeTask(root, "X-1", { "status.json": withTransitions(6) });
+    git("commit", "-q", "-am", "append");
+    const pass = run(["pipeline", "ci", "--base", base, "--root", root]);
+    assert.equal(pass.status, 0, pass.stdout + pass.stderr);
+    assert.equal(pass.stdout, `pipeline ci ${base.slice(0, 7)}: PASS (1 task dir(s))\nX-1: A1 pass; check ok; debt skip\n`);
+
+    writeTask(root, "X-1", { "status.json": withTransitions(6, true) });
+    git("commit", "-q", "-am", "edit");
+    const fail = run(["pipeline", "ci", "--base", base, "--root", root, "--json"]);
+    assert.equal(fail.status, 1, fail.stdout + fail.stderr);
+    const j = JSON.parse(fail.stdout);
+    assert.deepEqual([j.outcome, j.dirs[0].id, j.dirs[0].append_only], ["fail", "X-1", { status: "fail", detail: "transitions[0] differs from the base" }]);
+    assert.match(run(["pipeline", "ci", "--base", base, "--root", root]).stdout, /X-1: A1 fail — transitions\[0\] differs from the base/);
+
+    const usage = run(["pipeline", "ci", "--root", root]);
+    assert.equal(usage.status, 1);
+    assert.match(usage.stderr, /usage: base-ai pipeline ci --base <ref>/);
+    const unknown = run(["pipeline", "ci", "--base", "no-such-ref", "--root", root]);
+    assert.equal(unknown.status, 2);
+    assert.match(unknown.stdout, /halt: G1 non-zero exit/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
