@@ -4,7 +4,7 @@
   "plan_locked": true,
   "assignee": null,
   "created_at": "2026-11-24T18:11:16Z",
-  "updated_at": "2026-11-24T19:31:30Z",
+  "updated_at": "2026-11-24T19:34:40Z",
   "transitions": [
     {
       "from": null,
@@ -75,6 +75,20 @@
       "agent": "qa",
       "timestamp": "2026-11-24T19:31:30Z",
       "note": "qa round 1: pass; criteria: pass 9, pass with caveat 0, fail 0, not verified 0; checks: passed 3, failed 0, no applicable check 1, forbidden to run 0; verified implementer completion 2026-11-24T19:22:26Z"
+    },
+    {
+      "from": "completed",
+      "to": "in_progress",
+      "agent": "implementer",
+      "timestamp": "2026-11-24T19:34:20Z",
+      "note": "re-entry authorized by human decision D3: add the L2 sentences (base status.json over 2 MiB, D0 dir.name) to README.md and docs/task-state-machine.md"
+    },
+    {
+      "from": "in_progress",
+      "to": "completed",
+      "agent": "implementer",
+      "timestamp": "2026-11-24T19:34:40Z",
+      "note": "D3 L2 sentences added to README.md and docs/task-state-machine.md; checklist items left false: not applicable, deferred to QA"
     }
   ],
   "checklist": {
