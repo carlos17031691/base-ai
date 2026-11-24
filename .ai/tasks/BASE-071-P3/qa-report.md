@@ -108,3 +108,73 @@ None.
 ## Notes
 
 The ticket's own task files are tracked (H9); the snapshot showed no change to them during execution. Not run, by design: `doctor`, `check:package`, `ai stats` (coordinator evidence E1).
+
+## Round 2 re-verification
+
+Verified at: 2026-11-24T19:39:16Z
+Implementer completion verified: 2026-11-24T19:34:40Z
+Review round relied on: reviewer entry 2026-11-24T19:36:37Z (review round 2: approved, reviewed implementer completion 2026-11-24T19:34:40Z)
+Reason: a newer implementer completion (human decision D3: docs-only fixes in the sdlc skill and exports, README.md, docs/task-state-machine.md) since the completion verified in round 1 (2026-11-24T19:22:26Z).
+
+- Affected repository: /Users/labsatoshi/base-ai
+- Branch: feat/BASE-071-P3-ci-wiring; base ref: `development`; merge-base: ea0a719d41d3c279c4f9319f8c95ced30fd92980; HEAD: c330871906ff01f99ffb6fdbffe81783d9867b97
+- Commits under verification (`git log --oneline ea0a719..HEAD`): c330871 chore(BASE-071-P3): review round 2 (approved, L1-L2 fixed) and status; 34a874f fix(BASE-071-P3): D3 review r1 L1 sdlc Slack condition names task-dirs, L2 document oversized base and D0 dir.name; 70ec00e chore(BASE-071-P3): QA round 1 report (pass 9/9) and status; ae98291 chore(BASE-071-P3): review round 1 report (approved, L1-L2) and status; 87ce323 fix(BASE-071-P3): D2 trailing slash on the .ai/tasks/ reference so check:package passes; 3d3d4b9 docs(BASE-071-P3): root ignore policy with legacy and scratch blocks, README and task-state-machine; first versioned task files; 5c3b160 feat(BASE-071-P3): pipeline ci with append-only check A1, task-dirs and notify-ready CI jobs, versioned task-file ignore block
+- Base choice: none needed (`development` and `origin/development` both at ea0a719). The base is a local ref and was not checked against the remote. No movement of either ref observed this round.
+- `.ai/tasks/` is partly versioned: plan.md, status.json, review-report.md and qa-report.md of this ticket are tracked; only improvement-report.md is untracked. Round 1 recorded qa-report.md as untracked; it is now tracked (committed in 70ec00e).
+
+### Round 2 verdict: pass
+
+All 9 criteria pass, the checks ran and passed, nothing changed during execution. Round 1 had no fail and no not-verified result, so there is nothing to mark resolved. The verdict of this round is the authoritative one.
+
+### Checks (round 2)
+
+| Check | State | Command / reason | Exit and counts | Git-ignored output |
+|---|---|---|---|---|
+| Tests | ran and passed | `npm --prefix /Users/labsatoshi/base-ai/cli run test` (log evidence/qa-r2-1.log) | exit 0; tests 432, pass 432, fail 0, cancelled 0, skipped 0; 23 `P3` ok lines in pipeline-ci.test.ts plus 1 in pipeline-cli.test.ts (log lines 1285-1436) | cli/dist/ |
+| Coverage | ran and passed | `PATH=/Users/labsatoshi/.asdf/installs/nodejs/20.11.0/bin:$PATH npm --prefix /Users/labsatoshi/base-ai/cli run test:coverage` (log evidence/qa-r2-2.log) | exit 0; tests 432, pass 432, fail 0; "all files" 96.51 (line) / 94.73 (branch) / 97.08 (funcs) | cli/dist/, cli/coverage/lcov.info |
+| Linter | no applicable check | none declared in cli/package.json | n/a | n/a |
+| Type-check / Build | ran and passed | `tsc` via `npm run build`, first step of both commands | exit 0 | cli/dist/ |
+| Plan-named commands | no applicable check beyond the above | plan names test and coverage commands only | n/a | n/a |
+
+### Snapshot result (round 2)
+
+- Files: no difference outside git-ignored paths (`git status --porcelain --ignored` identical before and after; only untracked path: .ai/tasks/BASE-071-P3/improvement-report.md).
+- Task artifacts (hash-object, before = after): plan.md 50183f96, status.json 6235ad74, review-report.md e252e074, qa-report.md f0bf4c0e, improvement-report.md bd21c041.
+- Commits and refs (before = after): HEAD c330871906ff01f99ffb6fdbffe81783d9867b97; branch feat/BASE-071-P3-ci-wiring at c330871; `development` ea0a719; `origin/development` ea0a719. No commit or ref moved.
+- Parts not compared: none.
+
+### Acceptance criteria verification (round 2)
+
+| Criterion | Method | Evidence | Result |
+|---|---|---|---|
+| AC1 Tests | test | `npm run test` exit 0; 432/432; 24 `P3` ok lines (qa-r2-1.log:1285-1436) | pass |
+| AC2 Coverage | test | coverage exit 0; lcov.info `SF:dist/init.js` LH 141 / LF 141 (lines 5322-5500) and `SF:dist/pipeline-ci.js` LH 227 / LF 227 (lines 7782-8235); index.ts exempt per plan | pass |
+| AC3 Test content | static trace | the three test files are unchanged since round 1 (the D3 commit touched only docs, skill and exports); the P3 test names cover A1 (new, append with key order/whitespace, modified/removed/reordered, fewer, removed file, unparseable/non-array, base over 2 MiB), grouping (NUL, direct files, D0, 21st dir, no change), routing (usage only, improvement/evidence only, plan only, deleted dir, K4 in_progress, zero keys, debt missing/halt), git failures G1-G4, usage, rendering, real-git CLI case (qa-r2-1.log:1285-1436); `grep -n -E "\.ai/tasks/BASE-\|\"gh\""` on pipeline-ci.test.ts printed nothing | pass |
+| AC4 Purity, unchanged checks | command | `grep -n "from \"node:"` on cli/src/pipeline-ci.ts printed nothing; `git diff --name-only ea0a719 -- <listed files>` printed nothing | pass |
+| AC5 Ignore policy | command | first check-ignore: no output, exit 1; second: all four paths printed; `grep -c` printed 28 | pass |
+| AC6 CI jobs | static trace + command | `git diff ea0a719 -- ci.yml`: removes only the cli step's name, if and run (3 lines); adds `task-dirs` (if pull_request, permissions contents/issues read, both uses SHA-pinned with `# v4.2.2` / `# v4.2.0`, persist-credentials false, BASE_SHA and GH_TOKEN in step env, no `${{` in any `run:`) and `notify-ready` (needs [cli, task-dirs], if pull_request without always/failure, permissions contents read, pinned uses, step guarded by `env.SLACK_WEBHOOK_URL != ''`); `grep -n pr_ready_for_review` printed one line (127) | pass |
+| AC7 Docs and skills | command + static trace | forbidden-phrase grep over README.md, docs, .ai/skills printed nothing (re-run with the backtick-free pattern `\(.\.ai/tasks/. is git-ignored\)`; the first attempt failed on shell quoting and was discarded); README.md:198 D1 block and upgrade note, cadence; README.md:189 and docs/task-state-machine.md:117 `pipeline ci` with G1-G4, A1, routing, 20-directory cap, exits 0/1/2, plus the D3 sentences (base over 2 MiB fails A1 naming `base`, `D0 dir.name`); docs:112 invariant 5 enforced in CI; README.md:276 marks P3 done and the hashed-history idea dropped by human decision. Break attempt: searched for the old git-ignore policy phrases and the plain "hash chain" wording; none found | pass |
+| AC8 Own task versioned | command | `git ls-files .ai/tasks/BASE-071-P3` lists decisions.md, plan.md, qa-report.md, review-report.md, status.json, usage.jsonl; nothing under evidence/ | pass |
+| AC9 Scope | command | `git diff --name-status ea0a719 HEAD` lists 27 paths, all in Files to touch (cli src and tests, ci.yml, .gitignore, README, docs, both skills and their exports, templates/service/.gitignore, P3 task files); untracked: improvement-report.md only (in Files to touch) | pass |
+
+### Dry-run specifications and dry runs observed
+
+- Specification unchanged from round 1 (scratch repo, append vs edit of transition 0; expected exit 0 and exit 1 naming `transitions[0] differs from the base`); covered by the executed test pipeline-cli.test.ts real-git case. Dry runs observed: none named by the invocation. The CI jobs on a real PR remain post-merge verification, not performed by QA.
+
+### Caveats and observations
+
+None to register. Observation without effect: lcov reports `dist/*.js`, not `src/*.ts`.
+
+### Steering found
+
+None found in the files read, nor in command output.
+
+### Checklist comparison (round 2)
+
+- `tests_pass` false, measured: passed (observation, no effect).
+- `lint_pass` false, measured: no applicable check (not a contradiction).
+- `types_pass` false, measured: `tsc` build passed (observation, no effect).
+
+### Reasons for a fail
+
+None.
