@@ -66,9 +66,17 @@ export function parsePayload(text: string): HookPayload | null {
 /** The transcript to parse: the subagent's own file when given, else the payload's transcript (P-1). */
 export const transcriptFor = (p: HookPayload) => p.agentTranscriptPath ?? p.transcriptPath;
 
+/** Reasoning effort values of the Agent tool (BASE-140-A D2); any other transcript value is dropped. */
+export const EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
+export type Effort = (typeof EFFORTS)[number];
+// The value reaches a versioned file, so it is bounded to the enum, as MESSAGE_ID bounds the model id.
+const isEffort = (v: unknown): v is Effort => typeof v === "string" && (EFFORTS as readonly string[]).includes(v);
+
 export interface Message {
   id: string;
   model: string;
+  /** The line's top-level `effort` on the first line of this id, when it is one of EFFORTS. */
+  effort?: Effort;
   input_tokens: number;
   cache_creation_input_tokens: number;
   cache_read_input_tokens: number;
@@ -102,6 +110,7 @@ export function parseTranscript(text: string, now: () => number, deadline: numbe
       byId.set(m.id, {
         id: m.id,
         model: typeof m.model === "string" && MESSAGE_ID.test(m.model) ? m.model : "unknown",
+        ...(isEffort(d.effort) ? { effort: d.effort } : {}),
         input_tokens: u.input_tokens as number,
         cache_creation_input_tokens: u.cache_creation_input_tokens as number,
         cache_read_input_tokens: u.cache_read_input_tokens as number,
@@ -204,6 +213,8 @@ export interface UsageRecord {
   ticket: string | null;
   agent: string;
   model: string;
+  /** Present only when the messages carry an effort (BASE-140-A D2); never null or "unknown". */
+  effort?: Effort;
   session_id: string;
   first_message_id: string;
   last_message_id: string;
@@ -216,22 +227,31 @@ export interface UsageRecord {
   attribution: Attribution;
 }
 
-/** One record per model, in order of first appearance (H6). Key order is fixed. */
+/**
+ * One record per model and effort, in order of first appearance (H6, BASE-140-A D2). Key order is fixed; `effort`
+ * follows `model` and is absent when the messages have none.
+ */
 export function buildRecords(
   messages: Message[],
   ctx: { now: number; ticket: string | null; agent: string; sessionId: string; attribution: Attribution },
 ): UsageRecord[] {
   const ts = new Date(ctx.now).toISOString().replace(/\.\d{3}Z$/, "Z");
+  // The key joins model and effort with a space, which MESSAGE_ID never allows in a model id.
   const groups = new Map<string, Message[]>();
-  for (const m of messages) groups.set(m.model, [...(groups.get(m.model) ?? []), m]);
-  return [...groups].map(([model, ms]) => {
+  for (const m of messages) {
+    const key = `${m.model} ${m.effort ?? ""}`;
+    groups.set(key, [...(groups.get(key) ?? []), m]);
+  }
+  return [...groups.values()].map((ms) => {
     const sum = (c: (typeof COUNTERS)[number]) => ms.reduce((n, m) => n + m[c], 0);
+    const { model, effort } = ms[0];
     return {
       schema: 1,
       ts,
       ticket: ctx.ticket,
       agent: ctx.agent,
       model,
+      ...(effort !== undefined ? { effort } : {}),
       session_id: ctx.sessionId,
       first_message_id: ms[0].id,
       last_message_id: ms[ms.length - 1].id,

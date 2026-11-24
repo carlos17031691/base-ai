@@ -260,3 +260,26 @@ test("D2 H3: planTitle rules: missing or unreadable plan, hyphen separator, CRLF
   assert.equal(Array.from(long ?? "").length, 80);
   assert.ok((long ?? "").endsWith("…"));
 });
+
+test("R1 a usage.jsonl mixing records with and without effort gives the same totals and records as without it", () => {
+  const b = sandbox();
+  try {
+    const mixed = b.task("TK-1");
+    writeFileSync(join(mixed, "usage.jsonl"), `${record()}\n${record({ effort: "high" })}\n${record({ effort: "bogus" })}\n`);
+    const plain = b.task("TK-2");
+    writeFileSync(join(plain, "usage.jsonl"), `${record()}\n${record()}\n${record()}\n`);
+    const [a, p] = listTasks(b.root, PRICING).tasks;
+    assert.deepEqual([a.tokens?.records, a.tokens?.cost_usd, a.usage_error], [3, 13.5, null]);
+    assert.deepEqual(a.tokens, p.tokens);
+    const da = taskDetail(b.root, "TK-1", PRICING);
+    const dp = taskDetail(b.root, "TK-2", PRICING);
+    assert.ok("records" in da.usage && "records" in dp.usage);
+    if ("records" in da.usage && "records" in dp.usage) {
+      assert.deepEqual(da.usage.records, dp.usage.records);
+      assert.deepEqual(da.usage.report.groups, dp.usage.report.groups);
+      assert.equal(da.usage.report.skipped_lines, 0);
+    }
+  } finally {
+    b.done();
+  }
+});
