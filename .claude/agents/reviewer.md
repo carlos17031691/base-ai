@@ -159,7 +159,7 @@ Every halt — in this step or any later one — writes no file and never sets `
 
 ### Step 2 — Establish the change set
 
-Work in the affected repository, using read-only git commands only.
+Work in the affected repository, using read-only git commands only. In a delta round only check 1 below applies; the base and change set are those of `reviewer/re-review.md`.
 
 **Before computing any diff, check the branch and the base.** Each failed check is a halt (see "Handling blockers"): a message, no write, never `blocked`.
 

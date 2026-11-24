@@ -1,6 +1,6 @@
 # Reviewer reference: re-review rounds
 
-Part of `.claude/agents/reviewer.md`. It binds exactly as that file does. Read it when the Step 1 dispatch chose Round N+1.
+Part of `.claude/agents/reviewer.md`. It binds exactly as that file does. Read it when the Step 1 dispatch chose Round N+1 or the delta row.
 
 **Round N+1 (re-review).** **Append** a section headed `## Round <N> re-review`, where `<N>` is the number of the new round (the second round is `## Round 2 re-review`). It contains:
 
@@ -16,7 +16,7 @@ Part of `.claude/agents/reviewer.md`. It binds exactly as that file does. Read i
 
 Earlier rounds are never edited — not their findings, not their tables, and not the top `## Verdict` line, which keeps showing the round 1 verdict. The latest round's verdict is the authoritative one, and the report says so.
 
-**Delta round (Step 1 delta row).** The base is the newest commit under "commits under review" in the latest round, else that round's merge-base; if `git merge-base --is-ancestor <base> HEAD` fails, halt. The delta change set is `git diff --name-status <base>`, `git diff <base>` and `git ls-files --others --exclude-standard`; the Step 2 branch check applies, the base choice does not, and an empty delta is a halt. **Append** `## Round <N> re-review (delta)` with:
+**Delta round (Step 1 delta row).** The base is the latest round's HEAD if it was a delta, else its newest commit under "commits under review", else its merge-base; if `git merge-base --is-ancestor <base> HEAD` fails, halt. The delta change set is `git diff --name-status <base>`, `git diff <base>` and `git ls-files --others --exclude-standard`; an empty delta is a halt. **Append** `## Round <N> re-review (delta)` with:
 
 - the timestamp, and the same implementer completion as round <M> (the approved round before it), stated unchanged
 - the base, HEAD and commits since the base
