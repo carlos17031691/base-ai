@@ -1,0 +1,32 @@
+{
+  "ticket_id": "BASE-140-C",
+  "state": "pending",
+  "plan_locked": true,
+  "assignee": null,
+  "created_at": "2026-11-24T23:25:19Z",
+  "updated_at": "2026-11-24T23:42:40Z",
+  "transitions": [
+    {
+      "from": null,
+      "to": "pending",
+      "agent": "planner",
+      "timestamp": "2026-11-24T23:25:19Z",
+      "note": "task initialized"
+    },
+    {
+      "from": "pending",
+      "to": "pending",
+      "agent": "human",
+      "timestamp": "2026-11-24T23:42:40Z",
+      "note": "plan approved and locked by the human (\"aprobado con tus recomendaciones\", 2026-11-24); H1-H9 as recommended; branch fast-forwarded to a9c0e43; this ticket's own plan is not subject to the new plan-review gate; applied by the coordinator"
+    }
+  ],
+  "checklist": {
+    "tests_pass": false,
+    "lint_pass": false,
+    "types_pass": false,
+    "review_verdict": null,
+    "qa_verdict": null
+  },
+  "blocker": null
+}
