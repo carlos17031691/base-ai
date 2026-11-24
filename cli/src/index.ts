@@ -14,9 +14,10 @@ import { runEvals, renderEvalReport } from "./eval.js";
 import { runWizard } from "./wizard.js";
 import { devUp, devStop, devStatus } from "./dev.js";
 import { checkTask, renderText } from "./pipeline-check.js";
-import { loadTask } from "./pipeline-files.js";
+import { CI_USAGE, ciExitCode, renderCi, runCi } from "./pipeline-ci.js";
+import { loadTask, readBounded } from "./pipeline-files.js";
 import { spawnRunner } from "./pipeline-gh.js";
-import { debtForTask, renderDebt } from "./pipeline-registration.js";
+import { checkRegistration, debtForTask, renderDebt } from "./pipeline-registration.js";
 import { loadDashboardConfig, loadUsageConfig } from "./source.js";
 import { guardHookProcess, readUsageReport, runUsageRecord } from "./usage-files.js";
 import { renderUsageReport, stderrLine } from "./usage.js";
@@ -49,6 +50,8 @@ Commands:
                                                      naming each failed check. Offline.
   pipeline debt <task-dir> [--issues n,…] [--json]  Check each To register key against GitHub issues (opt-in network, gh);
                                                      exit 0 registered, 1 missing, 2 could not check
+  pipeline ci --base <ref> [--json]                 For each task directory changed since <ref>: append-only transitions (A1),
+                                                     pipeline check and pipeline debt; exit 0 pass, 1 fail, 2 could not check
   dashboard [--port N]                              Serve the pipeline HUD and JSON API over .ai/tasks/ on 127.0.0.1 (default port 4747);
                                                      it reads only, except the opt-in CHECK REGISTRATION (gh)
   usage record                                      Record a Claude Code turn's tokens from a Stop/SubagentStop hook (stdin) into
@@ -348,6 +351,25 @@ function main(argv: string[]): number | Promise<number> {
       }
       console.log(flags.json === true ? JSON.stringify(r.report, null, 2) : renderDebt(r.report));
       return r.report.outcome === "registered" ? 0 : r.report.outcome === "missing" ? 1 : 2;
+    });
+  }
+
+  if (cmd === "pipeline" && sub === "ci") {
+    const runner = spawnRunner();
+    return runCi(str(flags.base), {
+      root,
+      run: runner,
+      read: (relPath) => readBounded(join(root, relPath)),
+      loadTask: (dir) => loadTask(root, dir),
+      checkTask,
+      debt: (report) => checkRegistration(report, [], runner),
+    }).then((r) => {
+      if (r.kind === "usage") {
+        console.error(CI_USAGE);
+        return 1;
+      }
+      console.log(flags.json === true ? JSON.stringify(r.report, null, 2) : renderCi(r.report));
+      return ciExitCode(r.report);
     });
   }
 

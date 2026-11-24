@@ -36,6 +36,12 @@ obj/
 !.ai/tasks/*/
 .ai/tasks/*/*
 !.ai/tasks/*/usage.jsonl
+!.ai/tasks/*/status.json
+!.ai/tasks/*/plan.md
+!.ai/tasks/*/review-report.md
+!.ai/tasks/*/qa-report.md
+!.ai/tasks/*/decisions.md
+!.ai/tasks/*/improvement-report.md
 .ai/usage/
 .DS_Store
 Thumbs.db
