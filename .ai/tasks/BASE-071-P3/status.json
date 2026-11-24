@@ -1,0 +1,60 @@
+{
+  "ticket_id": "BASE-071-P3",
+  "state": "completed",
+  "plan_locked": true,
+  "assignee": null,
+  "created_at": "2026-11-24T18:11:16Z",
+  "updated_at": "2026-11-24T19:12:20Z",
+  "transitions": [
+    {
+      "from": null,
+      "to": "pending",
+      "agent": "planner",
+      "timestamp": "2026-11-24T18:11:16Z",
+      "note": "task initialized"
+    },
+    {
+      "from": "pending",
+      "to": "blocked",
+      "agent": "planner",
+      "timestamp": "2026-11-24T18:11:16Z",
+      "note": "blocked before planning: the decided H1/H2 scope assumes .ai/tasks/<id>/status.json is versioned, but .gitignore, templates/service/.gitignore and init.ts keep it local and no commit has ever contained one; human decision H0 needed"
+    },
+    {
+      "from": "blocked",
+      "to": "pending",
+      "agent": "human",
+      "timestamp": "2026-11-24T18:41:44Z",
+      "note": "human reset blocked to pending (2026-11-24), decision H0 option A: version status.json, plan.md, review-report.md, qa-report.md, decisions.md and improvement-report.md from P3 on; evidence/ and scratch stay ignored; all three policy places, README and docs/task-state-machine.md; no backfill. Recorded by the coordinator"
+    },
+    {
+      "from": "pending",
+      "to": "pending",
+      "agent": "human",
+      "timestamp": "2026-11-24T18:59:50Z",
+      "note": "plan approved and locked by the human (2026-11-24): H1-H6 and H8-H11 as recommended, H7 the alternative (final notify-ready job with needs [cli, task-dirs]). Lock recorded by the coordinator"
+    },
+    {
+      "from": "pending",
+      "to": "in_progress",
+      "agent": "implementer",
+      "timestamp": "2026-11-24T19:12:04Z",
+      "note": "implementer claimed task; plan_locked asserted true"
+    },
+    {
+      "from": "in_progress",
+      "to": "completed",
+      "agent": "implementer",
+      "timestamp": "2026-11-24T19:12:20Z",
+      "note": "step 3 files written (.gitignore, README.md, docs/task-state-machine.md); checklist tests_pass, lint_pass, types_pass left false: not applicable to this step (docs and ignore rules, no runner), deferred to QA"
+    }
+  ],
+  "checklist": {
+    "tests_pass": false,
+    "lint_pass": false,
+    "types_pass": false,
+    "review_verdict": null,
+    "qa_verdict": null
+  },
+  "blocker": null
+}
