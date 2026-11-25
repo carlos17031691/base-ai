@@ -1,10 +1,10 @@
 {
   "ticket_id": "BASE-140-D",
   "state": "pending",
-  "plan_locked": false,
+  "plan_locked": true,
   "assignee": "planner",
   "created_at": "2026-11-25T02:14:49Z",
-  "updated_at": "2026-11-25T02:14:49Z",
+  "updated_at": "2026-11-25T14:25:45Z",
   "transitions": [
     {
       "from": null,
@@ -12,6 +12,13 @@
       "agent": "planner",
       "timestamp": "2026-11-25T02:14:49Z",
       "note": "task initialized"
+    },
+    {
+      "from": "pending",
+      "to": "pending",
+      "agent": "human",
+      "timestamp": "2026-11-25T14:25:45Z",
+      "note": "plan approved and locked by the human (\"Lock now, accept L8\", 2026-11-25); applied by the coordinator; plan review round 3 approved, plan.md at 9762cbac63d89b06c192eb3bf361119833343739"
     }
   ],
   "checklist": {
