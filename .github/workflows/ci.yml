@@ -75,7 +75,8 @@ jobs:
         run: node ../.github/scripts/slack-notify.js ci_failure
 
   # BASE-071-P3 D3: each task directory the PR changes must keep transitions[] append-only (A1) and pass
-  # pipeline check and pipeline debt. It runs on every PR and exits 0 when no task directory changed, so it can be required.
+  # pipeline check, pipeline plan (BASE-140-B: P1 criteria, P2 lock; when status.json, plan.md, plan-review.md or
+  # decisions.md changed) and pipeline debt. It runs on every PR and exits 0 when no task directory changed, so it can be required.
   task-dirs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest

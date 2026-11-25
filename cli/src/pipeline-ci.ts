@@ -1,13 +1,16 @@
 /**
  * `base-ai pipeline ci --base <ref>` (BASE-071-P3 D2, issue #71): the task directories a PR changes, each checked
- * for an append-only `transitions[]` (A1, invariant 5 of docs/task-state-machine.md), then `pipeline check` and
- * `pipeline debt`.
+ * for an append-only `transitions[]` (A1, invariant 5 of docs/task-state-machine.md), then `pipeline check`,
+ * `pipeline plan` (BASE-140-B D4: P1 criteria and P2 lock, when status.json, plan.md, plan-review.md or
+ * decisions.md changed; its two fixed git calls per directory, and up to three `rev-parse` calls more for a lock
+ * re-binding that names a rewritten commit) and `pipeline debt`.
  *
  * Pure: git goes through the injected `Runner` (pipeline-gh.ts is the real one), the working tree through the
- * injected reader, and the check and debt through injected functions, so every case is tested with fakes.
+ * injected reader, and the check, plan and debt through injected functions, so every case is tested with fakes.
  * Read-only. It never prints file content, git stderr, a URL or issue text.
  */
 import { MAX_FILE_BYTES, type CheckReport, type FileRead, type TaskInput } from "./pipeline-check.js";
+import { EXEMPT, HALT_TEXT as PLAN_HALT_TEXT, type PlanResult } from "./pipeline-plan.js";
 import type { DebtReport, RunFailure, Runner } from "./pipeline-registration.js";
 
 export const MAX_TASK_DIRS = 20;
@@ -19,6 +22,8 @@ const DIR_ID = /^[A-Za-z0-9#._-]+$/;
 const TASKS = ".ai/tasks";
 /** The files `pipeline check` reads; a change to any other file (usage.jsonl, evidence/, …) skips it (H4). */
 const CHECKED = new Set(["status.json", "plan.md", "review-report.md", "qa-report.md", "decisions.md"]);
+/** The files `pipeline plan` reads; a change to any of them runs it (BASE-140-B D4). */
+const PLAN_FILES = new Set(["status.json", "plan.md", "plan-review.md", "decisions.md"]);
 
 export type CiTemplate = "G1" | "G2" | "G3" | "G4";
 export type CiHaltReason = RunFailure | "sha" | "cap";
@@ -32,6 +37,8 @@ export interface CiDeps {
   checkTask: (input: TaskInput) => CheckReport;
   /** The registration check of a report with keys (`checkRegistration` with no `--issues`). */
   debt: (report: CheckReport) => Promise<DebtReport>;
+  /** `pipeline plan` of a task directory (`checkPlan`), by its path relative to `root`. */
+  plan: (taskDir: string) => Promise<PlanResult>;
 }
 
 export interface AppendOnly {
@@ -39,6 +46,8 @@ export interface AppendOnly {
   detail: string;
 }
 export type CiCheck = { status: "ok" } | { status: "fail"; failed: string[] } | { status: "skip"; detail: string };
+/** `pipeline plan` per directory; a halt is per directory, like a debt halt (M3). */
+export type CiPlan = CiCheck | { status: "halt"; reason: RunFailure };
 export type CiDebt =
   | { status: "skip" }
   | { status: "registered" | "missing" | "halt"; calls: number; missing: string[]; halt?: DebtReport["halt"] };
@@ -50,6 +59,7 @@ export interface CiDir {
   name: "pass" | "fail";
   append_only: AppendOnly;
   check: CiCheck;
+  plan: CiPlan;
   debt: CiDebt;
 }
 
@@ -167,12 +177,14 @@ async function checkDir(
     name: "pass",
     append_only: { status: "skip", detail: "status.json unchanged" },
     check: { status: "skip", detail: "no checked file changed" },
+    plan: { status: "skip", detail: "no plan file changed" },
     debt: { status: "skip" },
   };
   if (!validId(id)) {
     dir.name = "fail";
     dir.append_only = { status: "skip", detail: "invalid directory name" };
     dir.check = { status: "skip", detail: "invalid directory name" };
+    dir.plan = { status: "skip", detail: "invalid directory name" };
     return dir;
   }
   const statusPath = `${TASKS}/${id}/status.json`;
@@ -180,6 +192,9 @@ async function checkDir(
   if (files.includes("status.json")) {
     const listed = await git("G3", ["ls-tree", "-z", "--name-only", sha, "--", statusPath]);
     dir.append_only = appendOnly(listed === "" ? null : await baseRead(sha, statusPath, git), head);
+  }
+  if (files.some((f) => PLAN_FILES.has(f))) {
+    dir.plan = head.kind === "missing" ? { status: "skip", detail: "no status.json" } : ciPlan(await deps.plan(`${TASKS}/${id}`));
   }
   if (!files.some((f) => CHECKED.has(f))) return dir;
   if (head.kind === "missing") {
@@ -197,6 +212,13 @@ async function checkDir(
   return dir;
 }
 
+function ciPlan(r: PlanResult): CiPlan {
+  if (r.halt) return { status: "halt", reason: r.halt };
+  if (r.report.exempt) return { status: "skip", detail: EXEMPT };
+  if (r.report.ok) return { status: "ok" };
+  return { status: "fail", failed: r.report.checks.filter((c) => c.status === "fail").map((c) => c.id) };
+}
+
 const TOO_LARGE: FileRead = { kind: "error", reason: `larger than ${MAX_FILE_BYTES} bytes` };
 
 /** The base version of status.json (G4), bounded like a working-tree read: one over MAX_FILE_BYTES fails A1 naming base. */
@@ -212,10 +234,10 @@ async function baseRead(sha: string, path: string, git: Git): Promise<FileRead> 
 }
 
 const dirFailed = (d: CiDir) =>
-  d.name === "fail" || d.append_only.status === "fail" || d.check.status === "fail" || d.debt.status === "missing";
+  d.name === "fail" || d.append_only.status === "fail" || d.check.status === "fail" || d.plan.status === "fail" || d.debt.status === "missing";
 
 function outcomeOf(r: CiReport): CiReport["outcome"] {
-  if (r.halt || r.dirs.some((d) => d.debt.status === "halt")) return "halt";
+  if (r.halt || r.dirs.some((d) => d.debt.status === "halt" || d.plan.status === "halt")) return "halt";
   return r.dirs.some(dirFailed) ? "fail" : "pass";
 }
 
@@ -243,6 +265,13 @@ function renderCheck(c: CiCheck): string {
   return `check skip (${c.detail})`;
 }
 
+function renderPlanOutcome(p: CiPlan): string {
+  if (p.status === "halt") return `plan halt (git ${PLAN_HALT_TEXT[p.reason]})`;
+  if (p.status === "ok") return "plan ok";
+  if (p.status === "fail") return `plan FAIL ${p.failed.join(",")}`;
+  return `plan skip (${p.detail})`;
+}
+
 function renderDebtOutcome(d: CiDebt): string {
   if (d.status === "skip") return "debt skip";
   return d.halt ? `debt halt (${d.halt.template} ${d.halt.reason})` : `debt ${d.status}`;
@@ -257,7 +286,7 @@ export function renderCi(r: CiReport): string {
       out.push(`${JSON.stringify(d.id)}: D0 dir.name fail — not ${DIR_ID.source}`);
       continue;
     }
-    out.push(`${d.id}: ${renderAppendOnly(d.append_only)}; ${renderCheck(d.check)}; ${renderDebtOutcome(d.debt)}`);
+    out.push(`${d.id}: ${renderAppendOnly(d.append_only)}; ${renderCheck(d.check)}; ${renderPlanOutcome(d.plan)}; ${renderDebtOutcome(d.debt)}`);
     if (d.debt.status === "missing" && d.debt.missing.length) {
       out.push("  missing keys, ready to paste:", ...d.debt.missing.map((k) => `    [${k}]`));
       out.push("  a just-registered item may not be indexed yet: wait and rerun the job");

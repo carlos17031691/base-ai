@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { MAX_FILE_BYTES, checkTask, type CheckReport, type FileRead, type TaskInput } from "../pipeline-check.js";
 import { CI_USAGE, MAX_TASK_DIRS, appendOnly, ciExitCode, groupPaths, jsonEqual, renderCi, runCi, type CiDeps, type CiReport } from "../pipeline-ci.js";
+import type { PlanResult } from "../pipeline-plan.js";
 import type { DebtReport, RunResult, Runner } from "../pipeline-registration.js";
 
 // In memory only: a fake git, a fake working tree and a fake registration check. No process, no network.
@@ -42,12 +43,31 @@ interface World {
   tree?: Record<string, Record<string, string>>;
   fail?: (sub: string) => RunResult | undefined;
   debt?: (r: CheckReport) => DebtReport;
+  /** The `pipeline plan` result, by task directory; a passing one by default. */
+  plan?: (taskDir: string) => PlanResult;
   sha?: string;
 }
+
+const planPass = (taskDir: string): PlanResult => ({
+  report: {
+    schema: 1,
+    ticket: "TK-1",
+    taskDir: `${ROOT}/${taskDir}`,
+    exempt: false,
+    outcome: "pass",
+    ok: true,
+    checks: [
+      { id: "P1", key: "plan.criteria", status: "pass", detail: "" },
+      { id: "P2", key: "plan.lock", status: "pass", detail: "" },
+    ],
+    criteria: [],
+  },
+});
 
 function world(w: World) {
   const calls: string[][] = [];
   const debtCalls: string[] = [];
+  const planCalls: string[] = [];
   const run: Runner = async (cmd, args) => {
     calls.push([cmd, ...args]);
     assert.deepEqual(args.slice(0, 2), ["-C", ROOT]);
@@ -82,15 +102,19 @@ function world(w: World) {
       debtCalls.push(r.ticket ?? "");
       return w.debt?.(r) ?? { schema: 1, rule: r.rule, ticket: r.ticket, repo: "acme/repo", outcome: "registered", calls: 2, keys: r.keys.map((k) => ({ ...k, status: "registered", issue: 106, state: "open" })) };
     },
+    plan: async (taskDir) => {
+      planCalls.push(taskDir);
+      return (w.plan ?? planPass)(taskDir);
+    },
   };
-  return { deps, calls, debtCalls };
+  return { deps, calls, debtCalls, planCalls };
 }
 
-async function report(w: World, ref = "origin/development"): Promise<{ r: CiReport; calls: string[][]; debtCalls: string[] }> {
-  const { deps, calls, debtCalls } = world(w);
+async function report(w: World, ref = "origin/development"): Promise<{ r: CiReport; calls: string[][]; debtCalls: string[]; planCalls: string[] }> {
+  const { deps, calls, debtCalls, planCalls } = world(w);
   const res = await runCi(ref, deps);
   assert.equal(res.kind, "report");
-  return { r: (res as { kind: "report"; report: CiReport }).report, calls, debtCalls };
+  return { r: (res as { kind: "report"; report: CiReport }).report, calls, debtCalls, planCalls };
 }
 const subs = (calls: string[][]) => calls.map((c) => c[3]);
 const ok = (text: string): FileRead => ({ kind: "ok", text });
@@ -199,7 +223,7 @@ test("P3 routing: usage.jsonl only skips the check and runs no A1", async () => 
   assert.deepEqual(subs(calls), ["rev-parse", "diff"]);
   assert.deepEqual(debtCalls, []);
   assert.equal(ciExitCode(r), 0, "an unfinished task's usage.jsonl alone passes (H4)");
-  assert.match(renderCi(r), /\nTK-1: A1 skip \(status\.json unchanged\); check skip \(no checked file changed\); debt skip$/);
+  assert.match(renderCi(r), /\nTK-1: A1 skip \(status\.json unchanged\); check skip \(no checked file changed\); plan skip \(no plan file changed\); debt skip$/);
 });
 
 test("P3 routing: improvement-report.md or evidence/ only skips the check", async () => {
@@ -242,7 +266,7 @@ test("P3 routing: zero keys make no debt call; keys make one, and a registered o
   assert.deepEqual(some.debtCalls, ["TK-1"]);
   assert.deepEqual(some.r.dirs[0].debt, { status: "registered", calls: 2, missing: [], halt: undefined });
   assert.equal(ciExitCode(some.r), 0);
-  assert.equal(renderCi(some.r), "pipeline ci aaaaaaa: PASS (1 task dir(s))\nTK-1: A1 pass; check ok; debt registered");
+  assert.equal(renderCi(some.r), "pipeline ci aaaaaaa: PASS (1 task dir(s))\nTK-1: A1 pass; check ok; plan ok; debt registered");
 });
 
 test("P3 routing: debt missing exits 1 and lists the keys; debt halt exits 2", async () => {
@@ -260,7 +284,7 @@ test("P3 routing: debt missing exits 1 and lists the keys; debt halt exits 2", a
   });
   assert.equal(halt.r.outcome, "halt");
   assert.equal(ciExitCode(halt.r), 2);
-  assert.match(renderCi(halt.r), /^pipeline ci aaaaaaa: HALT .*\nTK-1: A1 skip \(status\.json unchanged\); check ok; debt halt \(T5 remote\)$/);
+  assert.match(renderCi(halt.r), /^pipeline ci aaaaaaa: HALT .*\nTK-1: A1 skip \(status\.json unchanged\); check ok; plan ok; debt halt \(T5 remote\)$/);
 });
 
 test("P3 git failures: G1–G4, each by a non-zero exit, ENOENT and a timeout, halt naming the template", async () => {
@@ -308,9 +332,89 @@ test("P3 rendering: text and JSON carry no base content and no stderr", async ()
   for (const out of [text, json]) {
     assert.doesNotMatch(out, /SECRET|init|claim|stderr/);
   }
-  assert.match(text, /^pipeline ci aaaaaaa: FAIL \(1 task dir\(s\)\)\nTK-1: A1 fail — transitions\[0\] differs from the base; check ok; debt registered$/);
+  assert.match(text, /^pipeline ci aaaaaaa: FAIL \(1 task dir\(s\)\)\nTK-1: A1 fail — transitions\[0\] differs from the base; check ok; plan ok; debt registered$/);
   const parsed = JSON.parse(json);
   assert.deepEqual(Object.keys(parsed), ["schema", "base", "outcome", "dirs"]);
-  assert.deepEqual(Object.keys(parsed.dirs[0]), ["id", "files", "name", "append_only", "check", "debt"]);
+  assert.deepEqual(Object.keys(parsed.dirs[0]), ["id", "files", "name", "append_only", "check", "plan", "debt"]);
   assert.deepEqual([parsed.schema, parsed.base, parsed.outcome, parsed.dirs[0].files], [1, SHA, "fail", ["status.json"]]);
+});
+
+const planWith = (checks: PlanResult["report"]["checks"], extra: Partial<PlanResult["report"]> = {}, halt?: PlanResult["halt"]) => (taskDir: string): PlanResult => {
+  const base = planPass(taskDir).report;
+  const failed = checks.some((c) => c.status === "fail");
+  const halted = checks.some((c) => c.status === "halt");
+  const report = { ...base, checks, outcome: halted ? "halt" : failed ? "fail" : "pass", ok: !failed && !halted, ...extra } as PlanResult["report"];
+  return halt ? { report, halt } : { report };
+};
+
+test("R2 ci trigger: status.json, plan.md, plan-review.md or decisions.md runs pipeline plan; other files skip it", async () => {
+  for (const f of ["status.json", "plan.md", "plan-review.md", "decisions.md"]) {
+    const { r, planCalls } = await report({ diff: [`.ai/tasks/TK-1/${f}`], base: { "TK-1": BASE_STATUS }, tree: { "TK-1": taskFiles(HEAD_STATUS, false) } });
+    assert.deepEqual(planCalls, [".ai/tasks/TK-1"], f);
+    assert.deepEqual(r.dirs[0].plan, { status: "ok" }, f);
+  }
+  const reviewOnly = await report({ diff: [".ai/tasks/TK-1/plan-review.md"], tree: { "TK-1": taskFiles(HEAD_STATUS, false) } });
+  assert.deepEqual(reviewOnly.r.dirs[0].check, { status: "skip", detail: "no checked file changed" }, "plan-review.md is not a pipeline check file");
+  assert.match(renderCi(reviewOnly.r), /\nTK-1: A1 skip \(status\.json unchanged\); check skip \(no checked file changed\); plan ok; debt skip$/);
+  const decisionsOnly = await report({ diff: [".ai/tasks/TK-1/decisions.md"], tree: { "TK-1": taskFiles(HEAD_STATUS, false) } });
+  assert.deepEqual(decisionsOnly.planCalls, [".ai/tasks/TK-1"], "a decisions.md-only change runs the plan check");
+  for (const f of ["usage.jsonl", "review-report.md", "qa-report.md", "evidence/e2.txt"]) {
+    const { r, planCalls } = await report({ diff: [`.ai/tasks/TK-1/${f}`], tree: { "TK-1": taskFiles(HEAD_STATUS, false) } });
+    assert.deepEqual(planCalls, [], f);
+    assert.deepEqual(r.dirs[0].plan, { status: "skip", detail: "no plan file changed" }, f);
+  }
+});
+
+test("R2 ci skip: no status.json at HEAD, an invalid id and an exempt directory skip the plan check", async () => {
+  const gone = await report({ diff: [".ai/tasks/TK-1/plan.md"] });
+  assert.deepEqual([gone.planCalls, gone.r.dirs[0].plan], [[], { status: "skip", detail: "no status.json" }]);
+  const bad = await report({ diff: [".ai/tasks/bad id/plan.md"] });
+  assert.deepEqual([bad.planCalls, bad.r.dirs[0].plan], [[], { status: "skip", detail: "invalid directory name" }]);
+  const skipped = { id: "P1", key: "plan.criteria", status: "skip", detail: "exempt (locked before the plan gate)" } as const;
+  const exempt = await report({
+    diff: [".ai/tasks/TK-1/plan.md"],
+    tree: { "TK-1": taskFiles(HEAD_STATUS, false) },
+    plan: planWith([skipped, { ...skipped, id: "P2", key: "plan.lock" }], { exempt: true }),
+  });
+  assert.deepEqual(exempt.r.dirs[0].plan, { status: "skip", detail: "exempt (locked before the plan gate)" });
+  assert.equal(ciExitCode(exempt.r), 0);
+  assert.match(renderCi(exempt.r), /; plan skip \(exempt \(locked before the plan gate\)\); /);
+});
+
+test("R2 ci fail: a failing plan check fails the directory (exit 1) naming P1 and P2", async () => {
+  const { r } = await report({
+    diff: [".ai/tasks/TK-1/plan.md"],
+    tree: { "TK-1": taskFiles(HEAD_STATUS, false) },
+    plan: planWith([
+      { id: "P1", key: "plan.criteria", status: "fail", detail: "1 of 2 criteria fail" },
+      { id: "P2", key: "plan.lock", status: "fail", detail: "no lock entry" },
+    ]),
+  });
+  assert.deepEqual(r.dirs[0].plan, { status: "fail", failed: ["P1", "P2"] });
+  assert.equal(r.outcome, "fail");
+  assert.equal(ciExitCode(r), 1);
+  assert.equal(renderCi(r), "pipeline ci aaaaaaa: FAIL (1 task dir(s))\nTK-1: A1 skip (status.json unchanged); check ok; plan FAIL P1,P2; debt skip");
+  const text = renderCi(r) + JSON.stringify(r);
+  assert.doesNotMatch(text, /criteria fail|no lock entry/, "only the failed ids reach the output");
+});
+
+test("R2 ci halt: a plan halt is per directory (exit 2) and leaves CiReport.halt absent", async () => {
+  for (const reason of ["exit", "missing", "timeout", "overflow"] as const) {
+    const { r } = await report({
+      diff: [".ai/tasks/TK-1/plan.md"],
+      tree: { "TK-1": taskFiles(HEAD_STATUS, false) },
+      plan: planWith([{ id: "P1", key: "plan.criteria", status: "pass", detail: "" }, { id: "P2", key: "plan.lock", status: "halt", detail: "git" }], {}, reason),
+    });
+    assert.deepEqual(r.dirs[0].plan, { status: "halt", reason }, reason);
+    assert.equal(r.halt, undefined, reason);
+    assert.equal(r.outcome, "halt", reason);
+    assert.equal(ciExitCode(r), 2, reason);
+  }
+  const { r } = await report({
+    diff: [".ai/tasks/TK-1/plan.md"],
+    tree: { "TK-1": taskFiles(HEAD_STATUS, false) },
+    plan: planWith([{ id: "P1", key: "plan.criteria", status: "pass", detail: "" }, { id: "P2", key: "plan.lock", status: "halt", detail: "git" }], {}, "timeout"),
+  });
+  assert.equal(renderCi(r), "pipeline ci aaaaaaa: HALT (1 task dir(s))\nTK-1: A1 skip (status.json unchanged); check ok; plan halt (git timed out); debt skip");
+  assert.deepEqual(Object.keys(JSON.parse(JSON.stringify(r))), ["schema", "base", "outcome", "dirs"]);
 });
