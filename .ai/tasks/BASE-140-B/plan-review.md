@@ -189,3 +189,58 @@ Carried over from round 1 except for these rows:
 | L7 | Low | Files to touch `plan.md:332`; D7 `:200-202`; step 2 `:294` | The skill row's action is "coordinator item 1, 'What is enforced'", but D7 and step 2 also edit the state-machine table and coordinator item 4. The code review compares the change with this row | Widen the row to "state-machine row, coordinator items 1 and 4, 'What is enforced'" |
 
 ### Verdict: changes_requested
+
+## Plan review round 3
+
+- Reviewed: 2026-11-25T01:00:54Z
+- Plan commit: b5cb9787a65f95a6e2e18412aabfb840f33a1d40
+- Code read at: feat/BASE-140-B-ac-lint @ b5cb9787a65f95a6e2e18412aabfb840f33a1d40
+- Changed since round 2: `git diff e9f4f87 b5cb978 -- .ai/tasks/BASE-140-B/plan.md`. The changes: Goal P2 and the Goal paragraph; D2.2 (two cases only, plus the attestation in `Decision:`); D2.4 (`<p>` versus `<c>`); D2.5 (the reachability and blob calls, the gap when the old commit is unreachable, and the 40-hex rule for revisions); D6 (re-binding tests); D7 (doc **Plan review**, the transition rule, the skill row, item 4 and the L6 wording); the Kept list ("Locked plans"); Q2 (lock binding, git input); the Files to touch skill row; the H14 clarification; and Risks. AC1–AC12 are unchanged. Everything else is carried over from round 2
+- Reason: not applicable (new plan commit)
+
+Pre-flight: `state` `pending`, `plan_locked` `false`; branch contains the ticket id; `plan.md` clean and last committed at `b5cb978`, which differs from round 2's plan commit. `development` and `origin/development` are both at `7720031`. No `status.json` field and no `transitions[]` entry is written by this mode.
+
+### Earlier blocking findings
+
+| Id | Round | Fixed / Not fixed | `plan.md:line` |
+|---|---|---|---|
+| M1–M6 | 1 | Fixed in round 2; the revision leaves those passages unchanged | as given in round 2 |
+| M7 | 2 | Fixed. A re-binding is limited to a wrong note or the same content under a rewritten commit. The D-block's `Decision:` must contain `plan.md unchanged since plan review round <R>`, or P2 fails. When the old commit `<p>` is reachable, the `plan.md` blobs at `<p>` and `<c>` must match. When it is unreachable, the plan says the attestation stands alone. The L6 text and Goal P2 are qualified. Q2 says that `agent: "human"` is a self-declared field written by the coordinator session, and that visibility on the PR is the real control | `plan.md:12`, `:14`, `:131-134`, `:142`, `:144-150`, `:193-198`, `:207-208`, `:213`, `:217`, `:263`, `:277-283`, `:423`, `:449` |
+
+L7 (round 2, Low) fixed: `plan.md:350`.
+
+### Q1 — Where else each changed rule is stated
+
+Carried over from round 2, plus:
+
+| Changed rule | Other statements | Edit planned / kept with reason / missing |
+|---|---|---|
+| Re-binding only for unchanged content, with the attestation phrase in `Decision:` | Doc transition rules and **Plan review** (`docs/task-state-machine.md:18-29`, `:33`); skill state-machine row and item 4; skill "Locked plans" (`skill.md:83`); doc `decisions.md` format (`docs/task-state-machine.md:70-80`); supervisor K17/C15 | Edited for the doc and skill (`plan.md:207-208`, `:212`, `:214`). Kept for "Locked plans", with a reason that holds now that content is limited (`plan.md:263`). K17 only requires a non-empty `Decision:`, so the phrase does not conflict with it. The doc's `decisions.md` format section does not mention the phrase (L9) |
+| Plan immutability: P2 detects a committed change unless a human re-binding attests the same content | `skill.md:121` (L6 wording) | Edited and qualified (`plan.md:217`) |
+
+### Q2 — Guards and bypasses the change touches
+
+Carried over from round 2, with these rows replaced:
+
+| Guard or bypass | How the change touches it | Addressed at `plan.md:line` / missing |
+|---|---|---|
+| P2 binding and the re-binding entry | The content is mechanically compared while `<p>` is reachable. When `<p>` is unreachable (rebased away, or not fetched), the attestation alone decides. That is a remaining gap, stated honestly. Note that `rev-parse --verify` tests whether the object exists, so a local run (reflog, loose objects) may compare while CI cannot; the plan's "or not fetched" covers this | `plan.md:131-134`, `:144-147`, `:277-283` — stated |
+| Self-declared `agent: "human"` | Stated as a field check, not an identity check; the control is visibility on the PR plus K18 and C15 | `plan.md:282` — stated |
+| Git input | Two new calls pass `<p>` and `<c>` as revisions, validated against `^[0-9a-f]{40}$`, so they cannot be read as options; `<plan rel>` is the validated path | `plan.md:150`, `:293` — stated. A reachable `<p>` that lacks `plan.md` at that path makes the blob call exit non-zero. The plan does not say whether that fails or halts (L8) |
+
+### Plan checks
+
+| Check | Result | Basis |
+|---|---|---|
+| Every acceptance criterion is verifiable by QA with one inline command, no file written for QA, no network, credentials or merged state, and holds after a send-back | pass | AC1–AC12 are byte-identical to round 2 (`plan.md:367-389` after the renumbering), and the round-2 trace against D1 still applies. D1 did not change in this revision, so the plan still passes its own P1, and every criterion is runnable under `qa.md` "Commands" |
+| "Files to touch" lists `usage.jsonl`, plus the `check:package` step and `package-check.ts` when needed | pass | `plan.md:357`, `:359`, `:323`; the skill row now matches D7 (`:350`) |
+| The facts the plan states about the code hold at HEAD | pass | Carried over from round 2; no new code fact was added except `rev-parse --verify --quiet` behaviour, which holds |
+
+### Findings
+
+| Id | Severity | Where | Why it matters | Required plan change |
+|---|---|---|---|---|
+| L8 | Low | D2.5 `plan.md:144-148` | When `<p>` is reachable but has no `plan.md` at `<plan rel>`, the blob call exits non-zero. Under "a runner failure … halts" that is a halt (exit 2), but it is really a content mismatch | Say that a non-zero exit of either blob call fails `re-binding names different plan.md content` |
+| L9 | Low | D7 `plan.md:207-208` | The doc's `decisions.md` format section (`docs/task-state-machine.md:70-80`) is where a coordinator looks up how to write a block, and it will not mention the attestation phrase that P2 requires | Add one line there: a block covering a lock re-binding has `Decision:` containing `plan.md unchanged since plan review round <R>` |
+
+### Verdict: approved
