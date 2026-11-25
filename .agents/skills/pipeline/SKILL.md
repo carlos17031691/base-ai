@@ -29,7 +29,7 @@ Every task lives in `.ai/tasks/<ticket-id>/`; its state is in `status.json`. Sta
 | Transition | Owner | When / what is written |
 |---|---|---|
 | none → `pending` | planner | Task directory created from `templates/task/`; plan drafted; `assignee: "planner"` |
-| `pending` → `pending` (lock) | planner, or the coordinator for the human | The human approves the plan: `plan_locked: true` and a lock entry (`agent` `"planner"` or `"human"`, note saying `approved` or `locked`). The planner locks only on approval given to it directly; otherwise the coordinator records the human's approval as an `agent: "human"` entry |
+| `pending` → `pending` (lock) | planner, or the coordinator for the human | The human approves the plan: `plan_locked: true` and a lock entry (`agent` `"planner"` or `"human"`, note saying `approved` or `locked`). Only after the latest round of the reviewer's plan review (`plan-review.md`) is `approved` for the current, committed `plan.md`; the note adds `plan review round <N> approved, plan.md at <commit>`. The planner locks only on approval given to it directly; otherwise the coordinator records the human's approval as an `agent: "human"` entry |
 | `pending` → `in_progress` | implementer | Claims a locked plan; asserts `plan_locked`, never writes it |
 | `in_progress` → `completed` | implementer | Every file of its effective allow-list written; checklist populated |
 | `completed` → `completed` | reviewer, then qa | One entry per review round and per QA round, each naming the implementer completion it covers; no state change. A delta round (own-ticket Low fixes after an approved round) names the same completion as the approved round before it |
@@ -45,7 +45,7 @@ Every task lives in `.ai/tasks/<ticket-id>/`; its state is in `status.json`. Sta
 | Task state | Next |
 |---|---|
 | No task directory | planner |
-| `pending`, `plan_locked: false` | human: approve or revise the plan |
+| `pending`, `plan_locked: false` | human: once the plan's open questions are answered in it, the coordinator commits `plan.md` and invokes the reviewer in plan-review mode; then approve, or have the planner revise (a new plan-review round) |
 | `pending`, locked | implementer |
 | `in_progress` | implementer |
 | `blocked` | human |
@@ -63,9 +63,9 @@ Reading never implies writing. Each write list is closed; everything else is for
 
 | Role | Reads (read-only) | Writes |
 |---|---|---|
-| planner | `src/**`, `docs/**`, `templates/task/`, its task directory, `CLAUDE.md`, `AGENTS.md`, `.ai/rules.md` | Creates the task directory from `templates/task/`; `plan.md` only before the lock; `status.json`: initialization, and the lock on approval given to it directly |
+| planner | `src/**`, `docs/**`, `templates/task/`, its task directory, `CLAUDE.md`, `AGENTS.md`, `.ai/rules.md` | Creates the task directory from `templates/task/`; `plan.md` only before the lock; `status.json`: initialization, and the lock on approval given to it directly, after an approved plan review of the current plan |
 | implementer | its task's `status.json` and `plan.md`; `review-report.md` and `qa-report.md` on re-entry; `src/**`, `tests/**`, `docs/**`, `cli/**`, `templates/**`, `.ai/rules.md`, `.ai/skills/**`, `.claude/agents/**`, `CLAUDE.md`, `AGENTS.md`; every file the plan names | Its effective allow-list: the plan's "Files to touch" minus its forbidden list. `status.json`: `state`, `assignee`, `updated_at`, `blocker`, `checklist.tests_pass`, `lint_pass`, `types_pass`, appended entries; never `plan_locked`. Forbidden whatever the plan says: `plan.md`, every report, `.ai/rules.md`, `.ai/skills/**`, `.github/**`, `cli/**`, `templates/**`, files at the root of `src/`, and `.claude/agents/**` except a definition the plan lists as its deliverable |
-| reviewer | The whole affected repository, git history and diffs | `review-report.md` (round 1, then appended rounds, each with its Security section); `status.json`: `checklist.review_verdict`, `updated_at`, one appended entry per round |
+| reviewer | The whole affected repository, git history and diffs | `review-report.md` (round 1, then appended rounds, each with its Security section); `status.json`: `checklist.review_verdict`, `updated_at`, one appended entry per round. Before the lock, in plan-review mode only: `plan-review.md` (appended rounds), and no `status.json` field |
 | qa | The whole affected repository except secret files; scratch task directories the invocation names; runs the project's checks | `qa-report.md` (round 1, then appended rounds); `status.json`: `checklist.qa_verdict`, `updated_at`, one appended entry per round. Files the checks write to git-ignored paths, and the log a check command is redirected to under the task's `evidence/`, are tolerated; QA writes nothing else itself |
 | supervisor | The task's artifacts, `decisions.md` included; `.ai/rules.md`, `.ai/skills/**`, `docs/**`, `.claude/agents/**`; the output of `pipeline check --json` and `pipeline debt --json` from the local CLI (it halts when they are missing); read-only `gh` to view issue text for steering | `status.json` only: `state` `completed` → `validated`, `updated_at`, one appended entry, with one `Edit`. It never creates a file |
 | improvement | The whole repository except secret files; other task directories as recurrence evidence; read-only `gh` | `improvement-report.md` only, with one `Edit`, only when unfilled; no `status.json` field. Proposals are text; it never applies them |
@@ -89,7 +89,7 @@ The coordinator is a session acting for the human. It relays, records and runs w
 
 The coordinator:
 
-1. Relays the human's plan approval. When the approval does not reach the planner directly, it sets `plan_locked: true` and appends the lock entry as `agent: "human"`, with a note saying who approved, when, and that the coordinator applied it.
+1. Orders the plan review and relays the human's plan approval. After the human's answers to the plan's open questions are in `plan.md`, it commits `plan.md` and invokes the reviewer in plan-review mode (`reviewer/plan-review.md`); any later change to `plan.md` needs a new round. When the approval does not reach the planner directly, it locks only when the latest plan-review round is `approved`, `git log -1 --format=%H -- <plan>` prints that round's plan commit and `git status --porcelain -- <plan>` prints nothing. It then sets `plan_locked: true` and appends the lock entry as `agent: "human"`, with a note saying who approved, when, that the coordinator applied it, and `plan review round <N> approved, plan.md at <commit>`. Otherwise it locks nothing and says a plan-review round of the current plan is needed. Task directories locked before BASE-140-C have no `plan-review.md` and are not backfilled.
 2. Relays send-backs and blocker clearances to the implementer as explicit instructions naming the human decision.
 3. Records every post-lock human decision in `decisions.md`. The supervisor refuses while any `agent: "human"` entry after the lock, or any re-entry not caused by a failing review or QA round, is not covered by a block.
 4. Writes the human's `status.json` changes, each with `updated_at` and an appended `agent: "human"` entry, and no other `status.json` change: the lock (`plan_locked: true`); a `blocked` reset (`state` back to the previous state, `blocker: null`); a validation withdrawal (`state: "completed"`); and a QA rounds reset (`from` and `to` both the current state, a note starting `qa rounds reset:`, and no field besides `updated_at`; see `qa.md`).
@@ -101,7 +101,7 @@ The coordinator:
 10. Before QA, creates `.ai/tasks/<ticket-id>/evidence/`: QA keeps its check logs there and cannot create it. In base-ai itself, builds the CLI (`cli/dist/index.js`) before the supervisor runs.
 11. Fixes the ticket's own Low findings after an approved review round, on the human's instruction, with a delta round instead of a new implementer completion: it edits only files in "Files to touch", commits with the ticket id, and invokes the reviewer in delta mode naming the Low ids it fixed (`reviewer/re-review.md`). There is no implementer re-entry, no `status.json` change of its own and no `decisions.md` block. It runs the delta before QA where possible, so QA runs once; a QA round recorded before the delta no longer counts. A `changes_requested` delta goes back to the ordinary send-back. Fixed Lows still need their `To register` keys (K16).
 
-The coordinator never writes a report, a verdict field, an agent's transition or a PR's security audit (it quotes the reviewer's). It never edits `plan.md` after the lock, decides for the human, runs an agent's gate by hand, sets `validated`, or approves a PR. The human approves plans, decides every post-lock question, and approves and merges the PR.
+The coordinator never writes a report (`plan-review.md` included), a verdict field, an agent's transition or a PR's security audit (it quotes the reviewer's). It never edits `plan.md` after the lock, decides for the human, runs an agent's gate by hand, sets `validated`, or approves a PR. The human approves plans, decides every post-lock question, and approves and merges the PR.
 
 ## Finding raised after validation
 
@@ -113,12 +113,12 @@ The coordinator never writes a report, a verdict field, an agent's transition or
 ## What is enforced, and how
 
 - **Mechanical:** each definition's `tools:` frontmatter (the supervisor and the improvement agent have no `Write`, so they cannot create files); `.githooks/` for branch and ticket id, only in a repository where `base-ai init`, `service new` or `sync` installed them and `core.hooksPath` points to them (`base-ai doctor` checks this in every service, and at the root only when `.githooks/` exists); `base-ai doctor` in CI for generated files out of sync.
-- **By instruction only:** write lists, plan immutability, state ownership and command lists. Nothing mechanical stops a forbidden write today.
+- **By instruction only:** write lists, plan immutability, the plan-review gate at the lock (`pipeline check` does not read `plan-review.md`), state ownership and command lists. Nothing mechanical stops a forbidden write today.
 - **So enforcement is by refusal.** An agent, or a session following this skill, that is asked to do something this protocol forbids its role refuses, writes nothing and escalates to the human. That covers editing a locked plan, setting a state or verdict it does not own, writing outside its list, and validating its own work.
 
 ## Evidence and git
 
-From BASE-071-P3 on, a task's `status.json`, `plan.md`, `decisions.md`, review, QA and improvement reports and `usage.jsonl` are versioned and reach the PR with the branch; `evidence/` stays local. Agents never commit: the coordinator commits the task files with each step's commit and once more after validation, and CI (`base-ai pipeline ci`) checks every changed task directory, `transitions[]` append-only included. Scratch copies for dry runs are named `<name>.scratch` and are never committed. The review and QA reports are still published on the PR. The PR's "Security audit" quotes the latest review round's Security section, unchanged, naming the round.
+From BASE-071-P3 on, a task's `status.json`, `plan.md`, `decisions.md`, plan review, review, QA and improvement reports and `usage.jsonl` are versioned and reach the PR with the branch; `evidence/` stays local. Agents never commit: the coordinator commits the task files with each step's commit and once more after validation, and CI (`base-ai pipeline ci`) checks every changed task directory, `transitions[]` append-only included. Scratch copies for dry runs are named `<name>.scratch` and are never committed. The review and QA reports are still published on the PR. The PR's "Security audit" quotes the latest review round's Security section, unchanged, naming the round.
 
 ## Changing the protocol
 

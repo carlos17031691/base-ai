@@ -13,7 +13,7 @@ Verify each gate before moving on. Owners are pipeline roles (agents by name in 
 
 | Gate (phase) | Owner | Task state |
 |---|---|---|
-| 1 Ticket & plan (Understand & trace) | planner drafts; human approves | none → `pending`; approval locks the plan (Gate 1 approval) |
+| 1 Ticket & plan (Understand & trace) | planner drafts; reviewer plan-reviews; human approves | none → `pending`; approval locks the plan (Gate 1 approval) |
 | 2 Branch & design (Branch & design) | human branches; plan decides ADR/RFC | `pending`, before the claim |
 | 3 Implement (Implement & test) | implementer: plan's "Files to touch"; human/coordinator: its own table | `pending` → `in_progress` |
 | 4 Verify (Implement & test) | implementer runs checks, fills checklist | `in_progress` → `completed` |
@@ -22,7 +22,7 @@ Verify each gate before moving on. Owners are pipeline roles (agents by name in 
 
 Blockers, failing verdicts, send-backs, `improvement` and the next actor: `pipeline` skill ("Escalation", "Who acts next").
 
-1. **Gate 1 — Problem, requirements & ticket traceability:** scope (root vs. `src/<name>` repo); Story/Epic/Task ID (e.g. `PROJ-123`, `CU-86a1b2`, `#45`); human approval of plan and acceptance criteria **before** modifying repository files, then `plan.md` is immutable ("Locked plans"); requirements, non-functional constraints and criteria unambiguous and verifiable by QA.
+1. **Gate 1 — Problem, requirements & ticket traceability:** scope (root vs. `src/<name>` repo); Story/Epic/Task ID (e.g. `PROJ-123`, `CU-86a1b2`, `#45`); an approved plan review (reviewer, `plan-review.md`) of the current plan, then human approval of plan and acceptance criteria **before** modifying repository files, then `plan.md` is immutable ("Locked plans"); requirements, non-functional constraints and criteria unambiguous and verifiable by QA.
 2. **Gate 2 — Working branch & architecture design:** branch from `development` referencing the ticket (`git checkout -b feat/PROJ-123-slug development`); never work on `main`, `master` or `development`. RFC (`rfc`) for cross-service or high-impact changes, ADR (`adr`) for durable decisions; boundaries, contracts and failure modes (`architecture`, `security`).
 3. **Gate 3 — Implementation & clean code:** small cohesive changes (SOLID, KISS, YAGNI, service conventions); domain isolated from infrastructure; explicit types and errors; zero hardcoded secrets; nothing outside the locked plan.
 4. **Gate 4 — Automated verification:** unit tests (domain, edge cases); integration/contract tests (adapters, boundaries); lint, typecheck and tests pass deterministically; dependency audit green (no High/Critical advisory in production dependencies; `security` skill) (`base-ai doctor` green when `.ai/` changes).

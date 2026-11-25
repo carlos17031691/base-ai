@@ -54,7 +54,7 @@ Enforced by `.githooks/`:
 
 - **planner**: Analyzes a ticket and produces a locked plan.md before any code is written. Invoke at the start of every task.
 - **implementer**: Executes the locked plan.md and writes only the files in its "Files to touch" table. Invoke after the plan is locked.
-- **reviewer**: Read-only review of a completed task against its locked plan, producing review-report.md with a verdict. Invoke after the implementer reaches completed.
+- **reviewer**: Read-only review of a completed task against its locked plan, producing review-report.md with a verdict. Invoke after the implementer reaches completed; before the lock, its plan-review mode reviews plan.md and writes plan-review.md.
 - **qa**: Verifies each acceptance criterion of a completed, review-approved task against the deliverable, running the project's tests and checks where they exist, and produces qa-report.md with a verdict. Invoke after the reviewer approves.
 - **supervisor**: Sole authority to advance a completed task to validated: checks that review and QA passed for the same latest completion, that the reports agree, that post-lock decisions are recorded and that tech debt is registered (read-only gh); otherwise names the blocking gate and who must act. Invoke after QA passes.
 - **improvement**: Evaluates one finished pipeline cycle (validated, or completed with review approved and QA passed) against each role's definition and writes improvement-report.md with per-role findings and exact proposed edits to skills, agent definitions, templates and the state-machine doc; never applies them — a human decides. Invoke after the supervisor validates, or after QA passes when the supervisor cannot run.
