@@ -244,3 +244,54 @@ Carried over from round 2, with these rows replaced:
 | L9 | Low | D7 `plan.md:207-208` | The doc's `decisions.md` format section (`docs/task-state-machine.md:70-80`) is where a coordinator looks up how to write a block, and it will not mention the attestation phrase that P2 requires | Add one line there: a block covering a lock re-binding has `Decision:` containing `plan.md unchanged since plan review round <R>` |
 
 ### Verdict: approved
+
+## Plan review round 4
+
+- Reviewed: 2026-11-25T01:05:04Z
+- Plan commit: 75fdbd395b794044af78d58a3336c5f5dbe16bed
+- Code read at: feat/BASE-140-B-ac-lint @ 75fdbd395b794044af78d58a3336c5f5dbe16bed
+- Changed since round 3: `git diff b5cb978 75fdbd3 -- .ai/tasks/BASE-140-B/plan.md`, five hunks. D2.5 now says that a non-zero exit of the `<p>:<plan rel>` lookup is a fail, not a halt, and names both exceptions to H7. D6 gains a re-binding test for that case. D7 gains a line for the `decisions.md` format section (`:70-80`). Q1 "Edited" and the `docs/task-state-machine.md` row of "Files to touch" name that section. Nothing else changed; everything else is carried over from round 3
+- Reason: not applicable (new plan commit)
+
+Pre-flight: `state` `pending`, `plan_locked` `false`; branch contains the ticket id; `plan.md` clean and last committed at `75fdbd3`, which differs from round 3's plan commit. `development` and `origin/development` are both at `7720031`. No `status.json` field and no `transitions[]` entry is written by this mode.
+
+### Earlier blocking findings
+
+| Id | Round | Fixed / Not fixed | `plan.md:line` |
+|---|---|---|---|
+| M1–M7 | 1–2 | Fixed (rounds 2 and 3); the delta does not touch those passages | as given in rounds 2 and 3 |
+
+Round-3 Lows: L8 fixed (`plan.md:146-147`, `:149`, test `:200`); L9 fixed (`plan.md:210`, `:245`, `:356`).
+
+### Q1 — Where else each changed rule is stated
+
+| Changed rule | Other statements | Edit planned / kept with reason / missing |
+|---|---|---|
+| The attestation phrase is now also stated in the `decisions.md` format section | Doc transition rules, **Plan check**, skill row and item 4 (all planned in round 3); K17's format (only a non-empty `Decision:`) | Edit planned (`plan.md:210`, `:245`). K17 is kept, and the phrase does not conflict with its grammar |
+| A missing `plan.md` at a reachable `<p>` is a fail, not a halt | H7 ("halts when git cannot run") | Stated as the second named exception (`plan.md:149`). It does not contradict H7: git ran, and the content differs |
+
+Rest carried over from round 3.
+
+### Q2 — Guards and bypasses the change touches
+
+| Guard or bypass | How the change touches it | Addressed at `plan.md:line` / missing |
+|---|---|---|
+| The P2 halt path (H7) | One more non-zero exit becomes a fail. This is stricter, not weaker: a re-binding that names content absent at the reviewed commit fails instead of halting. The `<c>:<plan rel>` lookup still halts on a non-zero exit, and that cannot happen once the `log -1` call has printed `<c>` for that path | `plan.md:146-149` — stated |
+
+Rest carried over from round 3.
+
+### Plan checks
+
+| Check | Result | Basis |
+|---|---|---|
+| Every acceptance criterion is verifiable by QA with one inline command, no file written for QA, no network, credentials or merged state, and holds after a send-back | pass | The delta touches no criterion: no `AC` line in the diff, and D1 is unchanged. The round-2 trace still applies, so the plan passes its own P1 and every criterion is runnable under `qa.md` "Commands" |
+| "Files to touch" lists `usage.jsonl`, plus the `check:package` step and `package-check.ts` when needed | pass | Carried over from round 3; the doc row is widened to the format section (`plan.md:356`) |
+| The facts the plan states about the code hold at HEAD | pass | Carried over; the delta adds the doc's `decisions.md` format section at `docs/task-state-machine.md:70-80`, which holds |
+
+### Findings
+
+| Id | Severity | Where | Why it matters | Required plan change |
+|---|---|---|---|---|
+| none | | | The delta resolves L8 and L9 and opens no new rule-statement gap or guard weakening | |
+
+### Verdict: approved
