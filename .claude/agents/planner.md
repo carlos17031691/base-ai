@@ -45,11 +45,7 @@ If `.ai/tasks/<ticket-id>/` does not exist:
 ```bash
 TICKET=<ticket-id>
 mkdir -p .ai/tasks/$TICKET
-cp templates/task/status.json .ai/tasks/$TICKET/
-cp templates/task/plan.md .ai/tasks/$TICKET/
-cp templates/task/review-report.md .ai/tasks/$TICKET/
-cp templates/task/qa-report.md .ai/tasks/$TICKET/
-cp templates/task/improvement-report.md .ai/tasks/$TICKET/
+cp templates/task/{status.json,plan.md,review-report.md,qa-report.md,improvement-report.md} .ai/tasks/$TICKET/
 ```
 
 Then set in `status.json`:
@@ -83,7 +79,7 @@ Fill `templates/task/plan.md` with:
 - **Goal:** one paragraph — what this change achieves and why
 - **Scope:** explicit in-scope and out-of-scope items (YAGNI — no future-proofing)
 - **Steps:** ordered, numbered, each referencing the responsible agent role
-- **Files to touch:** every file the implementer may create or modify — anything not listed here requires human approval. List `.ai/tasks/<ticket-id>/usage.jsonl` by default, and add a coordinator step that runs `npm run check:package` when the plan changes `.ai/rules.md`, `.ai/skills/**`, `.claude/agents/**` or `docs/task-state-machine.md` (list `cli/src/package-check.ts` if a packaged doc newly names a run-time path)
+- **Files to touch:** every file the implementer may create or modify — anything not listed here requires human approval. List `.ai/tasks/<ticket-id>/usage.jsonl` by default, and add a coordinator step that runs `npm run check:package` when the plan changes `.ai/rules.md`, `.ai/skills/**`, `.claude/agents/**` or `docs/task-state-machine.md` (list `cli/src/package-check.ts` if a packaged doc newly names a run-time path). Before the plan puts a path `check:package` checks in a packaged doc, read `cli/src/shipped.ts` (`isShippedPath`, `SHIPPED_DOCS`) and say in the plan whether that path ships; a path that does not ship is written in plain words
 - **Acceptance criteria:** verbatim from the ticket, in Gherkin if possible. Before Step 4, check that each one:
   - can be met within the plan's scope and "Files to touch", and still after a send-back;
   - agrees with every other section of the plan and with the known state of what it checks;
