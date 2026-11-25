@@ -130,3 +130,100 @@ Reviewed the whole change set against the locked plan (plan review round 4, `pla
 - [x] Domain logic isolated from infrastructure (P1 is pure; P2 uses the injected `Runner`)
 - [x] All acceptance criteria from plan.md are addressable by the implementation
 - [x] No files touched outside the plan.md "Files to touch" list
+
+## Round 2 re-review
+
+- Reviewed at: 2026-11-25T01:43:53Z
+- Implementer completion reviewed: `in_progress → completed` at 2026-11-25T01:41:52Z (re-entry at 2026-11-25T01:41:31Z, covered by `decisions.md` D1)
+- Branch: `feat/BASE-140-B-ac-lint`; base ref: `development` (`7720031b6614d21722b92a2336ab96bddf25af94`); merge-base: `7720031b6614d21722b92a2336ab96bddf25af94`
+- Commits under review: the round 1 list, plus:
+  - cedb158 fix(BASE-140-B): review round 1 findings (M1, L1-L4) and decision D1
+  - befc2af chore(BASE-140-B): review round 1 (changes_requested)
+- Uncommitted changes: none. Untracked files: none.
+- Base choice: none needed (`origin/development` and `development` both at `7720031b6614d21722b92a2336ab96bddf25af94`).
+- This round's verdict is the authoritative one; the `## Verdict` line at the top is the round 1 verdict.
+- Integrity: `plan.md` is still at its round 4 plan commit (`git log -1` prints `75fdbd395b794044af78d58a3336c5f5dbe16bed`), and the tree is clean. `.ai/tasks/BASE-140-B/` is versioned (`.gitignore:4-16`); only `evidence/` is git-ignored.
+
+### Status of earlier findings
+
+| # | Status | Evidence |
+|---|---|---|
+| M1 (Medium) | Fixed | Both trigger lists now read `status.json`, `plan.md`, `plan-review.md` or `decisions.md` (`docs/task-state-machine.md:130`, `README.md:192`), matching `PLAN_FILES` (`pipeline-ci.ts:25`). The README exit-2 list now includes "a per-directory plan halt" (`README.md:192`). |
+| L1 (Low) | Fixed | When there is a `NAME=value` prefix and the blank-split head is unknown, the head is re-read from the tokenized words (`pipeline-plan.ts:338-350`). `TOKEN="a b" gh …` now fails for credentials, and `TOKEN=$(cat f) gh …` fails as an operator. Test: `pipeline-plan.test.ts:260-268`. One new false-positive class: see L6. |
+| L2 (Low) | Fixed | `planner.md:92`: "In base-ai, run `node cli/dist/index.js pipeline plan …`". Size 6,916 bytes, within 7,000. |
+| L3 (Low) | Fixed | `README.md:188`: "Budgets: the current values are in `.ai/config.yaml`". The AC10 phrase is still present. |
+| L4 (Low) | Partly fixed | Fixed in `docs/task-state-machine.md:128`, `:130` and `README.md:192`. The `cli/src/pipeline-ci.ts:5` header comment still says "its two fixed git calls per directory": see L5. |
+
+### Findings
+
+#### High
+
+| # | File:line | Finding | Required fix |
+|---|---|---|---|
+| — | — | none | — |
+
+#### Medium
+
+| # | File:line | Finding | Required fix |
+|---|---|---|---|
+| — | — | none | — |
+
+#### Low
+
+| # | File:line | Suggestion | Tech-debt ticket |
+|---|---|---|---|
+| L5 | `cli/src/pipeline-ci.ts:5` | This is what remains of round 1 L4. The header comment still gives the plan check "its two fixed git calls per directory", while the docs now add "up to three `rev-parse` calls for a re-binding that names a rewritten commit" (`pipeline-plan.ts:640-648`). Fix: add the same clause to the comment. The file is coordinator-owned. | **To register** — title: "pipeline-ci.ts header: plan check git calls omit the re-binding rev-parse calls". Description: as in this row; reviewer BASE-140-B round 2. Grouping: #106, with L6, or fix both in a delta round. |
+| L6 | `cli/src/pipeline-plan.ts:345-349` | The L1 fix makes some literals fail, which D1.3 rules out ("This step never fails"; a head outside the vocabulary makes the candidate a literal, M4). When a span starts with a `NAME=value` word, its next blank-split word is unknown, and the rest does not tokenize, the span now fails with the tokenizer reason. `D1` records that intent for substitutions only. The trigger is wider: any later `(`, `)`, `;`, `&`, `\|`, `>`, a stray `<` or an apostrophe counts, as in `` `mode=fast (default)` `` (pipe, chain or redirect) or `` `x=1 isn't` `` (unparsable command). A planner then has to reword a span that is plainly a value. The cost is low: the plan accepts that a false positive is fixed by rewording, and no hidden head gets through. Fix: fail on a tokenizer error only when the error falls inside the leading `NAME=value` words, which is the substitution case. Otherwise keep the span a literal. Add the two examples above to the M4 literal test. | **To register** — title: "pipeline plan P1: a NAME=value span with an operator or apostrophe after an unknown word now fails". Description: as in this row; reviewer BASE-140-B round 2. Grouping: #106, one issue with L5, or fix both in a delta round. |
+
+**Other ways to hide a head, after the L1 fix.** None found:
+- A quoted or escaped prefix value (`TOKEN=a\ b gh`, `PATH="a b":$PATH …`) is now judged by the tokenized head.
+- A blank-split known head that sits inside a quoted prefix (`PATH="a ls b:$PATH" rm x`) is still judged on the tokenized words, so the real head fails (`pipeline-plan.ts:351-366`).
+- A quoted head with no prefix (`"gh" issue`) is still a literal. That is the H5 class accepted in round 1, unchanged.
+
+**Docs consistency.** The four statements of the plan-check trigger agree with each other and with the code: `docs/task-state-machine.md:130`, `README.md:192`, `index.ts:59-60` and `ci.yml:78-79`. So do the two halt lists and the git-call counts, except for L5.
+
+### Scope check
+
+| Changed file (since round 1) | Where the plan lists it | Result |
+|---|---|---|
+| `cli/src/pipeline-plan.ts`, `cli/src/test/pipeline-plan.test.ts` | Files to touch | In scope |
+| `docs/task-state-machine.md`, `README.md`, `.claude/agents/planner.md` | Files to touch | In scope |
+| `.ai/tasks/BASE-140-B/decisions.md` (A), `status.json`, `usage.jsonl`, `review-report.md` | Files to touch | In scope |
+
+The whole change set against the merge-base is the round 1 set plus `.ai/tasks/BASE-140-B/decisions.md`, and every path is in "Files to touch". The `status.json` changes stay within the permitted fields.
+
+### Acceptance criteria
+
+| Criterion | Evidence (`file:line`) | Result |
+|---|---|---|
+| AC1 — Tests and coverage exit 0 with every `R2` test passing | The R2 tests are as in round 1, plus `pipeline-plan.test.ts:260`. The coordinator reports 467 passing tests, and the implementer sets `tests_pass: true`. Neither claim was verified; execution is QA's | Met (static; execution not verified) |
+| AC2 — `grep -c` prints 3, with the three reasons | `pipeline-plan.test.ts:129`, `:168`, `:189`. The new title at `:260` ("fails a failing head") does not match the pattern | Met |
+| AC3 — BASE-140-B passes P1 and P2 | Unchanged lock (`status.json:21`) and round 4 (`plan-review.md:248-297`). `plan.md` is last committed at `75fdbd3` and is clean. The re-entry and the new completion are not binding entries (their notes carry no plan-review clause). The coordinator reports a pass after the rebuild, which was not verified | Met (static; execution not verified) |
+| AC4 — BASE-140-C is exempt on both checks | `pipeline-plan.ts:59`, `:62`; the exemption code is unchanged | Met (static; execution not verified) |
+| AC5 — lock, ci and cli tests by title; mirror count 1 | As in round 1 (titles unchanged; line numbers +10 after `:258` in `pipeline-plan.test.ts`); the mirror title appears once | Met |
+| AC6 — command wiring; `PRE_GATE_TASKS`; `PLAN_GATE_SINCE` count 0 | `index.ts:54`, `:372`, `:384`; `pipeline-ci.ts:4`; `pipeline-plan.ts:28` | Met |
+| AC7 — planner lines; size | `planner.md:34`, `:92`; 6,916 bytes ≤ 7,000; `config.yaml:16` `planner: 1750` | Met |
+| AC8 — docs paragraphs and strings | `docs/task-state-machine.md:28`, `:34`, `:128`, `:130`, `:132`; the old sentence count is 0 | Met |
+| AC9 — skill, exports, template, `ci.yml` | Unchanged since round 1 (`skill.md:47`, `:98`, `:101`, `:121`; count 2 in both the skill and `.claude/commands/pipeline.md`; `templates/task/plan.md:48`; `ci.yml:78`) | Met |
+| AC10 — README lines; `6,250 for` count 0; pointer | `README.md:171`, `:191`, `:192`; `:188` ("the current values are in") | Met |
+| AC11 — protected paths unchanged | The `git diff --name-only <base> -- <15 paths>` prints nothing | Met |
+| AC12 — scope | Scope check above | Met |
+
+### Security
+
+- Trust boundary touched: yes — processes, external input
+- Method: STRIDE
+- Findings: L6
+
+| Category | Result | Basis |
+|---|---|---|
+| Spoofing | none | No change since round 1. The self-declared `agent: "human"` on a re-binding is accepted by H14 (`pipeline-plan.ts:599`). |
+| Tampering | L6 | The L1 fix closes a P1 false negative (`pipeline-plan.ts:338-350`), and no new way to hide a head was found (see above). It opens a false-positive class (L6), which fails safe. The exemption and re-binding logic is unchanged. |
+| Repudiation | none | Append-only `transitions[]`. The re-entry at 01:41:31Z is covered by `decisions.md` D1 (K18). `pipeline plan` writes nothing. |
+| Information disclosure | none | The new paths return only `{ kind }` or a fixed `REASON` value (`pipeline-plan.ts:345-349`). The output paths are unchanged (`:701-713`). |
+| Denial of service | none | The fix adds no extra scan: one `tokenize` call, now hoisted, plus a linear `find` over the words (`pipeline-plan.ts:342`, `:348`). The bounds are as in round 1. |
+| Elevation of privilege | none | The git call forms, argv-only use and validation are unchanged (`pipeline-plan.ts:621-649`). No shell is used. |
+
+### Verdict (round 2 — authoritative): approved
+
+Low findings L5 and L6 must be registered as tech debt before human approval, or fixed in a delta round.
