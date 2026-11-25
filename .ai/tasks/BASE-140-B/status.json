@@ -1,10 +1,10 @@
 {
   "ticket_id": "BASE-140-B",
-  "state": "completed",
+  "state": "validated",
   "plan_locked": true,
   "assignee": null,
   "created_at": "2026-11-25T00:25:54Z",
-  "updated_at": "2026-11-25T01:52:32Z",
+  "updated_at": "2026-11-25T02:04:24Z",
   "transitions": [
     {
       "from": null,
@@ -75,6 +75,13 @@
       "agent": "qa",
       "timestamp": "2026-11-25T01:52:32Z",
       "note": "qa round 1: pass; criteria: pass 12, pass with caveat 0, fail 0, not verified 0; checks: passed 5, failed 0, no applicable check 1, forbidden to run 0; verified implementer completion 2026-11-25T01:41:52Z"
+    },
+    {
+      "from": "completed",
+      "to": "validated",
+      "agent": "supervisor",
+      "timestamp": "2026-11-25T02:04:24Z",
+      "note": "validated: review round 3 approved (entry 2026-11-25T01:48:55Z); qa round 1 pass (entry 2026-11-25T01:52:32Z); verified implementer completion 2026-11-25T01:41:52Z; decisions: none; registered: 6 items in issues #106; HEAD at qa round eba27543b30562a344d0e87e71280127b22078cd, now 8d1944cecdb5f2c1fada3580dc16bc6df91618d4"
     }
   ],
   "checklist": {
