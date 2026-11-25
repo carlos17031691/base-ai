@@ -191,3 +191,61 @@ The resulting line reads correctly. "skipping" still governs the original three 
 | L7 | Low | `plan.md:62` (D3 **Never for**), `:203`; `cli/src/pipeline-ci.ts:154`, `:157`, `:295`; `docs/task-state-machine.md:130` | The runbook equates "a runner or checkout failure" with "a G1–G4 git halt" and says to re-run it until it passes. But the cap halt renders as `halt: G2 …` and the `sha` halt as `G1`, and neither is cured by a re-run; `docs/task-state-machine.md:130` lists "G1–G4 failure" and "the 20-directory cap" as separate halts. On a PR to `development` with more than 20 task directories, a reader of the runbook gets only "re-run until it passes", which never happens (the real fix is splitting the PR). No bypass is opened: the line still forbids one | Narrow the parenthetical, e.g. "(a G1–G4 git halt other than the cap)", or name the runner reasons (`command not found`, `non-zero exit`, `timed out`, `output over the cap`); optionally add that a cap halt on a PR to `development` is fixed by splitting the PR. If the AC5 phrase is kept, no criterion changes |
 
 ### Verdict: approved
+
+## Plan review round 3
+
+- Reviewed: 2026-11-25T13:54:58Z
+- Plan commit: 9762cbac63d89b06c192eb3bf361119833343739
+- Code read at: feat/BASE-140-D-task-dirs-required @ 9762cbac63d89b06c192eb3bf361119833343739
+- Changed since round 2: `git diff b831705 9762cba -- .ai/tasks/BASE-140-D/plan.md` (+7/-4): D3 **Never for** parenthetical narrowed to the four runner reasons and one sentence added on how a cap halt on a PR to `development` clears (`plan.md:62`); a planner note under the D3 block (`:65`); one "Other statements" entry (`:96`); one sentence added to the cap Guards line (`:104`); H8 and the G1–G4 Risk line reworded (`:205`, `:206`). `git diff --stat b831705 9762cba` touches only `.ai/tasks/BASE-140-D/` (`plan.md`, `plan-review.md`, `usage.jsonl`), so every code, doc and skill line verified in rounds 1 and 2 is unchanged at HEAD.
+- Reason: n/a (new plan commit)
+
+H1–H8 are treated as human decisions (`plan.md:198-205`), not reopened. Each is intact: H1–H7 are textually unchanged; H8's decision sentence ("is re-run until it passes. Only the existing emergency-hotfix case can justify merging past it") is unchanged, only its parenthetical is narrowed, and the added sentence records why. Everything not listed as changed above is carried over from round 2 (and through it from round 1).
+
+### Earlier blocking findings
+
+| Id | Round | Fixed / Not fixed | `plan.md:line` |
+|---|---|---|---|
+| M1 | 1 | Fixed (confirmed in round 2); the revision leaves the **Justified only for** line untouched | `plan.md:61` |
+
+Round-2 Low (advice, for the record): L7 addressed. The parenthetical now names the runner reasons, verbatim from `HALT_TEXT` (`cli/src/pipeline-ci.ts:249-252`), so the re-run clause no longer covers the `sha` (G1) and cap (G2) halts; the cap's own clearing is stated (`plan.md:62`, `:104`, `:206`); `docs/task-state-machine.md:130` and `HALT_TEXT` are named as kept (`:96`).
+
+### Q1 — Where else each changed rule is stated
+
+Searched the plan for `re-run|rerun`, and the repository docs for `G1` and the cap (`docs/task-state-machine.md:130`, `README.md:192`, runbook).
+
+| Changed rule | Other statements | Edit planned / kept with reason / missing |
+|---|---|---|
+| "Runner or checkout failure" = a G1–G4 git halt for the four `RunFailure` reasons (H8, narrowed) | `plan.md:102` (Guards: "H8: a runner or checkout failure, which is re-run"), `:205`, `:206` | Consistent: `:205` and `:206` carry the same parenthetical; `:102` has none and stays true |
+| same | `cli/src/pipeline-ci.ts:248-255` (`HALT_TEXT`), `cli/src/pipeline-registration.ts:12` (`RunFailure`), `docs/task-state-machine.md:130` | Kept, still true (`plan.md:96`) |
+| same | Per-directory `plan halt (git …)` and `debt halt (T… …)` carry the same `RunFailure` reasons (`cli/src/pipeline-ci.ts:50`, `:269`, `:277`) | Still never a bypass reason (they are `pipeline plan` and "any reason other than the release-PR cap halt"), but not named as runner failures, so the runbook gives them no re-run guidance; see L8 |
+| A re-run does not clear the cap halt; on a PR to `development` it clears at ≤ 20 directories | `docs/task-state-machine.md:130`, `README.md:192` ("More than 20 changed directories halts") | Kept, consistent; the D3 new bullet (`plan.md:57`) and **Justified only for** (`:61`) are consistent with it |
+
+On the flagged sentence ("A re-run does not clear the 20-directory cap halt: on a PR to `development` it clears once the PR changes at most 20 task directories, for example after splitting it"): it is a code fact, not a new rule. The job passes `--base "$BASE_SHA"` from `github.event.pull_request.base.sha` (`.github/workflows/ci.yml:103-105`), and a re-run replays the same event, so the merge-base diff and the count are unchanged; the halt fires only on `groups.size > MAX_TASK_DIRS` (`cli/src/pipeline-ci.ts:156-157`), so at most 20 directories means no cap halt. It grants nothing: a cap halt on a PR to `development` remains under "any reason other than the release-PR cap halt above", i.e. never a bypass reason, and "for example" keeps splitting as one way among others (merging `development` into the branch can also lower the count).
+
+On the runner reasons named from the code: the four strings `command not found`, `non-zero exit`, `timed out`, `output over the cap` are `HALT_TEXT.missing/exit/timeout/overflow` verbatim, and a G1–G4 `RunFailure` renders as `halt: G<n> <text>` (`:149`, `:295`), so an admin can match the rendered line to the parenthetical. The note at `plan.md:65` is accurate.
+
+### Q2 — Guards and bypasses the change touches
+
+| Guard or bypass | How the change touches it | Addressed at `plan.md:line` / missing |
+|---|---|---|
+| Admin bypass, "Never for" | Unchanged in reach: the narrowing moves the `sha` and cap halts out of the re-run clause, not out of "never a bypass reason" (they remain "any reason other than the release-PR cap halt above"). No weakening | `plan.md:62`, `:65` |
+| Admin bypass, release-PR cap case | Untouched | `plan.md:61` |
+| 20-directory cap on a PR to `development` | Now has correct guidance (reduce the directory count) instead of "re-run until it passes"; still blocks, still never a bypass | `plan.md:62`, `:104`, `:206` |
+| Everything else in rounds 1–2 Q2 | Unchanged by the revision | Carried over |
+
+### Plan checks
+
+| Check | Result | Basis |
+|---|---|---|
+| Every acceptance criterion is verifiable by QA with one inline command, no file written for QA, no network, credentials or merged state, and holds after a send-back | Pass | No AC changed. AC5's strings against the revised D3: "halts on the 20-directory cap" still once (`:61`; the new sentence says "clear the 20-directory cap halt"), "never a bypass reason, and only an emergency hotfix" still on one line (`:62`), the other AC5 strings untouched. AC1–AC4, AC6–AC11 carried over |
+| "Files to touch" lists `usage.jsonl`, plus the `check:package` step and `package-check.ts` when needed | Pass | Unchanged; carried over from round 2 |
+| The facts the plan states about the code hold at HEAD | Pass | Verified: `RunFailure` at `cli/src/pipeline-registration.ts:12`; `HALT_TEXT` four runner reasons at `cli/src/pipeline-ci.ts:249-252` (the plan cites `:248-252`, `:248` being the declaration; the object closes at `:255`, the plan's `:96` says `:248-254` — immaterial); `sha` halt `:154`, cap halt `:156-157`; `docs/task-state-machine.md:130` lists "G1–G4 failure" and "the 20-directory cap" separately; `.github/workflows/ci.yml:103-105` base from the event |
+
+### Findings
+
+| Id | Severity | Where | Why it matters | Required plan change |
+|---|---|---|---|---|
+| L8 | Low | `plan.md:62`, `:65`; `cli/src/pipeline-ci.ts:50`, `:269`, `:277` | The note at `:65` calls the four reasons "the runner failures (`RunFailure`)", but the re-run clause covers them only as G1–G4 git halts. The same `RunFailure` reasons also surface per directory as `plan halt (git timed out)` or `debt halt (T6 timeout)`, which a re-run usually clears too; the runbook leaves them as "never a bypass reason" (correct) with no re-run guidance. No bypass is opened | Optional: widen the parenthetical to "a G1–G4 git halt, or a per-directory plan or debt halt, for …", or leave it and accept that those halts are handled by the general "never" clause. No criterion changes |
+
+### Verdict: approved
