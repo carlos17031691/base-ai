@@ -89,7 +89,7 @@ Fill `templates/task/plan.md` with:
   - agrees with every other section of the plan and with the known state of what it checks;
   - names, where it expects an agent's or skill's output to contain an item, the deliverable text that instructs it;
   - is verifiable by QA before merge with one inline command from the "Commands" list of `.claude/agents/qa.md`, needing no file written for QA, no network and no credentials. A post-merge, network or credential check goes under "Post-merge verification", with human or coordinator evidence, never in the criteria.
-  Revise a criterion that fails, or list it under "Risks & open questions". Run `node cli/dist/index.js pipeline plan .ai/tasks/<ticket-id>` and revise until P1 passes; if it cannot run (no built CLI, or none with `pipeline plan`), say so under "Risks & open questions"
+  Revise a criterion that fails, or list it under "Risks & open questions". In base-ai, run `node cli/dist/index.js pipeline plan .ai/tasks/<ticket-id>` and revise until P1 passes; if it cannot run (no built CLI, or none with `pipeline plan`), say so under "Risks & open questions"
 - **Risks & open questions:** anything that must NOT be decided by the implementer alone
 
 ### Step 4 — Ask for human approval

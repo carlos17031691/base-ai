@@ -257,6 +257,16 @@ test("R2 P1 fails --ext-diff, --textconv and another date form", () => {
   }
 });
 
+test("R2 P1 fails a failing head hidden behind a quoted or substituted prefix (review r1 L1)", () => {
+  assert.deepEqual(judgeCandidate('TOKEN="a b" gh issue view 1'), { kind: "fail", reason: REASON.credentials });
+  assert.deepEqual(judgeCandidate("TOKEN='a b' curl x"), { kind: "fail", reason: REASON.credentials });
+  assert.deepEqual(judgeCandidate("TOKEN=$(cat f) gh issue view 1"), { kind: "fail", reason: REASON.operator });
+  assert.deepEqual(judgeCandidate('PATH="a b":$PATH grep x a'), { kind: "command" });
+  for (const span of ["X=1", 'X="a b" foo bar', "MODE=fast and more"]) {
+    assert.deepEqual(judgeCandidate(span), { kind: "literal" }, span);
+  }
+});
+
 test("R2 P1 does not fail literal spans (M4): headings, diff stats, partial phrases, placeholders, apostrophes, a lone variable", () => {
   // The head is read verbatim (D1.3), so an operator glued to it makes a literal, as any unknown word does (H5).
   assert.deepEqual(judgeCandidate("ls;ls"), { kind: "literal" });

@@ -4,7 +4,7 @@
   "plan_locked": true,
   "assignee": null,
   "created_at": "2026-11-25T00:25:54Z",
-  "updated_at": "2026-11-25T01:39:10Z",
+  "updated_at": "2026-11-25T01:41:52Z",
   "transitions": [
     {
       "from": null,
@@ -40,6 +40,20 @@
       "agent": "reviewer",
       "timestamp": "2026-11-25T01:39:10Z",
       "note": "review round 1: changes_requested; High 0, Medium 1, Low 4; reviewed implementer completion 2026-11-25T01:30:33Z"
+    },
+    {
+      "from": "completed",
+      "to": "in_progress",
+      "agent": "implementer",
+      "timestamp": "2026-11-25T01:41:31Z",
+      "note": "re-entry on explicit human send-back (fix all in this PR) after review round 1 changes_requested: M1, L2, L3, L4"
+    },
+    {
+      "from": "in_progress",
+      "to": "completed",
+      "agent": "implementer",
+      "timestamp": "2026-11-25T01:41:52Z",
+      "note": "review round 1 fixes M1, L2, L3, L4 applied; L1 left to coordinator; npm run test exit 0; lint_pass and types_pass remain false: not applicable, deferred to QA"
     }
   ],
   "checklist": {

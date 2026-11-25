@@ -335,9 +335,18 @@ export function judgeCandidate(candidate: string): Judgement {
   let h = 0;
   while (h < raw.length && ASSIGNMENT.test(raw[h])) h++;
   const head = raw[h];
-  if (head === undefined || (!ALLOWED_HEADS.has(head) && !FAILING_HEADS.has(head))) return { kind: "literal" };
+  const known = (w: string | undefined) => w !== undefined && (ALLOWED_HEADS.has(w) || FAILING_HEADS.has(w));
+  if (head === undefined) return { kind: "literal" };
 
   const t = tokenize(candidate.trim());
+  if (!known(head)) {
+    // A prefix value with a quoted blank or a substitution splits wrongly on blanks and would hide a known
+    // head (`TOKEN="a b" gh …`, `TOKEN=$(cat f) gh …`; review r1 L1). With a prefix, re-read the head from
+    // the tokenized words; a prefix that does not tokenize is a command with a substitution, not a literal.
+    if (h === 0) return { kind: "literal" };
+    if ("error" in t) return { kind: "fail", reason: t.error };
+    if (!known(t.words.find((w) => !ASSIGNMENT.test(w.text))?.text)) return { kind: "literal" };
+  }
   if ("error" in t) return { kind: "fail", reason: t.error };
   let k = 0;
   for (; k < t.words.length && ASSIGNMENT.test(t.words[k].text); k++) {
