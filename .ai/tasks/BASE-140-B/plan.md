@@ -143,9 +143,10 @@ The planner and the coordinator run the command before each plan-review round, a
    - `git --literal-pathspecs --no-optional-locks -C <root> status --porcelain -- <plan rel>` must print nothing;
    - only when bound to a re-binding entry with `<p>` ≠ `<c>`: first `git -C <root> rev-parse --verify --quiet <p>^{commit}`. If it prints `<p>` (the old commit is still reachable), then `git -C <root> rev-parse --verify --quiet <p>:<plan rel>` and `git -C <root> rev-parse --verify --quiet <c>:<plan rel>` must print the same blob id. Otherwise P2 fails `re-binding names different plan.md content`.
      - If the first call exits non-zero, the old commit is gone (for example rebased away, or not fetched). The content cannot be compared, and the D-block attestation stands alone.
-     - A runner failure other than a non-zero exit halts.
+     - If the old commit exists but has no `plan.md` at that path, the `<p>:<plan rel>` lookup exits non-zero. That is the fail `re-binding names different plan.md content`, not a halt (round 3 L8).
+     - Any other runner failure halts.
 
-   A difference fails, with `plan.md changed after the reviewed commit` or `plan.md has uncommitted changes`. When the runner fails (missing, exit, timeout or overflow), the outcome is `halt` (H7). The one exception is the non-zero exit of the reachability call above. `--no-optional-locks` keeps the index untouched, so QA's snapshot is unaffected.
+   A difference fails, with `plan.md changed after the reviewed commit` or `plan.md has uncommitted changes`. When the runner fails (missing, exit, timeout or overflow), the outcome is `halt` (H7). The two exceptions are the non-zero exits of the reachability call and of the `<p>:<plan rel>` lookup above. `--no-optional-locks` keeps the index untouched, so QA's snapshot is unaffected.
 
    `<c>` and `<p>` reach git only after they match `^[0-9a-f]{40}$`, as `rev-parse` revisions, never as options; `<plan rel>` is the validated path. Timestamps are printed only after they match the K5 timestamp format.
 
@@ -196,6 +197,7 @@ The planner and the coordinator run the command before each plan-review round, a
     - one not covered by `decisions.md`;
     - one whose D-block lacks the attestation;
     - one naming a commit whose `plan.md` blob differs from the reachable old commit's;
+    - one whose reachable old commit has no `plan.md` at that path: it fails, it does not halt (L8);
   - `R2 P2 and K6 find the same lock entry`;
   - `R2 P2 and K18 read Covers alike`.
 - `cli/src/test/pipeline-ci.test.ts`: when the plan check runs (including on a `decisions.md`-only change) and when it is skipped; a per-directory fail (exit 1) and halt (exit 2, with `CiReport.halt` absent); the updated text lines.
@@ -205,6 +207,7 @@ The planner and the coordinator run the command before each plan-review round, a
 - `docs/task-state-machine.md`:
   - a new **Plan check** paragraph after **CI check**, covering D1–D4: the checks, the `PRE_GATE_TASKS` exemption, binding and re-binding entries, the git calls, exit codes and output. It also states two facts. `task-dirs` is not a required status check, so a red run does not block the merge by itself and the human must not merge over it (H12). The CLI that judges a PR is built from that PR, so a change to `pipeline-plan.ts` is a change to the rule and is reviewed as one (L5);
   - **Plan review** (`:33`): "The gate is enforced by instruction only: …" becomes: the lock writer checks (a) and (b) before writing; `pipeline plan` P2 checks the written lock afterwards, and `pipeline ci` runs it on every PR in the `task-dirs` job, which is not a required check (H12); a wrong lock note, or the same plan under a rewritten commit, is corrected only by a human re-binding entry covered by an attesting `decisions.md` block (H14). A re-binding never accepts post-lock plan content; a post-lock change the human decides goes to `decisions.md`, and `plan.md` stays unedited. `pipeline check` still does not read `plan-review.md`;
+  - `decisions.md` format (`:70-80`): the required attestation phrase for a re-binding block. Its `Decision:` contains `plan.md unchanged since plan review round <R>` (round 3 L9);
   - transition rules (`:18-29`): one line `<state> ──(lock re-binding)──► <state>`. It is human only, for a wrong note or the same `plan.md` under a rewritten commit, with the plan-review clause in its note, and covered by a `decisions.md` block that attests `plan.md unchanged since plan review round <R>` (H14);
   - **CI check** (`:125`): "four fixed git calls" also covers the plan check's two calls per directory; the plan check, its four trigger files; a plan failure (exit 1) and a per-directory plan halt (exit 2, listed with the other halts);
   - **Who reads the commands** (`:127`): `pipeline plan` is run by the planner, the coordinator and CI, and by QA only when a plan names it; the supervisor does not read it.
@@ -239,7 +242,7 @@ The planner and the coordinator run the command before each plan-review round, a
   - The command list: the `index.ts` `USAGE`, the README command block (`:168-171`), and a new doc paragraph.
   - Who runs which command: `docs/task-state-machine.md:127`, and skill coordinator item 1 (`:97`).
   - Human `status.json` acts (H14, the lock re-binding):
-    - the doc transition rules (`:18-29`);
+    - the doc transition rules (`:18-29`) and the `decisions.md` format section (`:70-80`);
     - the skill state-machine table and coordinator item 4 (`:100`);
     - the new **Plan check** paragraph.
   - Criteria must be runnable by QA:
@@ -350,7 +353,7 @@ The planner and the coordinator run the command before each plan-review round, a
 | `.ai/skills/pipeline/skill.md` | modify (state-machine row, coordinator items 1 and 4, "What is enforced") | coordinator — D7 |
 | `.agents/skills/pipeline/SKILL.md`, `.claude/commands/pipeline.md`, `.cursor/rules/pipeline.mdc`, `.github/prompts/pipeline.prompt.md`, `.ai/generated.json`, `.ai/context-index.json` | regenerate with `ai sync` (only those it changes) | coordinator — exports |
 | `.claude/agents/planner.md` | modify (D5 lines only) | implementer — D5 |
-| `docs/task-state-machine.md` | modify | implementer — D7 |
+| `docs/task-state-machine.md` | modify (including the `decisions.md` format section `:70-80`) | implementer — D7 |
 | `README.md` | modify (command block, `:186`, `:188-189`) | implementer — D7 |
 | `.ai/config.yaml` | modify (`budgets.definitions.planner` only, only if H8 needs it) | implementer — H8 |
 | `.ai/tasks/BASE-140-B/{status.json,plan.md,plan-review.md,review-report.md,qa-report.md,improvement-report.md,decisions.md}` | create/modify (versioned) | pipeline roles, each its own; the coordinator commits |
