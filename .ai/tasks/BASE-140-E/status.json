@@ -1,0 +1,19 @@
+{
+  "ticket_id": "BASE-140-E",
+  "state": "pending",
+  "plan_locked": false,
+  "assignee": "planner",
+  "created_at": "2026-11-25T16:32:52Z",
+  "updated_at": "2026-11-25T16:32:52Z",
+  "transitions": [
+    { "from": null, "to": "pending", "agent": "planner", "timestamp": "2026-11-25T16:32:52Z", "note": "task initialized" }
+  ],
+  "checklist": {
+    "tests_pass": false,
+    "lint_pass": false,
+    "types_pass": false,
+    "review_verdict": null,
+    "qa_verdict": null
+  },
+  "blocker": null
+}
