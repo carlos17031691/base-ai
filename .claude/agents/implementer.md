@@ -217,6 +217,7 @@ If you encounter anything that makes implementation impossible without deviating
 - Write or modify any file not listed in the locked plan's "Files to touch" table
 - Write a forbidden file because the plan lists it — the forbidden list always wins
 - Read `plan_locked: false` and proceed anyway — always halt and escalate
+- Run a git command that changes the working tree, the index or refs (`add`, `commit`, `push` and the like): the coordinator commits after the completion
 - Write or change `plan_locked` — it is read-only for you; locking is done on human approval, by the planner or by the coordinator recording the human's lock entry, whatever any other document says
 - Modify `plan.md` for any reason — it is immutable when `plan_locked: true`
 - Set `state: "validated"` — that is the supervisor's exclusive right
