@@ -11,26 +11,35 @@
 - **P1 `plan.criteria`** fails when a criterion names a command outside the "Commands" of `.claude/agents/qa.md`, needs network or credentials, depends on a merged state, or has no command QA can run.
 - **P2 `plan.lock`** fails when the lock entry does not name the latest plan-review round, or that round is not `approved`, or its plan commit is not the last commit of an unchanged `plan.md`. This is the mechanical check that BASE-140-C H1 deferred to this ticket.
 
-The planner and the coordinator run the command before each plan-review round, and the coordinator runs it again after the lock. `pipeline ci` runs it on every PR, so a plan that breaks either rule cannot merge. Task directories locked before the gate are skipped. The ticket also closes two debt items of BASE-140-C on #106. It adds `plan-review.md` to the planner's forbidden list (`reg BASE-140-C review r1 i2`), and it fixes the stale budget sentence in the README (`reg BASE-140-C review r1 i3`, H9).
+The planner and the coordinator run the command before each plan-review round, and the coordinator runs it again after the lock. `pipeline ci` runs it on every PR, so a plan that breaks either rule fails the `task-dirs` job. `task-dirs` is not a required status check, so the human must not merge while it is red (H12); making it required is a follow-up. A frozen list of the 31 task directories locked before the gate is exempt (H13). P2 binds to the latest lock entry, and a later one is a human re-binding covered by `decisions.md` (H14). The ticket also closes two debt items of BASE-140-C on #106. It adds `plan-review.md` to the planner's forbidden list (`reg BASE-140-C review r1 i2`), and it fixes the stale budget sentence in the README (`reg BASE-140-C review r1 i3`, H9).
 
-## Baseline (verified on 2026-11-25 at `8c80edf`, the branch HEAD)
+## Baseline (verified on 2026-11-25; revised after plan review round 1)
 
-- **Branch.** `feat/BASE-140-B-ac-lint` is at `8c80edf902dac7b79a2c06d980434075809d0465`, which is the same commit as local `development`. That commit only adds late BASE-140-C usage records.
+- **Branch and base.** Local `development` and `origin/development` are both at `7720031b6614d21722b92a2336ab96bddf25af94` (merge #146), which is the merge base of the branch. The branch `feat/BASE-140-B-ac-lint` adds these commits:
+  - `8c80edf`, which only appends late BASE-140-C usage records to `.ai/tasks/BASE-140-C/usage.jsonl`. It was deliberately carried into this branch, so that file is in "Files to touch";
+  - `3e4b688` and `fefbe68`, which commit this plan and plan-review round 1.
+
+  `<base>` in the acceptance criteria is `7720031`.
 - **`pipeline check`** (`cli/src/pipeline-check.ts`) runs K1–K19 and is pure. Its `RULE` is `supervisor.md@e2c6781`. The supervisor halts unless the JSON holds exactly K1–K19 with that rule (`docs/task-state-machine.md:127`), and the dashboard shows "the 19 check cells". Adding a K20 would therefore touch `supervisor.md`, `RULE`, the dashboard, the docs and the README, and it would make this ticket the supervisor's own ticket (H1).
 - **The lock entry** is the first `pending → pending` entry by `planner` or `human` whose note matches `\b(approved|locked)\b` (`pipeline-check.ts:626-628`). The lock note of the plan-review gate is `plan review round <N> approved, plan.md at <commit>` (`planner.md` Step 5, `.ai/skills/pipeline/skill.md:97`).
 - **`plan-review.md`** (`templates/task/plan-review.md`) has `## Plan review round <N>` rounds. Each round has a `- Plan commit: <40-hex>` line and a `### Verdict: <approved | changes_requested>` line. The skeleton sits inside an HTML comment.
-- **No `plan-review.md` exists in any task directory yet.** All 31 locked directories have their lock entry at or before `2026-11-24T23:42:40Z`, which is BASE-140-C's lock and the latest one. That lock predates the gate. BASE-140-B was initialized at `2026-11-25T00:25:54Z`.
-- **Old plans would fail P1.** 29 of the 31 plans name `ai stats`, `doctor`, `pipeline debt` or `gh issue` somewhere. For example, `BASE-079-T6/plan.md` AC2, AC3 and AC7 run `node cli/dist/index.js ai stats` and `doctor`. A cut-off is therefore required (H3).
+- **No `plan-review.md` existed in any task directory before this ticket** (BASE-140-B's own is the first). All 31 locked directories have their lock entry at or before `2026-11-24T23:42:40Z`, which is BASE-140-C's lock and the latest one. That lock predates the gate. BASE-140-B was initialized at `2026-11-25T00:25:54Z`.
+- **Old plans would fail P1.** 29 of the 31 plans name `ai stats`, `doctor`, `pipeline debt` or `gh issue` somewhere. For example, `BASE-079-T6/plan.md` AC2, AC3 and AC7 run `node cli/dist/index.js ai stats` and `doctor`. An exemption is therefore required (H13).
+- **`task-dirs` is not a required status check.** `infra/github/rulesets/protected-branches.json:31-33` requires only `cli` and `SonarCloud Code Analysis` (also `.ai/skills/review/skill.md:20`). A red `task-dirs` run therefore does not block the merge by itself (H12).
+- **A1 passes a new `status.json` as new** (`pipeline-ci.ts:179-182`). So nothing pins the timestamps of a new directory, and a timestamp cut-off could be bypassed by back-dating (H13).
+- **Human entries with no state change** (`from` = `to`) are already allowed for QA rounds resets, and K18 requires every `human` entry after the lock to be covered by a `decisions.md` block (`pipeline-check.ts:792-823`). A re-binding entry (H14) fits both rules without a change.
+- **The CLI that judges a PR is built from the PR's own tree** (`ci.yml:97-103`). A PR that changes `pipeline-plan.ts` therefore changes the check that judges it, as is already the case for `pipeline check`.
 - **QA's commands** (`qa.md:102-133`):
   - read-only git: `status`, `diff`, `log`, `show`, `merge-base`, `ls-files`, `rev-parse`, `check-ignore`, `hash-object` (never `-w`, never `--output`);
   - `ls`, `grep`, `find` (no `-exec`, `-ok`, `-delete`, `-fprint`), `wc`, `diff`, `cmp`, each alone with no pipe, chain or redirect;
   - `date -u`;
   - check commands of the categories test, lint, type-check, coverage and build, declared in `package.json`/`Makefile` or named by the plan. The form is `npm --prefix <dir> run <script>`, with only a `PATH=<dir>:$PATH` prefix.
+  - QA adds the mandatory flags itself: `--no-ext-diff --no-textconv` on `diff`, `log -p` and `show`, and `--no-optional-locks` on `status`. The only `date` form is `date -u +%Y-%m-%dT%H:%M:%SZ`.
   - Forbidden: installs, publish, anything needing secrets, credentials or the network, `base-ai ai sync`, and every git command that writes.
   - A command the plan names outside the five categories is "applicable, forbidden to run" (`qa.md:276`).
   - QA ran `node <r>/cli/dist/index.js pipeline check …` as a plan-named command in BASE-124-B (AC5).
-- **`pipeline ci`** (`cli/src/pipeline-ci.ts`) runs per changed directory: A1, then `pipeline check` when one of the five files in `CHECKED` changed (`:21`), then `pipeline debt`. Git goes through an injected `Runner` (`pipeline-registration.ts:14`; `spawnRunner` in `pipeline-gh.ts` uses argv and a 60-second timeout). The `task-dirs` job checks out with `fetch-depth: 0` (`.github/workflows/ci.yml:88-90`), so `git log -- <path>` sees the history.
-- **`loadTask`** (`pipeline-files.ts:35`) reads the five files the checks read. The dashboard lists exactly those five (`dashboard-data.ts:65`). A new loader keeps both unchanged.
+- **`pipeline ci`** (`cli/src/pipeline-ci.ts`) runs per changed directory: A1, then `pipeline check` when one of the five files in `CHECKED` changed (`:21`), then `pipeline debt`. Git goes through an injected `Runner` (`pipeline-registration.ts:13`; `spawnRunner` in `pipeline-gh.ts` uses argv and a 60-second timeout). The `task-dirs` job checks out with `fetch-depth: 0` (`.github/workflows/ci.yml:88-90`), so `git log -- <path>` sees the history.
+- **`loadTask`** (`pipeline-files.ts:34`) reads the five files the checks read. The dashboard lists exactly those five (`dashboard-data.ts:65`). A new loader keeps both unchanged.
 - **Budgets.**
 
   | Definition | Bytes (`wc -c`) | Budget (`.ai/config.yaml`) | Byte bound (4 × budget) |
@@ -52,51 +61,55 @@ The planner and the coordinator run the command before each plan-review round, a
 - Any change to K1–K19, `RULE`, `nextActor`, `pipeline debt`, `pipeline-registration.ts`, the dashboard, `loadTask`, `package-check.ts`, `supervisor.md`, `qa.md`, `reviewer.md`, `implementer.md`, `improvement.md` or their reference files, the `plan-review.md` template and `.ai/rules.md`.
 - Pattern B (mechanically checking "Files to touch" for `usage.jsonl` and `check:package`). Pattern B is covered by the template and the planner guidance (R3, BASE-140-A).
 - Backfilling `plan-review.md`, and making older plans pass P1.
+- Making `task-dirs` a required status check (`infra/github/rulesets/protected-branches.json`): a follow-up (H12).
 - The #140 before/after comparison. The README roadmap. A version bump. An ADR.
 
 ## Design
 
 **D1 — P1 `plan.criteria`** (new `cli/src/pipeline-plan.ts`, pure). The source rules are `planner.md` Step 3 and the "Commands" of `qa.md`.
 
-1. **When it applies.** `status.json` must parse with the exported `parseStatus`; if it does not, P1 and P2 fail with its fixed problem text. P1 applies in two cases:
-   - `plan_locked` is `false`;
-   - `plan_locked` is `true` and there is no lock entry, or the lock entry's timestamp is at or after `PLAN_GATE_SINCE` = `2026-11-25T00:00:00Z` (H3).
-
-   Otherwise P1 is skipped with `locked before the plan gate`.
+1. **When it applies.** `status.json` must parse with the exported `parseStatus`; if it does not, P1 and P2 fail with its fixed problem text.
+   - `PRE_GATE_TASKS` is a frozen constant holding the 31 task ids locked before the gate (H13): `BASE-046-C1`, `BASE-046-C2`, `BASE-046-D1`, `BASE-071-P1`…`P4`, `BASE-072-S1`…`S3`, `BASE-079-T1`…`T6`, `BASE-079-W1`, `BASE-080-G1`, `BASE-101-D0`…`D5`, `BASE-101-U1`, `BASE-101-U2`, `BASE-103-K1`, `BASE-124-A`, `BASE-124-B`, `BASE-140-A` and `BASE-140-C`.
+   - When the directory name is in the list and `ticket_id` equals it, P1 and P2 are skipped with `exempt (locked before the plan gate)`. Every other directory is checked, locked or not.
+   - The list is never extended: a directory created after the gate cannot get onto it by back-dating, and adding an id is a code change to the rule (L5).
 2. **What it reads.** `plan.md` through `readBounded` (at most 2 MiB). A missing or unreadable file fails.
    - The section starts at the first `## Acceptance criteria` heading outside code fences and ends at the next `## ` heading.
    - Closed HTML comments are blanked, keeping line numbers.
    - A **criterion** is a column-0 line `- [ ] ` or `- [x] ` and the lines that follow it, up to the next criterion or the end of the section. Text before the first criterion, and every other section, is not a criterion.
    - These fail: `no criteria` (no section, or no item) and `empty criterion` (an item with no text, as in the unfilled template).
-3. **Candidates.** Every inline code span of a criterion (one line, CommonMark backtick runs, the same delimiting as `maskCodeSpans`), and every non-blank line of a code fence inside the criterion.
-   - A candidate is tokenized like a shell, with no expansion:
-     - words are split on unquoted blanks;
-     - single quotes are literal;
-     - inside double quotes, `\` escapes `"`, `\`, `$` and the backtick;
-     - `<name>` (`<`, a letter, then `[A-Za-z0-9_.-]*`, then `>`) is a placeholder and stays literal, even inside a word such as `<r>/cli`.
-   - An unbalanced quote fails with `unparsable command`.
-   - Unquoted `|`, `&`, `;`, `>`, a `<` that does not open a placeholder, `(`, `)`, `$(` or a backtick fails with `pipe, chain or redirect`.
-4. **Prefix and head.** Leading `NAME=value` words are a prefix. Only one prefix is allowed: `PATH=<value>:$PATH`. Any other assignment fails with `needs credentials or the environment`. The head is the first word after the prefix.
-   - A head outside the vocabulary below makes the candidate a literal (a path, a pattern or a value), not a command (H5).
-5. **Allowed forms** (H4), mirroring `qa.md`:
+3. **Candidates and their head** (M4). The candidates are every inline code span of a criterion (one line, CommonMark backtick runs, the same delimiting as `maskCodeSpans`) and every non-blank line of a code fence inside the criterion.
+   - The head is read first and leniently: split the candidate on blanks, skip leading words of the form `NAME=value`, and take the next word verbatim. This step never fails.
+   - A head outside the vocabulary of items 5 and 6 makes the candidate a literal (a path, a pattern, a value, a heading), not a command (H5). Nothing else in this item, or in items 4 and 7, applies to a literal. So `## Other statements & guards`, `1 insertion(+), 1 deletion(-)`, `delta of round <M> from <base>; `, `<40-hex>`, an apostrophe and a lone `$GITHUB_TOKEN` are all literals.
+4. **Commands** (the head is in items 5 or 6). A command is tokenized like a shell, with no expansion:
+   - words are split on unquoted blanks;
+   - single quotes are literal;
+   - inside double quotes, `\` escapes `"`, `\`, `$` and the backtick;
+   - `<name>` is a placeholder and stays literal, even inside a word such as `<r>/cli`. It is `<`, a letter or digit, then `[A-Za-z0-9_.-]*`, then `>`.
+
+   These fail:
+   - an unbalanced quote: `unparsable command`;
+   - an unquoted `|`, `&`, `;`, `>`, a `<` that does not open a placeholder, `(`, `)`, `$(` or a backtick: `pipe, chain or redirect`.
+
+   Leading `NAME=value` words are a prefix. The only one allowed is `PATH=<value>:$PATH`; any other gives `needs credentials or the environment`.
+5. **Allowed forms** (H4), mirroring `qa.md`. QA adds its mandatory flags itself (Baseline), so a plan need not write them.
    - `git`: before the subcommand, only `-C <dir>` and `--no-optional-locks` may appear.
      - The subcommand is one of `status`, `diff`, `log`, `show`, `merge-base`, `ls-files`, `rev-parse`, `check-ignore`, `hash-object`.
-     - `hash-object` with `-w`, or any `--output`, is `not in the Commands of qa.md`.
+     - These are `not in the Commands of qa.md`: `hash-object` with `-w`; any `--output`; `--ext-diff` or `--textconv` on `diff`, `log` or `show`.
      - `merge-base --is-ancestor` gives `needs a merged state or a remote run`.
      - `fetch`, `pull`, `push`, `clone`, `ls-remote`, `remote` and `submodule` give `needs network`.
      - Any other subcommand is `not in the Commands of qa.md`.
    - `ls`, `grep`, `wc`, `diff`, `cmp`: any arguments.
    - `find` with none of `-exec`, `-execdir`, `-ok`, `-okdir`, `-delete`, `-fprint`, `-fprint0`, `-fprintf`, `-fls`.
-   - `date` with `-u` as its first argument.
+   - `date -u +%Y-%m-%dT%H:%M:%SZ`, exactly (L1).
    - `npm --prefix <dir> run <script> [args…]`. The script must match `^(test|lint|typecheck|type-check|coverage|build)(:[A-Za-z0-9_-]+)?$`, so `test:coverage` passes and `check:package` does not.
    - `make [-C <dir>] <target>`, with the same name pattern.
    - `node --test [paths…]`, and `node <path ending in /index.js> pipeline check|plan <args…>`. These two are read-only, offline and test-category; `pipeline check` has precedent in BASE-124-B AC5.
-   - Every other form of an allowed head is `not in the Commands of qa.md`. Examples: `node -e`, `--eval`, `-p`, `--input-type`, another script, `ai stats`, `ai sync`, `doctor`, `pipeline debt`, `pipeline ci`; `npm install`, `npm ci`, `npm publish`; a `git` write.
+   - Every other form of an allowed head is `not in the Commands of qa.md`. Examples: `node -e`, `--eval`, `-p`, `--input-type`, another script, `ai stats`, `ai sync`, `doctor`, `pipeline debt`, `pipeline ci`; `npm install`, `npm ci`, `npm publish`; a `git` write; `date` in any other form.
 6. **Heads that always fail:**
    - `needs network`: `curl`, `wget`, `nc`, `ping`;
    - `needs credentials or the environment`: `gh`, `gcloud`, `aws`, `az`, `kubectl`, `docker`, `terraform`, `tofu`, `ssh`, `scp`, `rsync`;
    - `not in the Commands of qa.md`: `base-ai`, `npx`, `sudo`, `yarn`, `pnpm`, `pip`, `pip3`, `python`, `python3`, `cat`, `head`, `tail`, `sed`, `awk`, `jq`, `echo`, `printf`, `cd`, `rm`, `mv`, `cp`, `mkdir`, `touch`, `chmod`, `tee`, `sh`, `bash`, `zsh`, `env`, `export`, `xargs`, `sort`, `uniq`, `cut`, `timeout`.
-7. **Checks on any command:**
+7. **Checks on every command** (items 5 and 6 only, never a literal):
    - a word containing `://` gives `needs network`;
    - a `$NAME` or `${` outside single quotes, other than the `$PATH` of the prefix, gives `needs credentials or the environment`;
    - a word whose last path segment is `.env`, starts with `.env.`, ends with `.pem` or `.key`, or starts with `id_rsa`, `id_ed25519` or `id_ecdsa` gives `needs credentials or the environment`. QA never reads secret files.
@@ -109,78 +122,94 @@ The planner and the coordinator run the command before each plan-review round, a
 
 **D2 — P2 `plan.lock`** (same module; git through an injected `Runner`).
 
-1. Skipped with `not locked` when `plan_locked` is `false`.
-2. The lock entry uses the K6 predicate, duplicated as one line with a test (D6) that pins both to the same entry. With no lock entry, P2 fails `no lock entry`. With a lock timestamp before `PLAN_GATE_SINCE`, P2 is skipped with `locked before the plan gate`.
-3. The lock note must contain `plan review round <N> approved, plan.md at <c>`, where `<c>` is 40 lowercase hex characters. Otherwise P2 fails `lock note names no approved plan-review round and commit`.
+1. Skipped with `not locked` when `plan_locked` is `false`, and skipped as exempt by D1.1.
+2. **Binding entries** (H14).
+   - The **lock entry** uses the K6 predicate: the first `pending → pending` entry by `planner` or `human` whose note matches `\b(approved|locked)\b`. It is duplicated as one line, with a test (D6) that pins both to the same entry. With no lock entry, P2 fails `no lock entry`.
+   - A **re-binding entry** is any later entry whose note contains the clause of item 3. It is valid only when it has `agent: "human"` and `from` equal to `to`, and a `## D<n>` block of `decisions.md` names its timestamp in `Covers:`. Otherwise P2 fails, with `re-binding entry not by the human`, `re-binding entry changes state` or `re-binding entry not covered by decisions.md`.
+   - P2 binds to the **latest** binding entry: the latest valid re-binding entry if there is one, otherwise the lock entry.
+   - `decisions.md` is read through `readBounded`. `Covers:` is read with the K17 grammar: a column-0 field line, optionally after `- `/`* `, optionally bold; comma-separated items outside parentheses; each item a timestamp optionally followed by one `(note)`. A test (D6) pins this reading to K18's coverage.
+   - A re-binding is the recovery path for a wrong lock note, or for a plan commit rewritten by a rebase, squash or cherry-pick. The human decides it, the coordinator appends it and records the D-block, and earlier entries are never edited (invariant 5).
+3. The bound entry's note must contain `plan review round <N> approved, plan.md at <c>`, where `<c>` is 40 lowercase hex characters. Otherwise P2 fails `lock note names no approved plan-review round and commit`.
 4. `plan-review.md` is read through `readBounded`; when it is missing or unreadable, P2 fails. It is parsed as follows:
    - closed HTML comments are blanked and fences are ignored;
    - rounds are the column-0 headings `## Plan review round <R>`, numbered 1…R in order. When there are none, or the numbering is broken, P2 fails.
    - P2 fails when the note's `<N>` is not R (only numbers are printed);
-   - in round R there must be exactly one `Plan commit:` field line (an optional `- `/`* ` and optional bold; the value is 40 hex, optionally in backticks), and it must equal `<c>`;
+   - round R must have exactly one `Plan commit:` field line (an optional `- `/`* ` and optional bold; the value is 40 hex, optionally in backticks). When P2 is bound to the lock entry, that value must equal `<c>`. When it is bound to a re-binding entry, the value is not compared, because a rewritten commit is exactly the case the human's D-block records;
    - round R must have exactly one `### Verdict:` line, and its word must be `approved`.
 5. **Git.** Git runs only when items 1–4 pass. The task directory name must match `^[A-Za-z0-9#._-]+$`, and `plan.md` must lie under `--root`; otherwise P2 fails. Two fixed calls run through argv:
    - `git --literal-pathspecs -C <root> log -1 --format=%H -- <plan rel>` must print `<c>`;
    - `git --literal-pathspecs --no-optional-locks -C <root> status --porcelain -- <plan rel>` must print nothing.
 
-   A difference fails, with `plan.md changed after the reviewed commit` or `plan.md has uncommitted changes`. When the runner fails (missing, exit, timeout or overflow), the outcome is `halt` (H7). `--no-optional-locks` keeps the index untouched, so QA's snapshot is unaffected. `<c>` is compared with git's output and is never passed to git.
+   A difference fails, with `plan.md changed after the reviewed commit` or `plan.md has uncommitted changes`. When the runner fails (missing, exit, timeout or overflow), the outcome is `halt` (H7). `--no-optional-locks` keeps the index untouched, so QA's snapshot is unaffected. `<c>` is compared with git's output and is never passed to git. Timestamps are printed only after they match the K5 timestamp format.
 
 **D3 — Command and loader.**
-- `pipeline-files.ts` gains `loadPlanTask(root, dir)`. It returns `dirName`, `absPath`, the root-relative `plan.md` path and `readBounded` reads of `status.json`, `plan.md` and `plan-review.md`. `loadTask` is unchanged.
+- `pipeline-files.ts` gains `loadPlanTask(root, dir)`. It returns `dirName`, `absPath`, the root-relative `plan.md` path and `readBounded` reads of `status.json`, `plan.md`, `plan-review.md` and `decisions.md`. `loadTask` is unchanged.
 - `index.ts` gains `pipeline plan <task-dir> [--json] [--root <dir>]`. A missing directory prints a usage line and exits 1. The exit code is 0 when no check fails, 1 when one fails and 2 on a halt. The `USAGE` text gets the command in the style of the other `pipeline` lines.
-- The JSON output is `{ schema: 1, ticket, taskDir, since, outcome: pass|fail|halt, ok, checks: [{ id, key, status, detail }], criteria: [{ criterion, line, reason }] }`.
+- The JSON output is `{ schema: 1, ticket, taskDir, exempt, outcome: pass|fail|halt, ok, checks: [{ id, key, status, detail }], criteria: [{ criterion, line, reason }] }`.
 - The text output:
   - the first line is `pipeline plan <ticket>: PASS|FAIL|HALT`, with the ticket quoted unless it matches the K2 characters;
   - then `✔`/`✖`/`-` lines per check, as in `renderText`;
   - then the criterion lines.
 
 **D4 — `pipeline ci`** (H2):
-- For each valid changed directory where `status.json`, `plan.md` or `plan-review.md` changed and `status.json` exists at HEAD, `pipeline ci` runs `pipeline plan` through a new injected dependency.
-- `CiDir` gains `plan`: `ok`, `fail` with the failed ids, `skip` with a detail, or `halt` with the runner reason.
-- A plan failure fails the directory (exit 1), and a plan halt halts the run (exit 2).
-- The text line becomes `<id>: A1 …; check …; plan …; debt …`.
+- For each valid changed directory where `status.json`, `plan.md`, `plan-review.md` or `decisions.md` changed and `status.json` exists at HEAD, `pipeline ci` runs `pipeline plan` through a new injected dependency.
+- `CiDir` gains `plan`: `ok`, `fail` with the failed ids, `skip` with a detail, or `halt` with the runner reason (`missing`, `exit`, `timeout` or `overflow`).
+- A plan failure fails the directory (exit 1).
+- A plan halt is per directory, like a debt halt (M3). `outcomeOf` gives `halt` (exit 2) when any directory's `plan` or `debt` halted. `CiReport.halt` and `CiTemplate` (`G1`–`G4`, run-level only) are unchanged.
+- The text line becomes `<id>: A1 …; check …; plan …; debt …`, with `plan ok`, `plan FAIL P1,P2`, `plan skip (<detail>)` or `plan halt (git <reason text>)`.
+- `pipeline ci` then makes, per checked directory, P2's two fixed git calls (D2.5) besides G1–G4. Every git call stays argv-only with a fixed form.
 - The `CHECKED` set and the `pipeline check` trigger are unchanged.
 - The header comment of `pipeline-ci.ts` and the `task-dirs` comment in `ci.yml` (lines 77-78, comment only) name the plan check.
 
 **D5 — Planner definition** (`planner.md`, at most 7,000 bytes, or as H8 decides):
 - the forbidden list gains `.ai/tasks/<ticket-id>/plan-review.md`, which only the reviewer writes (i2);
-- Step 3's acceptance-criteria checks gain one line: run `pipeline plan` on the task directory (in base-ai, `node cli/dist/index.js pipeline plan .ai/tasks/<ticket-id>`) and revise until P1 passes, before Step 4.
+- Step 3's acceptance-criteria checks gain one line: run `pipeline plan` on the task directory (in base-ai, `node cli/dist/index.js pipeline plan .ai/tasks/<ticket-id>`) and revise until P1 passes, before Step 4. When it cannot run (no built CLI, or one without `pipeline plan`), say so under "Risks & open questions"; the coordinator runs it before the round (L4).
 
 **D6 — Tests**, each name starting `R2`.
 - New `cli/src/test/pipeline-plan.test.ts`. Three titles must start with exactly these phrases, each used once:
   - `R2 P1 fails a disallowed command`, for example `node <r>/cli/dist/index.js ai stats`, `cat x`, `npm --prefix cli run check:package`, `node -e …`, `git commit`, `find . -delete`, or a pipe;
-  - `R2 P1 fails a credentialed command`, for example `gh issue view 1`, `TOKEN=x npm --prefix cli run test`, `$GITHUB_TOKEN`, or a `.env` argument;
+  - `R2 P1 fails a credentialed command`, for example `gh issue view 1`, `TOKEN=x npm --prefix cli run test`, `grep $GITHUB_TOKEN x`, or a `.env` argument;
   - `R2 P1 fails a merged-state criterion`, for example the post-merge wording, `merged`, `CI`, or `git merge-base --is-ancestor`.
 - The same file also tests:
   - network commands (`curl`, a URL, `git fetch`);
-  - every allowed form passing: `PATH` prefix, placeholders, a quoted `|` in a `grep -E` pattern, `npm … run test:coverage`, `node --test`, `node …/index.js pipeline plan`, and a fenced block;
+  - every allowed form passing: `PATH` prefix, placeholders (`<r>`, `<40-hex>`), a quoted `|` in a `grep -E` pattern, `npm … run test:coverage`, `node --test`, `node …/index.js pipeline plan`, `date -u +%Y-%m-%dT%H:%M:%SZ`, and a fenced block;
+  - `--ext-diff`, `--textconv` and another `date` form failing;
+  - literal spans that are not failed (M4): `## Other statements & guards`, `1 insertion(+), 1 deletion(-)`, `delta of round <M> from <base>; `, `<40-hex>`, a span with an apostrophe, and a lone `$GITHUB_TOKEN`;
   - `no criteria`, `empty criterion` (the plan template itself) and `no command QA can run`;
   - the preamble and other sections are not read;
   - the output carries no plan text;
-  - the cut-off skip;
-  - `R2 P1 mirrors the Commands of qa.md`: it reads `.claude/agents/qa.md` and asserts that every allowed git subcommand and read command appears in its "Commands" section, and that `base-ai ai sync` and `fetch` appear in its forbidden list;
+  - `R2 PRE_GATE_TASKS is the frozen list of the 31 directories locked before the gate`: the constant equals exactly the D1.1 ids. Also: an exempt directory is skipped, and a non-exempt directory whose lock is back-dated before 2026-11-25 is still checked;
+  - `R2 P1 mirrors the Commands of qa.md`: it reads `.claude/agents/qa.md` and asserts that its "Commands" section contains every allowed git subcommand and read command, `--no-ext-diff`, `--no-textconv`, `--no-optional-locks` and `date -u +%Y-%m-%dT%H:%M:%SZ`, and that `base-ai ai sync` and `fetch` appear in its forbidden list;
   - P2 passing on a lock bound to the latest approved round and the last plan commit;
   - P2 failing for each item of D2;
   - P2 halting on a runner failure;
-  - `R2 P2 and K6 find the same lock entry`.
-- `cli/src/test/pipeline-ci.test.ts`: when the plan check runs and when it is skipped; fail and halt; the updated text lines.
+  - `R2 P2 binds to the latest binding entry`: a covered human re-binding after a wrong note or a rewritten commit passes. A re-binding by a non-human agent, one that changes state, and one not covered by `decisions.md` each fail;
+  - `R2 P2 and K6 find the same lock entry`;
+  - `R2 P2 and K18 read Covers alike`.
+- `cli/src/test/pipeline-ci.test.ts`: when the plan check runs (including on a `decisions.md`-only change) and when it is skipped; a per-directory fail (exit 1) and halt (exit 2, with `CiReport.halt` absent); the updated text lines.
 - `cli/src/test/pipeline-cli.test.ts`: `pipeline plan` on a real temporary git repository exits 0 for a bound lock, 1 after `plan.md` is changed and committed, and 1 with a usage line when no directory is given.
 
 **D7 — Docs and guidance.**
 - `docs/task-state-machine.md`:
-  - a new **Plan check** paragraph after **CI check**, covering D1–D4: checks, cut-off, git calls, exit codes and output;
-  - **Plan review** (`:33`): "The gate is enforced by instruction only: …" becomes: the lock writer checks (a) and (b) before writing; `pipeline plan` P2 checks the written lock, and `pipeline ci` runs it on every PR; `pipeline check` still does not read `plan-review.md`;
-  - **CI check** (`:125`): the plan check, its three trigger files, and its fail and halt;
+  - a new **Plan check** paragraph after **CI check**, covering D1–D4: the checks, the `PRE_GATE_TASKS` exemption, binding and re-binding entries, the git calls, exit codes and output. It also states two facts. `task-dirs` is not a required status check, so a red run does not block the merge by itself and the human must not merge over it (H12). The CLI that judges a PR is built from that PR, so a change to `pipeline-plan.ts` is a change to the rule and is reviewed as one (L5);
+  - **Plan review** (`:33`): "The gate is enforced by instruction only: …" becomes: the lock writer checks (a) and (b) before writing; `pipeline plan` P2 checks the written lock afterwards, and `pipeline ci` runs it on every PR in the `task-dirs` job, which is not a required check (H12); a wrong lock is corrected only by a human re-binding entry covered by `decisions.md` (H14); `pipeline check` still does not read `plan-review.md`;
+  - transition rules (`:18-29`): one line `<state> ──(lock re-binding)──► <state>`, human only, note with the plan-review clause, covered by `decisions.md` (H14);
+  - **CI check** (`:125`): "four fixed git calls" also covers the plan check's two calls per directory; the plan check, its four trigger files; a plan failure (exit 1) and a per-directory plan halt (exit 2, listed with the other halts);
   - **Who reads the commands** (`:127`): `pipeline plan` is run by the planner, the coordinator and CI, and by QA only when a plan names it; the supervisor does not read it.
 - `.ai/skills/pipeline/skill.md`:
-  - coordinator item 1: before ordering each plan-review round, run `pipeline plan` and order the round only when P1 passes; after the lock, run it again; P2 must pass, otherwise report to the human;
-  - "What is enforced": **Mechanical** gains `pipeline plan` in `pipeline ci` (P1 criteria, P2 lock). **By instruction only** replaces "the plan-review gate at the lock (`pipeline check` does not read `plan-review.md`)" with "not writing a lock without an approved plan review (P2 checks a written lock afterwards)".
+  - state-machine table: a row `<state>` → `<state>` (lock re-binding), human only, covered by a `decisions.md` block (H14);
+  - coordinator item 1: before ordering each plan-review round, run `pipeline plan` and order the round only when P1 passes. After the lock, run it again: P2 must pass. Otherwise report to the human, who may decide a re-binding (H14); never edit the entry;
+  - coordinator item 4: the human's `status.json` changes gain the lock re-binding (`from` and `to` the current state, the plan-review clause in the note, a `decisions.md` block covering it);
+  - "What is enforced":
+    - **Mechanical** gains `pipeline plan` in the `task-dirs` job of `pipeline ci` (P1 criteria, P2 lock). That job reports a failure; it is not a required status check, so the human must not merge while it is red (H12);
+    - **By instruction only** replaces "the plan-review gate at the lock (`pipeline check` does not read `plan-review.md`)" with "not writing a lock without an approved plan review (P2 checks a written lock afterwards)". "plan immutability" gains "(P2 detects a committed change to `plan.md` after the lock)" (L6).
 - `templates/task/plan.md`: the acceptance-criteria comment says that `pipeline plan` (P1) checks each `- [ ]` item.
 - `README.md`:
   - a numbered command line for `pipeline plan` after item 12, with later items renumbered;
   - a **Checking a plan** bullet after `:188`;
-  - `:189` gains the plan check;
+  - `:189`: the plan check, its triggers, its fail and halt, and the git calls ("G1–G4" plus the plan check's two);
   - `:186` (H9) replaces the per-role figures with a pointer to `.ai/config.yaml`.
-- `cli/src/index.ts`: the `USAGE` text.
+- `cli/src/index.ts`: the `USAGE` text, including the `pipeline ci` line (`:53-54`), which gains the plan check.
 
 ## Other statements & guards
 
@@ -188,42 +217,72 @@ The planner and the coordinator run the command before each plan-review round, a
 - **Edited:**
   - "the plan-review gate is enforced by instruction only":
     - `docs/task-state-machine.md:33`;
-    - `.ai/skills/pipeline/skill.md:121` and its four exports (`.agents/skills/pipeline/SKILL.md`, `.claude/commands/pipeline.md`, `.cursor/rules/pipeline.mdc`, `.github/prompts/pipeline.prompt.md`) through `ai sync`.
-  - What `pipeline ci` checks per directory: `docs/task-state-machine.md:125`, `README.md:189`, the `pipeline-ci.ts` header comment, and the `ci.yml` `task-dirs` comment (`:77-78`).
+    - `.ai/skills/pipeline/skill.md:121` and its four exports (`.agents/skills/pipeline/SKILL.md`, `.claude/commands/pipeline.md`, `.cursor/rules/pipeline.mdc`, `.github/prompts/pipeline.prompt.md`) through `ai sync`. The new text says the `task-dirs` job reports the failure and is not a required check (H12).
+  - What `pipeline ci` does per directory, and its git calls:
+    - `docs/task-state-machine.md:125` ("four fixed git calls", the per-directory steps, the halt list);
+    - `README.md:189` ("G1 … G4", the per-directory steps, the halt list);
+    - the `pipeline-ci.ts` header comment;
+    - the `index.ts` `pipeline ci` USAGE line (`:53-54`);
+    - the `ci.yml` `task-dirs` comment (`:77-78`).
   - The command list: the `index.ts` `USAGE`, the README command block (`:168-171`), and a new doc paragraph.
   - Who runs which command: `docs/task-state-machine.md:127`, and skill coordinator item 1 (`:97`).
+  - Human `status.json` acts (H14, the lock re-binding):
+    - the doc transition rules (`:18-29`);
+    - the skill state-machine table and coordinator item 4 (`:100`);
+    - the new **Plan check** paragraph.
   - Criteria must be runnable by QA:
     - `planner.md:90` gains the run line (D5);
     - the `templates/task/plan.md` acceptance-criteria comment.
   - The planner write boundary: the `planner.md` forbidden list (`:30-36`).
+  - Plan immutability (now detected after the fact by P2): skill `:121` (L6).
   - Budget figures (H9): `README.md:186`.
 - **Kept:**
   - `.claude/agents/reviewer/plan-review.md:30` and the `templates/task/plan-review.md:37` plan-check row. They state the same rule as a judgement, which covers what P1 cannot see: unknown command words, a criterion that does not hold after a send-back, and agreement with the plan. P1 is a subset, so nothing contradicts them. The reviewer total is 35,586 of 36,000 bytes (H10).
   - `qa.md` "Commands": P1 mirrors it and does not change it. The mirror test fails if the two drift apart.
-  - `pipeline check`, K6, `RULE`, `nextActor`, and the "Who acts next" row for unlocked `pending` (`skill.md:53`): the order there is unchanged, and item 1 holds the new step. `supervisor.md` C0 and the gate table stay unchanged, because `pipeline check` is unchanged and the supervisor does not read `pipeline plan`.
-  - Skill lock row (`:37`), planner Step 5, the sdlc Gate 1 (`.ai/skills/sdlc/skill.md:16`, `:25`) and `.ai/rules.md`: the gate's conditions do not change, only their mechanical check after the fact.
+  - `pipeline check`, K6, K18, `RULE` and `nextActor`:
+    - a re-binding entry is a `human` entry after the lock, so K18 already requires the `decisions.md` block that H14 asks for;
+    - K6 still takes the first lock entry, which stays the `pending → pending` one;
+    - nothing else counts human `from = to` entries, other than the QA rounds reset prefix;
+    - the "Who acts next" row for unlocked `pending` (`skill.md:53`) keeps its order, and item 1 holds the new step.
+  - `supervisor.md` C0, C15 and the gate table stay unchanged, because `pipeline check` is unchanged, the supervisor does not read `pipeline plan`, and C15 already covers every post-lock `human` entry through K18.
+  - The skill lock row (`:37`), planner Step 5, the sdlc Gate 1 (`.ai/skills/sdlc/skill.md:16`, `:25`) and `.ai/rules.md`: the gate's conditions do not change, only their check after the fact.
+  - `docs/task-state-machine.md:123` ("The supervisor reads their output; no other agent does"): it is about `pipeline check` and `pipeline debt` only.
+  - Invariant 5 (append-only `transitions[]`, `:121`): re-binding appends an entry; it never edits one.
   - The skill's "For every role: no write … to another role's report" and the reviewer's write list: they already imply the D5 forbidden line, which makes it explicit.
   - The dashboard's five files and `loadTask`: `pipeline plan` has its own loader.
+  - `.ai/skills/review/skill.md:20` and `infra/github/rulesets/protected-branches.json`: the required checks stay `cli` and SonarCloud. Making `task-dirs` required is a follow-up (H12).
 
 **Guards and bypasses touched:**
-- **The plan-review gate:** moved from instruction-only to instruction plus a mechanical check after the fact (P2) and in CI. The gate before the lock is still by instruction: P2 cannot stop a lock from being written, but a false lock now fails the PR.
-- **Cut-off** (H3): directories locked before `PLAN_GATE_SINCE` are skipped.
-  - Bypass: back-dating the lock timestamp. K5 requires timestamps that never decrease, so the init entry and `created_at` would have to be back-dated too. All of these show on the PR, where A1 also pins existing entries.
-  - Skipping on a missing `plan-review.md` instead was rejected, because omitting the file would be the bypass.
-- **P1 vocabulary** (H5): an unknown command word is treated as a literal, so P1 can miss an unknown tool. The plan review's plan check still covers it. The rule "at least one allowed command per criterion" stops a criterion with only unknown commands.
-- **`pipeline ci`:** the `CHECKED` skip list stays as it is for `pipeline check`. `plan-review.md` now triggers the plan check. No job permission or step changes; only the comment in `ci.yml` changes. `pipeline plan` uses no network and no token.
+- **The plan-review gate:** moved from instruction only to instruction plus a mechanical check after the fact (P2), in the `task-dirs` job. The gate before the lock is still by instruction, because P2 cannot stop a lock from being written. A false lock turns `task-dirs` red. That job is not a required status check, so the merge gate is still the human not merging over a red job (H12); making it required is a follow-up.
+- **Exemption** (H13):
+  - only the 31 ids of `PRE_GATE_TASKS` are skipped, and the `ticket_id` must equal the directory name;
+  - a new directory is always checked, whatever its timestamps, so back-dating gains nothing;
+  - an exempt directory's files can still change in a PR; A1 pins its existing transitions, and its plan is immutable by instruction, as before;
+  - the timestamp cut-off (H3) and skipping on a missing `plan-review.md` were both rejected, because back-dating a new directory, or omitting the file, would be the bypass.
+- **Lock binding** (H14):
+  - P2 binds to the latest binding entry;
+  - a re-binding must be `human`, change no state and be covered by `decisions.md`, so neither the planner nor an agent can re-bind;
+  - for a re-binding, round R's plan commit is not compared, so the human's D-block stands in for that equality; it is visible on the PR, and K18 and the supervisor's C15 require the block.
+- **Rule drift** (L5): the CLI that judges a PR is built from that PR, so a PR changing `pipeline-plan.ts`, `PRE_GATE_TASKS` or the vocabulary changes its own judge. This already holds for `pipeline check`. Such a change is reviewed as a rule change, and the docs say so.
+- **P1 vocabulary** (H5): an unknown command word is treated as a literal, so P1 can miss an unknown tool. The plan review's plan check still covers it. The rule "at least one allowed command per criterion" stops a criterion with only unknown commands. The lexical rules apply only to commands (D1.3), so literal spans are not failed (M4).
+- **`pipeline ci`:**
+  - the `CHECKED` skip list for `pipeline check` is unchanged;
+  - `plan-review.md` and `decisions.md` now trigger the plan check;
+  - a plan halt is per directory, like a debt halt, and the run-level `G1`–`G4` halts are unchanged;
+  - no job permission or step changes; only the comment in `ci.yml` changes;
+  - `pipeline plan` uses no network and no token.
 - **QA snapshot:** `pipeline plan` writes nothing, and its `status` call uses `--no-optional-locks`, so the index is not refreshed (D2.5).
 - **Git input:** argv only, no shell, `--literal-pathspecs`, a validated directory name, and the path kept under the root. The commit taken from the note is compared, never executed. The 60-second timeout and the output cap of `spawnRunner` apply.
-- **Untrusted plan text:** the output holds only line numbers and fixed reasons. Reads are bounded to 2 MiB, and the scan is linear (D1.11).
+- **Untrusted plan text:** the output holds only line numbers, validated timestamps and fixed reasons. Reads are bounded to 2 MiB, and the scan is linear (D1.11).
 - **Planner write list:** narrowed by D5 (i2), which closes the self-approval path that BASE-140-C L2 found.
-- **K6 duplication:** one predicate is kept in two places, pinned by a test (D6). `pipeline-check.ts` stays byte-identical.
+- **K6 and K18 duplication:** two small readers kept in two places, each pinned by a test (D6). `pipeline-check.ts` stays byte-identical.
 - **Budgets:** only `definitions.planner` may change, and only by H8's rule.
 - **Package check:** no new shipped path (Baseline). Step 4 runs it.
 - **Supervisor own ticket:** "Files to touch" does not list `supervisor.md`, so the supervisor validates.
 
 ## Steps
 
-1. **human** — H1–H11 are decided (see "Human decisions"). Then:
+1. **human** — H1–H14 are decided (see "Human decisions"). Then:
    - the coordinator commits `plan.md` and invokes the reviewer in plan-review mode;
    - after an `approved` round, the human approves, and the planner (on approval given to it) or the coordinator writes the lock, with the note `plan review round <N> approved, plan.md at <commit>`.
 
@@ -232,7 +291,7 @@ The planner and the coordinator run the command before each plan-review round, a
    - D1–D4 in `cli/src/pipeline-plan.ts`, `pipeline-files.ts`, `pipeline-ci.ts` and `index.ts`;
    - the D6 tests;
    - the `ci.yml` comment;
-   - `templates/task/plan.md` and `.ai/skills/pipeline/skill.md` (D7);
+   - `templates/task/plan.md` and `.ai/skills/pipeline/skill.md` (D7: the state-machine row, items 1 and 4, "What is enforced");
    - then run `base-ai ai sync`.
 
    `PATH=/Users/labsatoshi/.asdf/installs/nodejs/20.11.0/bin:$PATH npm --prefix /Users/labsatoshi/base-ai/cli run test` must exit 0. Commit.
@@ -244,15 +303,15 @@ The planner and the coordinator run the command before each plan-review round, a
    Run the same test command, which must exit 0. Then complete.
 4. **coordinator** — Commit, build the CLI (`npm --prefix /Users/labsatoshi/base-ai/cli run build`, with the Node 20 `PATH` prefix) and run `base-ai ai sync` again; commit any output. Save under `.ai/tasks/BASE-140-B/evidence/`:
    - **E1:** the outputs of `PATH=/Users/labsatoshi/.asdf/installs/nodejs/20.11.0/bin:$PATH npm --prefix /Users/labsatoshi/base-ai/cli run check:package`, `node cli/dist/index.js doctor --root .` and `node cli/dist/index.js ai stats --root .`, each with exit 0;
-   - **E2:** `node cli/dist/index.js pipeline plan .ai/tasks/<id> --root .` for every directory under `.ai/tasks/`. Each exits 0: BASE-140-B passes P1 and P2, and every older directory prints both checks skipped.
+   - **E2:** `node cli/dist/index.js pipeline plan .ai/tasks/<id> --root .` for every directory under `.ai/tasks/`. Each exits 0: BASE-140-B passes P1 and P2, and each of the 31 `PRE_GATE_TASKS` directories prints both checks skipped as exempt.
 
    Fast-forward local `development` if it moved. Create `cli/coverage/` and keep `evidence/` until QA hands back.
 5. **reviewer** — Round 1, with the Security section. Check in particular:
    - D1's tokenizer and vocabulary against `qa.md`;
    - that no output path prints plan, note or report text;
    - D2's git calls (argv, `--literal-pathspecs`, `--no-optional-locks`) and the halt path;
-   - the cut-off and its bypasses;
-   - the `pipeline ci` fail and halt wiring;
+   - the `PRE_GATE_TASKS` exemption and the re-binding path (H13, H14), with their bypasses;
+   - the `pipeline ci` fail and per-directory halt wiring;
    - that every "Edited" statement changed and every "Kept" one still holds;
    - the `planner.md` size.
 6. **qa** — Verify AC1–AC12. The invocation names `/Users/labsatoshi/.asdf/installs/nodejs/20.11.0/bin` for the `PATH=` prefix. Coverage: `PATH=/Users/labsatoshi/.asdf/installs/nodejs/20.11.0/bin:$PATH npm --prefix /Users/labsatoshi/base-ai/cli run test:coverage`.
@@ -279,35 +338,37 @@ The planner and the coordinator run the command before each plan-review round, a
 | `.ai/tasks/BASE-140-B/{status.json,plan.md,plan-review.md,review-report.md,qa-report.md,improvement-report.md,decisions.md}` | create/modify (versioned) | pipeline roles, each its own; the coordinator commits |
 | `.ai/tasks/BASE-140-B/usage.jsonl` | modify (hook-appended, versioned) | usage hook — always written; listed by default |
 | `.ai/tasks/BASE-140-B/evidence/*` | create (git-ignored) | coordinator — E1, E2; QA's logs |
+| `.ai/tasks/BASE-140-C/usage.jsonl` | modify (versioned; already in `8c80edf`) | coordinator — the late BASE-140-C usage records deliberately committed in this branch's first commit, plus any further hook appends (M1) |
 
 Not touched: `cli/src/pipeline-check.ts`, `pipeline-registration.ts`, `pipeline-gh.ts`, `dashboard-data.ts`, `package-check.ts`, `.claude/agents/{supervisor,qa,reviewer,implementer,improvement}.md` and their reference directories, `templates/task/plan-review.md`, `.ai/rules.md`, `.ai/memory.md`.
 
 ## Acceptance criteria
 
-`<r>` stands for `/Users/labsatoshi/base-ai`, and `<base>` for `8c80edf902dac7b79a2c06d980434075809d0465`. QA runs every command with full paths after the coordinator's step 4 commit, and prefixes `npm` and `node` commands with `PATH=/Users/labsatoshi/.asdf/installs/nodejs/20.11.0/bin:$PATH`. The ticket's criterion is: "R2: a plan with a criterion QA cannot run fails the check, with tests for a disallowed command, a credentialed command and a post-merge criterion". It maps to AC1 and AC2, and AC3 applies it to this plan. This plan is written to pass its own P1.
+`<r>` stands for `/Users/labsatoshi/base-ai`, and `<base>` for `7720031b6614d21722b92a2336ab96bddf25af94` (`development`, the merge base). QA runs every command with full paths after the coordinator's step 4 commit, and prefixes `npm` and `node` commands with `PATH=/Users/labsatoshi/.asdf/installs/nodejs/20.11.0/bin:$PATH`. The ticket's criterion is: "R2: a plan with a criterion QA cannot run fails the check, with tests for a disallowed command, a credentialed command and a post-merge criterion". It maps to AC1 and AC2, and AC3 applies it to this plan. This plan is written to pass its own P1.
 
 - [ ] **AC1 — Tests.** `npm --prefix <r>/cli run test` exits 0, and its output shows every test whose name starts with `R2` passing. `npm --prefix <r>/cli run test:coverage` exits 0.
 - [ ] **AC2 — The three tests of the ticket.** `grep -c -E "R2 P1 fails (a disallowed command|a credentialed command|a merged-state criterion)" <r>/cli/src/test/pipeline-plan.test.ts` prints `3`. Reading those three tests shows assertions that P1 fails with the reasons `not in the Commands of qa.md`, `needs credentials or the environment` and `needs a merged state or a remote run`.
 - [ ] **AC3 — This ticket's own plan and lock.** `node <r>/cli/dist/index.js pipeline plan <r>/.ai/tasks/BASE-140-B --root <r>` exits 0, and its output shows `✔ P1 plan.criteria` and `✔ P2 plan.lock`.
-- [ ] **AC4 — Older directories are not failed.** `node <r>/cli/dist/index.js pipeline plan <r>/.ai/tasks/BASE-140-C --root <r>` exits 0, and its output shows `- P1 plan.criteria — skipped: locked before the plan gate` and `- P2 plan.lock — skipped: locked before the plan gate`.
-- [ ] **AC5 — Lock and `pipeline ci` tests.** `grep -n -E "R2 (P2|ci|pipeline plan)" <r>/cli/src/test/pipeline-plan.test.ts <r>/cli/src/test/pipeline-ci.test.ts <r>/cli/src/test/pipeline-cli.test.ts` shows:
-  - in `pipeline-plan.test.ts`: the P2 pass test, a fail test for each D2 item, the halt test, and `R2 P2 and K6 find the same lock entry`;
+- [ ] **AC4 — Older directories are not failed.** `node <r>/cli/dist/index.js pipeline plan <r>/.ai/tasks/BASE-140-C --root <r>` exits 0, and its output shows `- P1 plan.criteria — skipped: exempt (locked before the plan gate)` and `- P2 plan.lock — skipped: exempt (locked before the plan gate)`.
+- [ ] **AC5 — Lock and `pipeline ci` tests.** `grep -n -E "R2 (P2|ci|pipeline plan|PRE_GATE_TASKS)" <r>/cli/src/test/pipeline-plan.test.ts <r>/cli/src/test/pipeline-ci.test.ts <r>/cli/src/test/pipeline-cli.test.ts` shows:
+  - in `pipeline-plan.test.ts`: the P2 pass test, a fail test for each D2 item, the halt test, `R2 P2 binds to the latest binding entry`, `R2 P2 and K6 find the same lock entry`, `R2 P2 and K18 read Covers alike` and `R2 PRE_GATE_TASKS is the frozen list of the 31 directories locked before the gate`;
   - in `pipeline-ci.test.ts`: the trigger, fail and halt tests;
   - in `pipeline-cli.test.ts`: the real-repository test.
 
   `grep -c "R2 P1 mirrors the Commands of qa.md" <r>/cli/src/test/pipeline-plan.test.ts` prints `1`.
-- [ ] **AC6 — Command wiring.** `grep -n "pipeline plan" <r>/cli/src/index.ts <r>/cli/src/pipeline-ci.ts` shows the `USAGE` line, the dispatch and the `pipeline ci` dependency. `grep -n "PLAN_GATE_SINCE = \"2026-11-25T00:00:00Z\"" <r>/cli/src/pipeline-plan.ts` prints one line.
-- [ ] **AC7 — Planner definition.** `grep -n -E "plan-review\.md|pipeline plan" <r>/.claude/agents/planner.md` shows a line of the forbidden list naming `.ai/tasks/<ticket-id>/plan-review.md` and the Step 3 line that runs `pipeline plan`. `wc -c <r>/.claude/agents/planner.md` prints at most `7000`, or at most `8000` when `grep -n -E "^    planner: " <r>/.ai/config.yaml` prints `2000` (H8).
-- [ ] **AC8 — Docs.** `grep -n "pipeline plan" <r>/docs/task-state-machine.md` shows the `Plan check` paragraph and the edited `Plan review`, `CI check` and `Who reads the commands` paragraphs. `grep -c -F "The gate is enforced by instruction only" <r>/docs/task-state-machine.md` prints `0`.
+- [ ] **AC6 — Command wiring.** `grep -n "pipeline plan" <r>/cli/src/index.ts <r>/cli/src/pipeline-ci.ts` shows the `USAGE` line, the dispatch and the `pipeline ci` dependency. `grep -n "PRE_GATE_TASKS" <r>/cli/src/pipeline-plan.ts` shows the constant's definition, and `grep -c "PLAN_GATE_SINCE" <r>/cli/src/pipeline-plan.ts` prints `0`.
+- [ ] **AC7 — Planner definition.** `grep -n -E "plan-review\.md|pipeline plan" <r>/.claude/agents/planner.md` shows a line of the forbidden list naming `.ai/tasks/<ticket-id>/plan-review.md` and the Step 3 line that runs `pipeline plan`. `wc -c <r>/.claude/agents/planner.md` prints at most `7000`, or at most `8000` when `grep -n -E "^    planner: " <r>/.ai/config.yaml` prints a line ending in `2000` (H8).
+- [ ] **AC8 — Docs.** `grep -n "pipeline plan" <r>/docs/task-state-machine.md` shows the `Plan check` paragraph and the edited `Plan review`, `CI check` and `Who reads the commands` paragraphs. `grep -c -F "The gate is enforced by instruction only" <r>/docs/task-state-machine.md` prints `0`. `grep -n -E "lock re-binding|not a required status check" <r>/docs/task-state-machine.md` shows the transition-rule line and the `Plan check` paragraph.
 - [ ] **AC9 — Skill, exports and template.**
   - `grep -n "pipeline plan" <r>/.ai/skills/pipeline/skill.md` shows coordinator item 1 and the **Mechanical** line;
+  - `grep -n "re-binding" <r>/.ai/skills/pipeline/skill.md` shows the state-machine row and coordinator items 1 and 4;
   - `grep -c -F "the plan-review gate at the lock (" <r>/.ai/skills/pipeline/skill.md` prints `0`;
-  - `grep -c "pipeline plan" <r>/.claude/commands/pipeline.md` prints the same number as for the skill;
+  - `grep -c "pipeline plan" <r>/.ai/skills/pipeline/skill.md` and `grep -c "pipeline plan" <r>/.claude/commands/pipeline.md` print the same number;
   - `grep -n "pipeline plan" <r>/templates/task/plan.md` prints the acceptance-criteria comment line;
   - `grep -n "pipeline plan" <r>/.github/workflows/ci.yml` prints the `task-dirs` comment.
-- [ ] **AC10 — README.** `grep -n "pipeline plan" <r>/README.md` shows the command-block line, the **Checking a plan** bullet and the **Checking a pull request** bullet. `grep -c -F "6,250 for" <r>/README.md` prints `0`, and `grep -n -F "budgets.definition_totals" <r>/README.md` shows the pointer at the **Definition budgets** bullet.
-- [ ] **AC11 — Mechanical rules and other roles unchanged.** `git -C <r> diff --name-only <base> -- cli/src/pipeline-check.ts cli/src/pipeline-registration.ts cli/src/pipeline-gh.ts cli/src/dashboard-data.ts cli/src/package-check.ts .claude/agents/supervisor.md .claude/agents/supervisor .claude/agents/qa.md .claude/agents/qa .claude/agents/reviewer.md .claude/agents/reviewer .claude/agents/implementer.md .claude/agents/improvement.md templates/task/plan-review.md .ai/rules.md` prints nothing.
-- [ ] **AC12 — Scope.** `git -C <r> diff --name-only <base>` and `git -C <r> ls-files --others --exclude-standard` list only paths from "Files to touch".
+- [ ] **AC10 — README.** `grep -n "pipeline plan" <r>/README.md` shows the command-block line, the **Checking a plan** bullet and the **Checking a pull request** bullet. `grep -c -F "6,250 for" <r>/README.md` prints `0`, and `grep -n -F "the current values are in" <r>/README.md` shows the pointer at the **Definition budgets** bullet.
+- [ ] **AC11 — Mechanical rules and other roles unchanged.** `git -C <r> diff --no-ext-diff --no-textconv --name-only <base> -- cli/src/pipeline-check.ts cli/src/pipeline-registration.ts cli/src/pipeline-gh.ts cli/src/dashboard-data.ts cli/src/package-check.ts .claude/agents/supervisor.md .claude/agents/supervisor .claude/agents/qa.md .claude/agents/qa .claude/agents/reviewer.md .claude/agents/reviewer .claude/agents/implementer.md .claude/agents/improvement.md templates/task/plan-review.md .ai/rules.md` prints nothing.
+- [ ] **AC12 — Scope.** `git -C <r> diff --no-ext-diff --no-textconv --name-only <base>` and `git -C <r> ls-files --others --exclude-standard` list only paths from "Files to touch".
 
 ## Coordinator evidence (not acceptance criteria)
 
@@ -317,7 +378,7 @@ Not touched: `cli/src/pipeline-check.ts`, `pipeline-registration.ts`, `pipeline-
 ## Post-merge verification
 
 - **Coordinator, on the PR:** the `task-dirs` job prints `plan ok` for `BASE-140-B`.
-- **Human/coordinator:** comment on #106 that `reg BASE-140-C review r1 i2` and `i3` are fixed by this PR. Note on #140 that R2 and the BASE-140-C H1 follow-up are done; the before/after comparison stays open.
+- **Human/coordinator:** register the follow-up "make `task-dirs` a required status check" on #106 (H12). Comment on #106 that `reg BASE-140-C review r1 i2` and `i3` are fixed by this PR. Note on #140 that R2 and the BASE-140-C H1 follow-up are done; the before/after comparison stays open.
 - **Next ticket:** the planner and the coordinator run `pipeline plan` before its first plan-review round, and after its lock.
 
 ## Human decisions (recorded before the plan review)
@@ -325,8 +386,8 @@ Not touched: `cli/src/pipeline-check.ts`, `pipeline-registration.ts`, `pipeline-
 The human answered on 2026-11-25 ("aprobado con tus recomendaciones"), taking every recommendation below; the coordinator relayed it. This is the answer to the open questions, not the plan approval: the plan is still unlocked and goes to the reviewer's plan review first. Recorded decisions:
 
 - **H1:** (a). A new read-only command `base-ai pipeline plan` with P1 and P2; K1–K19, `RULE`, the supervisor and the dashboard unchanged.
-- **H2:** yes. `pipeline ci` runs `pipeline plan` when `status.json`, `plan.md` or `plan-review.md` changed; a failure fails the PR, a git failure halts it.
-- **H3:** the fixed timestamp. `PLAN_GATE_SINCE` = `2026-11-25T00:00:00Z`; earlier locks are skipped.
+- **H2:** yes. `pipeline ci` runs `pipeline plan` when `status.json`, `plan.md`, `plan-review.md` (or, after H14, `decisions.md`) changed. A failure fails the `task-dirs` job, which is not a required check (H12), and a git failure halts it.
+- **H3:** the fixed timestamp, as first answered. **Superseded by H13** after plan review round 1 (M5): there is no `PLAN_GATE_SINCE`.
 - **H4:** yes. `node --test` and `node …/index.js pipeline check|plan` only; npm scripts named test, lint, typecheck, coverage, build (with `:suffix`); `base-ai`/`npx` heads denied.
 - **H5:** yes. Unknown first words are literals; every criterion needs at least one allowed command.
 - **H6:** yes. The D1.8 merged-state list, outside code spans.
@@ -336,6 +397,12 @@ The human answered on 2026-11-25 ("aprobado con tus recomendaciones"), taking ev
 - **H10:** yes. The reviewer's plan-review mode is unchanged.
 - **H11:** yes. The coordinator runs P2 after the lock (skill item 1); planner Step 5 is unchanged.
 
+Decisions on the findings of plan review round 1 (2026-11-25, relayed by the coordinator):
+
+- **H12 (M2):** reword. `task-dirs` reports a failure, and the human must not merge while it is red. It is not a required status check; making it one is out of scope for this ticket and becomes a follow-up (registered on #106).
+- **H13 (M5):** exempt a frozen, explicit list of the task ids locked before the gate (`PRE_GATE_TASKS`, D1.1) instead of a timestamp cut-off. The list is deterministic, works locally and in CI, and a new directory cannot get onto it by back-dating.
+- **H14 (M6):** P2 binds to the latest lock entry. A second or later lock entry (a re-binding) is valid only with `agent: "human"` and a `decisions.md` D-block whose `Covers:` names it. This is the recovery path for a wrong note or a rewritten plan commit. It is swept into the doc and skill statements (D7).
+
 The options as they were put to the human:
 
 - **H1 — Where the checks live.**
@@ -343,7 +410,7 @@ The options as they were put to the human:
   - (b) K20/K21 in `pipeline check`. That changes `RULE`, `supervisor.md` (C0's "K1–K19", the gate table), the dashboard's 19 cells, the docs and the README. It would be the supervisor's own ticket, and the human would validate.
 
   *Recommended: (a).* P1 is meant to run before the lock, when `pipeline check` is not yet relevant.
-- **H2 — `pipeline ci` runs `pipeline plan`** when `status.json`, `plan.md` or `plan-review.md` changed. A failure fails the PR, and a git failure halts it. *Recommended: yes.* Without it, P1 and P2 are advisory, and the H1 follow-up is not mechanical at merge.
+- **H2 — `pipeline ci` runs `pipeline plan`** when `status.json`, `plan.md` or `plan-review.md` changed. A failure fails the PR, and a git failure halts it. (Round 1, M2: it fails the `task-dirs` job, which is not a required check; see H12.) *Recommended: yes.* Without it, P1 and P2 are advisory, and the H1 follow-up is not mechanical at merge.
 - **H3 — Cut-off.** P1 and P2 apply to unlocked tasks and to locks at or after `2026-11-25T00:00:00Z`; earlier locks are skipped. Every existing lock is at or before `2026-11-24T23:42:40Z`. The alternative is to skip when `plan-review.md` is missing, which can be bypassed by omitting the file. *Recommended: the fixed timestamp.*
 - **H4 — Allowed `node` and `npm` forms.** Allowed: `node --test` and `node …/index.js pipeline check|plan`. Denied: `node -e`/`--eval`/`--input-type`, every other CLI subcommand (`ai stats`, `ai sync`, `doctor`, `pipeline debt`, `pipeline ci`), and the `base-ai`/`npx` heads, so plans name the built CLI by path. npm scripts are limited to the names test, lint, typecheck, coverage and build (with `:suffix`). *Recommended: yes.* Logic of the kind BASE-124-B AC4 ran inline (`node --input-type=module -e`) goes into a test.
 - **H5 — Unknown command words and the one-command rule.** A code span whose first word is outside the vocabulary is a literal, not a command, and every criterion must contain at least one allowed command. The alternative is to mark commands explicitly in the template (for example a `Command:` label), which changes every plan's format. *Recommended: the vocabulary plus the one-command rule.* The plan review covers unknown tools.
@@ -358,6 +425,9 @@ The options as they were put to the human:
 
 - **Self-test.** AC3 runs P1 on this plan. If the implemented vocabulary and this plan's wording disagree, AC3 fails. That would be a plan defect, which the human decides (`decisions.md`), never a silent rewording.
 - **False positives and negatives.** The vocabulary is fixed and documented. A false positive is fixed by rewording, or by putting a literal in a code span. A false negative (an unknown tool) is left to the plan review.
-- **CI checkout.** `task-dirs` checks out the PR merge commit. `git log -1 -- <plan>` follows the side that holds `plan.md` (history simplification), which is the PR head. A squash merge would rewrite the plan commit, and a later PR that touches the directory would then fail P2. The repository merges with merge commits (#145, #146).
+- **CI checkout and rewritten commits.** `task-dirs` checks out the PR merge commit, and `git log -1 -- <plan>` follows the side that holds `plan.md` (history simplification), which is the PR head. Some operations rewrite the plan commit: a squash merge, a rebase of the ticket branch after the lock, or a cherry-pick. After any of them, P2 fails for that directory on every later PR that touches it. The repository merges with merge commits (#145, #146).
+  - The rule the coordinator follows: never rebase or cherry-pick a ticket branch after its lock; bring `development` in with a merge.
+  - If the commit is rewritten anyway, the human decides a re-binding (H14). The coordinator appends the `human` entry with the new commit and records the covering D-block.
 - **QA classification.** QA treats `node …/index.js pipeline plan` as a plan-named, test-category command, as it did `pipeline check` in BASE-124-B. If QA classifies it as forbidden to run, AC3 and AC4 are "not verified", and the human decides.
+- **Follow-up (H12).** Until `task-dirs` is a required status check, P1 and P2 at merge rely on the human not merging over a red job.
 - **Cost.** Most of the work is the coordinator's CLI code, so the reviewer's round 1 is heavier. Tech debt from this ticket goes on #106, never on a new issue.
