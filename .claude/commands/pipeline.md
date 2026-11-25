@@ -117,7 +117,7 @@ The coordinator never writes a report (`plan-review.md` included), a verdict fie
 
 ## Evidence and git
 
-From BASE-071-P3 on, a task's `status.json`, `plan.md`, `decisions.md`, review, QA and improvement reports and `usage.jsonl` are versioned and reach the PR with the branch; `evidence/` stays local. Agents never commit: the coordinator commits the task files with each step's commit and once more after validation, and CI (`base-ai pipeline ci`) checks every changed task directory, `transitions[]` append-only included. Scratch copies for dry runs are named `<name>.scratch` and are never committed. The review and QA reports are still published on the PR. The PR's "Security audit" quotes the latest review round's Security section, unchanged, naming the round.
+From BASE-071-P3 on, a task's `status.json`, `plan.md`, `decisions.md`, plan review, review, QA and improvement reports and `usage.jsonl` are versioned and reach the PR with the branch; `evidence/` stays local. Agents never commit: the coordinator commits the task files with each step's commit and once more after validation, and CI (`base-ai pipeline ci`) checks every changed task directory, `transitions[]` append-only included. Scratch copies for dry runs are named `<name>.scratch` and are never committed. The review and QA reports are still published on the PR. The PR's "Security audit" quotes the latest review round's Security section, unchanged, naming the round.
 
 ## Changing the protocol
 

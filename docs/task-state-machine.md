@@ -16,7 +16,7 @@ The state lives in `.ai/tasks/<ticket-id>/status.json`.
 ## Transition rules
 
 ```
-pending ──(human approves plan)──► pending       [only after an approved plan review of the committed plan.md (D3); planner sets plan_locked=true on approval given to it; otherwise the coordinator records the human's lock entry]
+pending ──(human approves plan)──► pending       [only after an approved plan review of the committed plan.md (see **Plan review** below); planner sets plan_locked=true on approval given to it; otherwise the coordinator records the human's lock entry]
 pending ──(reviewer plan review)──► pending      [plan-review mode writes plan-review.md only: no status.json field, no transitions[] entry]
 pending ──(implementer claims)──► in_progress    [implementer sets assignee=implementer; asserts plan_locked, never writes it]
 in_progress ──(checklist complete)──► completed  [implementer sets checklist fields]

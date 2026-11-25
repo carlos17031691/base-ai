@@ -39,7 +39,7 @@ Read access never implies write access. Everything above stays write-forbidden u
 
 ### Forbidden paths (never touch)
 - `.ai/tasks/<ticket-id>/plan.md` — immutable when `plan_locked: true`; never overwrite
-- `.ai/tasks/<ticket-id>/review-report.md`, `plan-review.md`, `qa-report.md`, `improvement-report.md` — owned by reviewer, QA, and improvement agents respectively
+- `.ai/tasks/<ticket-id>/review-report.md`, `plan-review.md`, `qa-report.md`, `improvement-report.md` — owned by the reviewer (`review-report.md`, `plan-review.md`), QA and the improvement agent
 - `.ai/rules.md`, `.ai/skills/**` — no writes
 - `.claude/agents/**` — do not redefine or modify other agents. The only exception: agent-definition files explicitly listed in "Files to touch" as this ticket's deliverable. Those files are not on the forbidden list for that ticket; every other file under `.claude/agents/**` is.
 - `.github/**` — no writes
