@@ -227,3 +227,79 @@ The whole change set against the merge-base is the round 1 set plus `.ai/tasks/B
 ### Verdict (round 2 — authoritative): approved
 
 Low findings L5 and L6 must be registered as tech debt before human approval, or fixed in a delta round.
+
+## Round 3 re-review (delta)
+
+- Reviewed at: 2026-11-25T01:48:24Z
+- Implementer completion reviewed: 2026-11-25T01:41:52Z. This is the same completion as round 2, unchanged; there is no implementer re-entry.
+- Branch: `feat/BASE-140-B-ac-lint`.
+- Base: `cedb158c136ecc8394167e3471a80706b75f23a9`, the newest commit under review in round 2. `git merge-base --is-ancestor <base> HEAD` passes.
+- HEAD: `fd5c2f82fe948be06d5723a3f81b873bcb97533a`.
+- Commits since the base: `fd5c2f8 fix(BASE-140-B): review round 2 Lows L5, L6 (delta)` and `2b2b658 chore(BASE-140-B): review round 2 (approved)`.
+- Uncommitted changes: none. Untracked files: none.
+- Base choice: none needed (`origin/development` and `development` are both at `7720031b6614d21722b92a2336ab96bddf25af94`).
+- Low ids, as given by the invocation: L5, L6.
+- This round's verdict is the authoritative one.
+
+### Named Lows
+
+| # | Status | Evidence |
+|---|---|---|
+| L5 | Fixed | `cli/src/pipeline-ci.ts:5-6` now says "its two fixed git calls per directory, and up to three `rev-parse` calls more for a lock re-binding that names a rewritten commit". This matches `docs/task-state-machine.md:128`, `:130` and `README.md:192`. |
+| L6 | Fixed | `tokenize` errors now carry `inPrefix` and `head` (`cli/src/pipeline-plan.ts:203-211`). In the prefix branch with an unknown head, `judgeCandidate` fails on a tokenizer error only when the error falls in the prefix or follows a known head; otherwise the span stays a literal (`:354`). `mode=fast (default)` and `x=1 isn't` are now literals. `TOKEN=$(cat f) gh …` still fails (the error is inside the `TOKEN=` word). `TOKEN="a b" gh issue view 1; ls` fails as an operator (the known head is `gh`). Tests: `cli/src/test/pipeline-plan.test.ts:264`, `:266`. |
+
+**Is the new gap closed?** Traced cases:
+- An error at a word start right after the prefix, such as `TOKEN=x $(gh issue view 1)` or `X="a b" foo; gh x`, now yields a literal. In round 2 it failed.
+- This is the same outcome as the same text without a prefix (`$(gh issue view 1)`, `foo; gh x`): an unknown first word is a literal, which is the H5 class accepted in round 1. So the delta brings the prefix case back into line with H5 and opens no class beyond it. No finding.
+- `err()` runs once per error, with a linear `every` and `find` over the words.
+
+### Scope check of the delta
+
+| Delta file | Where the plan lists it | Result | Named Low |
+|---|---|---|---|
+| `cli/src/pipeline-ci.ts` (comment lines 5-6 only) | Files to touch | In scope | L5 |
+| `cli/src/pipeline-plan.ts` (`tokenize` error shape, `judgeCandidate` branch) | Files to touch | In scope | L6 |
+| `cli/src/test/pipeline-plan.test.ts` (three assertions in the L1/L6 test) | Files to touch | In scope | L6 |
+| `.ai/tasks/BASE-140-B/review-report.md`, `status.json`, `usage.jsonl` | Files to touch | In scope | exempt pipeline artefacts (round 2 and its entry, hook usage) |
+
+Every hunk is explained by a named Low.
+
+### New findings of the delta
+
+| Severity | # | File:line | Finding | Required fix |
+|---|---|---|---|---|
+| — | — | — | none | — |
+
+### Acceptance criteria
+
+| Criterion | Evidence (`file:line`) | Result |
+|---|---|---|
+| AC1 — tests and coverage exit 0, R2 tests pass | The delta touches `pipeline-plan.test.ts:264`, `:266`. The coordinator reports 467 tests passing, which was not verified; execution is QA's | Met (static; execution not verified) |
+| AC2 — three ticket tests | The titles at `pipeline-plan.test.ts:129`, `:168`, `:189` are unchanged | Met (round 2; evidence not touched by the delta) |
+| AC3 — BASE-140-B passes P1 and P2 | P1's judging changed (`pipeline-plan.ts:354`), but only toward literal, never toward a new fail on a command. `plan.md` is unchanged at `75fdbd3`. The coordinator reports an E2 rerun with exit 0, which was not verified | Met (static; execution not verified) |
+| AC4 — BASE-140-C exempt | The exemption code is unchanged | Met (round 2; evidence not touched by the delta) |
+| AC5 — lock, ci and cli test titles; mirror count 1 | The titles are unchanged | Met (round 2; evidence not touched by the delta) |
+| AC6 — command wiring | `pipeline-ci.ts:4` still holds "pipeline plan"; the other evidence is unchanged | Met |
+| AC7 — planner definition | Not touched | Met (round 2; evidence not touched by the delta) |
+| AC8 — docs | Not touched | Met (round 2; evidence not touched by the delta) |
+| AC9 — skill, exports, template, `ci.yml` | Not touched | Met (round 2; evidence not touched by the delta) |
+| AC10 — README | Not touched | Met (round 2; evidence not touched by the delta) |
+| AC11 — protected paths unchanged | The delta touches none of the 15 paths | Met |
+| AC12 — scope | Scope check above | Met |
+
+### Security
+
+- Trust boundary touched: yes — external input
+- Method: STRIDE
+- Findings: none
+
+| Category | Result | Basis |
+|---|---|---|
+| Spoofing | none | No identity or authorship logic in the delta (`pipeline-plan.ts:203-211`, `:354`; `pipeline-ci.ts:5-6` is a comment). |
+| Tampering | none | Fails-to-literal now occur only where the head is unknown and the error is outside the prefix. That is the accepted H5 class: no known head is hidden (traced above). |
+| Repudiation | none | The delta writes nothing. The pipeline artefacts are append-only (the round 2 reviewer entry). |
+| Information disclosure | none | The new `inPrefix` and `head` fields stay internal to `judgeCandidate`. A judgement returns only `{ kind }` or a fixed `REASON` value (`pipeline-plan.ts:354`), and no output path changed. |
+| Denial of service | none | `err()` runs once per error, with linear `every` and `find` calls (`pipeline-plan.ts:207-211`). Reads are still bounded. |
+| Elevation of privilege | none | No change to the git calls, the processes or the paths. |
+
+### Verdict (round 3 — authoritative): approved
