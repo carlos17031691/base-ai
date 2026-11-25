@@ -4,7 +4,7 @@
   "plan_locked": true,
   "assignee": null,
   "created_at": "2026-11-25T02:14:49Z",
-  "updated_at": "2026-11-25T15:20:00Z",
+  "updated_at": "2026-11-25T15:04:42Z",
   "transitions": [
     {
       "from": null,
@@ -24,15 +24,29 @@
       "from": "pending",
       "to": "in_progress",
       "agent": "implementer",
-      "timestamp": "2026-11-25T15:00:00Z",
+      "timestamp": "2026-11-25T14:26:08Z",
       "note": "implementer claimed task; plan_locked asserted true"
     },
     {
       "from": "in_progress",
       "to": "completed",
       "agent": "implementer",
-      "timestamp": "2026-11-25T15:20:00Z",
+      "timestamp": "2026-11-25T14:28:09Z",
       "note": "all files in effective allow-list written (D1-D4); checklist populated: tests_pass via npm --prefix cli run test (467 pass), types_pass via npx tsc --noEmit in cli (exit 0); lint_pass left false, not applicable (cli has no lint script; deliverables are docs/JSON), deferred to QA; D5 and E1-E3 left to the coordinator"
+    },
+    {
+      "from": "completed",
+      "to": "in_progress",
+      "agent": "implementer",
+      "timestamp": "2026-11-25T15:00:19Z",
+      "note": "human-instructed send-back (human decision D1, relayed by coordinator): check:package fails on the D2 runbook inline path docs/operations/runbooks/branch-rulesets.md in docs/task-state-machine.md; reword to plain words"
+    },
+    {
+      "from": "in_progress",
+      "to": "completed",
+      "agent": "implementer",
+      "timestamp": "2026-11-25T15:01:33Z",
+      "note": "D2 sentence reworded per human decision D1 (docs/task-state-machine.md only); check:package passes; tests_pass (467 pass) and types_pass (tsc exit 0) re-run; lint_pass left false, not applicable (no lint script), deferred to QA"
     }
   ],
   "checklist": {
