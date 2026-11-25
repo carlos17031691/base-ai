@@ -9,9 +9,9 @@
 #140 found that pattern A, acceptance criteria that the verifying role cannot run, caused five blocking findings: C1 M3, C1 QA AC12, P1 QA AC6, G1 QA r1 and T6 QA r1. A prose rule did not stop it. BASE-103-K1 added the rule to `planner.md` on 2026-11-22, and BASE-079-T6 broke it the next day. R2 turns the rule into a command that fails. This ticket adds a read-only command, `base-ai pipeline plan <task-dir>`, with two checks:
 
 - **P1 `plan.criteria`** fails when a criterion names a command outside the "Commands" of `.claude/agents/qa.md`, needs network or credentials, depends on a merged state, or has no command QA can run.
-- **P2 `plan.lock`** fails when the lock entry does not name the latest plan-review round, or that round is not `approved`, or its plan commit is not the last commit of an unchanged `plan.md`. This is the mechanical check that BASE-140-C H1 deferred to this ticket.
+- **P2 `plan.lock`** fails when the lock entry does not name the latest plan-review round, or that round is not `approved`, or its plan commit is not the last commit of an unchanged `plan.md`. A human re-binding may name a rewritten commit, but only of the same `plan.md` content (H14). This is the mechanical check that BASE-140-C H1 deferred to this ticket.
 
-The planner and the coordinator run the command before each plan-review round, and the coordinator runs it again after the lock. `pipeline ci` runs it on every PR, so a plan that breaks either rule fails the `task-dirs` job. `task-dirs` is not a required status check, so the human must not merge while it is red (H12); making it required is a follow-up. A frozen list of the 31 task directories locked before the gate is exempt (H13). P2 binds to the latest lock entry, and a later one is a human re-binding covered by `decisions.md` (H14). The ticket also closes two debt items of BASE-140-C on #106. It adds `plan-review.md` to the planner's forbidden list (`reg BASE-140-C review r1 i2`), and it fixes the stale budget sentence in the README (`reg BASE-140-C review r1 i3`, H9).
+The planner and the coordinator run the command before each plan-review round, and the coordinator runs it again after the lock. `pipeline ci` runs it on every PR, so a plan that breaks either rule fails the `task-dirs` job. `task-dirs` is not a required status check, so the human must not merge while it is red (H12); making it required is a follow-up. A frozen list of the 31 task directories locked before the gate is exempt (H13). P2 binds to the latest lock entry. A later entry is a human re-binding covered by `decisions.md`, and it is allowed only for a wrong lock note or for the same plan content under a rewritten commit (H14). The ticket also closes two debt items of BASE-140-C on #106. It adds `plan-review.md` to the planner's forbidden list (`reg BASE-140-C review r1 i2`), and it fixes the stale budget sentence in the README (`reg BASE-140-C review r1 i3`, H9).
 
 ## Baseline (verified on 2026-11-25; revised after plan review round 1)
 
@@ -128,19 +128,26 @@ The planner and the coordinator run the command before each plan-review round, a
    - A **re-binding entry** is any later entry whose note contains the clause of item 3. It is valid only when it has `agent: "human"` and `from` equal to `to`, and a `## D<n>` block of `decisions.md` names its timestamp in `Covers:`. Otherwise P2 fails, with `re-binding entry not by the human`, `re-binding entry changes state` or `re-binding entry not covered by decisions.md`.
    - P2 binds to the **latest** binding entry: the latest valid re-binding entry if there is one, otherwise the lock entry.
    - `decisions.md` is read through `readBounded`. `Covers:` is read with the K17 grammar: a column-0 field line, optionally after `- `/`* `, optionally bold; comma-separated items outside parentheses; each item a timestamp optionally followed by one `(note)`. A test (D6) pins this reading to K18's coverage.
-   - A re-binding is the recovery path for a wrong lock note, or for a plan commit rewritten by a rebase, squash or cherry-pick. The human decides it, the coordinator appends it and records the D-block, and earlier entries are never edited (invariant 5).
+   - A re-binding is the recovery path for exactly two cases: a wrong lock note, or the same `plan.md` content under a commit rewritten by a rebase, squash or cherry-pick (H14, clarified after round 2 M7). It never accepts post-lock content that was not plan-reviewed. A change the human decides after the lock goes to `decisions.md`, and `plan.md` stays unedited (Locked plans).
+   - **Attestation.** The covering D-block must say that the content is unchanged. Its `Decision:` value must contain `plan.md unchanged since plan review round <R>`, with R the round of item 4. Otherwise P2 fails `re-binding not attested as unchanged plan.md`.
+   - The human decides the re-binding, the coordinator appends it and records the D-block, and earlier entries are never edited (invariant 5).
 3. The bound entry's note must contain `plan review round <N> approved, plan.md at <c>`, where `<c>` is 40 lowercase hex characters. Otherwise P2 fails `lock note names no approved plan-review round and commit`.
 4. `plan-review.md` is read through `readBounded`; when it is missing or unreadable, P2 fails. It is parsed as follows:
    - closed HTML comments are blanked and fences are ignored;
    - rounds are the column-0 headings `## Plan review round <R>`, numbered 1…R in order. When there are none, or the numbering is broken, P2 fails.
    - P2 fails when the note's `<N>` is not R (only numbers are printed);
-   - round R must have exactly one `Plan commit:` field line (an optional `- `/`* ` and optional bold; the value is 40 hex, optionally in backticks). When P2 is bound to the lock entry, that value must equal `<c>`. When it is bound to a re-binding entry, the value is not compared, because a rewritten commit is exactly the case the human's D-block records;
+   - round R must have exactly one `Plan commit:` field line (an optional `- `/`* ` and optional bold; the value is 40 hex, optionally in backticks). Call that value `<p>`. When P2 is bound to the lock entry, `<p>` must equal `<c>`. When it is bound to a re-binding entry, `<p>` may differ from `<c>`, and the content is compared in item 5 instead;
    - round R must have exactly one `### Verdict:` line, and its word must be `approved`.
-5. **Git.** Git runs only when items 1–4 pass. The task directory name must match `^[A-Za-z0-9#._-]+$`, and `plan.md` must lie under `--root`; otherwise P2 fails. Two fixed calls run through argv:
+5. **Git.** Git runs only when items 1–4 pass. The task directory name must match `^[A-Za-z0-9#._-]+$`, and `plan.md` must lie under `--root`; otherwise P2 fails. Fixed calls run through argv:
    - `git --literal-pathspecs -C <root> log -1 --format=%H -- <plan rel>` must print `<c>`;
-   - `git --literal-pathspecs --no-optional-locks -C <root> status --porcelain -- <plan rel>` must print nothing.
+   - `git --literal-pathspecs --no-optional-locks -C <root> status --porcelain -- <plan rel>` must print nothing;
+   - only when bound to a re-binding entry with `<p>` ≠ `<c>`: first `git -C <root> rev-parse --verify --quiet <p>^{commit}`. If it prints `<p>` (the old commit is still reachable), then `git -C <root> rev-parse --verify --quiet <p>:<plan rel>` and `git -C <root> rev-parse --verify --quiet <c>:<plan rel>` must print the same blob id. Otherwise P2 fails `re-binding names different plan.md content`.
+     - If the first call exits non-zero, the old commit is gone (for example rebased away, or not fetched). The content cannot be compared, and the D-block attestation stands alone.
+     - A runner failure other than a non-zero exit halts.
 
-   A difference fails, with `plan.md changed after the reviewed commit` or `plan.md has uncommitted changes`. When the runner fails (missing, exit, timeout or overflow), the outcome is `halt` (H7). `--no-optional-locks` keeps the index untouched, so QA's snapshot is unaffected. `<c>` is compared with git's output and is never passed to git. Timestamps are printed only after they match the K5 timestamp format.
+   A difference fails, with `plan.md changed after the reviewed commit` or `plan.md has uncommitted changes`. When the runner fails (missing, exit, timeout or overflow), the outcome is `halt` (H7). The one exception is the non-zero exit of the reachability call above. `--no-optional-locks` keeps the index untouched, so QA's snapshot is unaffected.
+
+   `<c>` and `<p>` reach git only after they match `^[0-9a-f]{40}$`, as `rev-parse` revisions, never as options; `<plan rel>` is the validated path. Timestamps are printed only after they match the K5 timestamp format.
 
 **D3 — Command and loader.**
 - `pipeline-files.ts` gains `loadPlanTask(root, dir)`. It returns `dirName`, `absPath`, the root-relative `plan.md` path and `readBounded` reads of `status.json`, `plan.md`, `plan-review.md` and `decisions.md`. `loadTask` is unchanged.
@@ -183,7 +190,12 @@ The planner and the coordinator run the command before each plan-review round, a
   - P2 passing on a lock bound to the latest approved round and the last plan commit;
   - P2 failing for each item of D2;
   - P2 halting on a runner failure;
-  - `R2 P2 binds to the latest binding entry`: a covered human re-binding after a wrong note or a rewritten commit passes. A re-binding by a non-human agent, one that changes state, and one not covered by `decisions.md` each fail;
+  - `R2 P2 binds to the latest binding entry`: a covered, attested human re-binding after a wrong note passes. So does one after a rewritten commit with the same `plan.md` blob, and one whose old commit is unreachable. These each fail:
+    - a re-binding by a non-human agent;
+    - one that changes state;
+    - one not covered by `decisions.md`;
+    - one whose D-block lacks the attestation;
+    - one naming a commit whose `plan.md` blob differs from the reachable old commit's;
   - `R2 P2 and K6 find the same lock entry`;
   - `R2 P2 and K18 read Covers alike`.
 - `cli/src/test/pipeline-ci.test.ts`: when the plan check runs (including on a `decisions.md`-only change) and when it is skipped; a per-directory fail (exit 1) and halt (exit 2, with `CiReport.halt` absent); the updated text lines.
@@ -192,17 +204,17 @@ The planner and the coordinator run the command before each plan-review round, a
 **D7 — Docs and guidance.**
 - `docs/task-state-machine.md`:
   - a new **Plan check** paragraph after **CI check**, covering D1–D4: the checks, the `PRE_GATE_TASKS` exemption, binding and re-binding entries, the git calls, exit codes and output. It also states two facts. `task-dirs` is not a required status check, so a red run does not block the merge by itself and the human must not merge over it (H12). The CLI that judges a PR is built from that PR, so a change to `pipeline-plan.ts` is a change to the rule and is reviewed as one (L5);
-  - **Plan review** (`:33`): "The gate is enforced by instruction only: …" becomes: the lock writer checks (a) and (b) before writing; `pipeline plan` P2 checks the written lock afterwards, and `pipeline ci` runs it on every PR in the `task-dirs` job, which is not a required check (H12); a wrong lock is corrected only by a human re-binding entry covered by `decisions.md` (H14); `pipeline check` still does not read `plan-review.md`;
-  - transition rules (`:18-29`): one line `<state> ──(lock re-binding)──► <state>`, human only, note with the plan-review clause, covered by `decisions.md` (H14);
+  - **Plan review** (`:33`): "The gate is enforced by instruction only: …" becomes: the lock writer checks (a) and (b) before writing; `pipeline plan` P2 checks the written lock afterwards, and `pipeline ci` runs it on every PR in the `task-dirs` job, which is not a required check (H12); a wrong lock note, or the same plan under a rewritten commit, is corrected only by a human re-binding entry covered by an attesting `decisions.md` block (H14). A re-binding never accepts post-lock plan content; a post-lock change the human decides goes to `decisions.md`, and `plan.md` stays unedited. `pipeline check` still does not read `plan-review.md`;
+  - transition rules (`:18-29`): one line `<state> ──(lock re-binding)──► <state>`. It is human only, for a wrong note or the same `plan.md` under a rewritten commit, with the plan-review clause in its note, and covered by a `decisions.md` block that attests `plan.md unchanged since plan review round <R>` (H14);
   - **CI check** (`:125`): "four fixed git calls" also covers the plan check's two calls per directory; the plan check, its four trigger files; a plan failure (exit 1) and a per-directory plan halt (exit 2, listed with the other halts);
   - **Who reads the commands** (`:127`): `pipeline plan` is run by the planner, the coordinator and CI, and by QA only when a plan names it; the supervisor does not read it.
 - `.ai/skills/pipeline/skill.md`:
-  - state-machine table: a row `<state>` → `<state>` (lock re-binding), human only, covered by a `decisions.md` block (H14);
+  - state-machine table: a row `<state>` → `<state>` (lock re-binding), human only, for unchanged plan content only, covered by an attesting `decisions.md` block (H14);
   - coordinator item 1: before ordering each plan-review round, run `pipeline plan` and order the round only when P1 passes. After the lock, run it again: P2 must pass. Otherwise report to the human, who may decide a re-binding (H14); never edit the entry;
-  - coordinator item 4: the human's `status.json` changes gain the lock re-binding (`from` and `to` the current state, the plan-review clause in the note, a `decisions.md` block covering it);
+  - coordinator item 4: the human's `status.json` changes gain the lock re-binding. It has `from` and `to` the current state, the plan-review clause in the note, and a `decisions.md` block covering it that attests `plan.md unchanged since plan review round <R>`. It is only for a wrong note or a rewritten commit of the same content;
   - "What is enforced":
     - **Mechanical** gains `pipeline plan` in the `task-dirs` job of `pipeline ci` (P1 criteria, P2 lock). That job reports a failure; it is not a required status check, so the human must not merge while it is red (H12);
-    - **By instruction only** replaces "the plan-review gate at the lock (`pipeline check` does not read `plan-review.md`)" with "not writing a lock without an approved plan review (P2 checks a written lock afterwards)". "plan immutability" gains "(P2 detects a committed change to `plan.md` after the lock)" (L6).
+    - **By instruction only** replaces "the plan-review gate at the lock (`pipeline check` does not read `plan-review.md`)" with "not writing a lock without an approved plan review (P2 checks a written lock afterwards)". "plan immutability" gains "(P2 detects a committed change to `plan.md` after the lock, unless a human re-binding attests the same content; where the old commit is still reachable, P2 also compares the content)" (L6, M7).
 - `templates/task/plan.md`: the acceptance-criteria comment says that `pipeline plan` (P1) checks each `- [ ]` item.
 - `README.md`:
   - a numbered command line for `pipeline plan` after item 12, with later items renumbered;
@@ -248,6 +260,7 @@ The planner and the coordinator run the command before each plan-review round, a
   - The skill lock row (`:37`), planner Step 5, the sdlc Gate 1 (`.ai/skills/sdlc/skill.md:16`, `:25`) and `.ai/rules.md`: the gate's conditions do not change, only their check after the fact.
   - `docs/task-state-machine.md:123` ("The supervisor reads their output; no other agent does"): it is about `pipeline check` and `pipeline debt` only.
   - Invariant 5 (append-only `transitions[]`, `:121`): re-binding appends an entry; it never edits one.
+  - "Locked plans" (`skill.md:83`, "the plan stays locked and unedited") and invariant 3: a re-binding covers only unchanged content (M7), so both still hold.
   - The skill's "For every role: no write … to another role's report" and the reviewer's write list: they already imply the D5 forbidden line, which makes it explicit.
   - The dashboard's five files and `loadTask`: `pipeline plan` has its own loader.
   - `.ai/skills/review/skill.md:20` and `infra/github/rulesets/protected-branches.json`: the required checks stay `cli` and SonarCloud. Making `task-dirs` required is a follow-up (H12).
@@ -261,8 +274,13 @@ The planner and the coordinator run the command before each plan-review round, a
   - the timestamp cut-off (H3) and skipping on a missing `plan-review.md` were both rejected, because back-dating a new directory, or omitting the file, would be the bypass.
 - **Lock binding** (H14):
   - P2 binds to the latest binding entry;
-  - a re-binding must be `human`, change no state and be covered by `decisions.md`, so neither the planner nor an agent can re-bind;
-  - for a re-binding, round R's plan commit is not compared, so the human's D-block stands in for that equality; it is visible on the PR, and K18 and the supervisor's C15 require the block.
+  - what is checked for a re-binding:
+    - the entry's `agent` field is `human`;
+    - it changes no state;
+    - a `decisions.md` block covers it and attests that the content is unchanged;
+    - where the old plan commit is still reachable, the `plan.md` blobs are equal.
+  - `agent: "human"` entries and their D-blocks are written by the coordinator session (skill item 4), so the `agent` check is a check on a self-declared field, not an identity check. What makes a false re-binding visible is that the entry, the D-block and the diff are on the PR. K18 and the supervisor's C15 require the block. The blob comparison is the only mechanical check of the content, and it applies only while the old commit is reachable;
+  - a re-binding cannot accept post-lock content: a differing blob fails, and an unreachable old commit relies on the attestation (M7).
 - **Rule drift** (L5): the CLI that judges a PR is built from that PR, so a PR changing `pipeline-plan.ts`, `PRE_GATE_TASKS` or the vocabulary changes its own judge. This already holds for `pipeline check`. Such a change is reviewed as a rule change, and the docs say so.
 - **P1 vocabulary** (H5): an unknown command word is treated as a literal, so P1 can miss an unknown tool. The plan review's plan check still covers it. The rule "at least one allowed command per criterion" stops a criterion with only unknown commands. The lexical rules apply only to commands (D1.3), so literal spans are not failed (M4).
 - **`pipeline ci`:**
@@ -272,7 +290,7 @@ The planner and the coordinator run the command before each plan-review round, a
   - no job permission or step changes; only the comment in `ci.yml` changes;
   - `pipeline plan` uses no network and no token.
 - **QA snapshot:** `pipeline plan` writes nothing, and its `status` call uses `--no-optional-locks`, so the index is not refreshed (D2.5).
-- **Git input:** argv only, no shell, `--literal-pathspecs`, a validated directory name, and the path kept under the root. The commit taken from the note is compared, never executed. The 60-second timeout and the output cap of `spawnRunner` apply.
+- **Git input:** argv only, no shell, `--literal-pathspecs`, a validated directory name, and the path kept under the root. The commits taken from the note and from `plan-review.md` reach git only as 40-hex `rev-parse` revisions, never as options or paths. The 60-second timeout and the output cap of `spawnRunner` apply.
 - **Untrusted plan text:** the output holds only line numbers, validated timestamps and fixed reasons. Reads are bounded to 2 MiB, and the scan is linear (D1.11).
 - **Planner write list:** narrowed by D5 (i2), which closes the self-approval path that BASE-140-C L2 found.
 - **K6 and K18 duplication:** two small readers kept in two places, each pinned by a test (D6). `pipeline-check.ts` stays byte-identical.
@@ -329,7 +347,7 @@ The planner and the coordinator run the command before each plan-review round, a
 | `cli/src/test/pipeline-ci.test.ts`, `cli/src/test/pipeline-cli.test.ts` | modify | coordinator — D6 |
 | `.github/workflows/ci.yml` | modify (`task-dirs` comment lines only) | coordinator — D4 |
 | `templates/task/plan.md` | modify (acceptance-criteria comment only) | coordinator — D7 |
-| `.ai/skills/pipeline/skill.md` | modify (coordinator item 1, "What is enforced") | coordinator — D7 |
+| `.ai/skills/pipeline/skill.md` | modify (state-machine row, coordinator items 1 and 4, "What is enforced") | coordinator — D7 |
 | `.agents/skills/pipeline/SKILL.md`, `.claude/commands/pipeline.md`, `.cursor/rules/pipeline.mdc`, `.github/prompts/pipeline.prompt.md`, `.ai/generated.json`, `.ai/context-index.json` | regenerate with `ai sync` (only those it changes) | coordinator — exports |
 | `.claude/agents/planner.md` | modify (D5 lines only) | implementer — D5 |
 | `docs/task-state-machine.md` | modify | implementer — D7 |
@@ -402,6 +420,7 @@ Decisions on the findings of plan review round 1 (2026-11-25, relayed by the coo
 - **H12 (M2):** reword. `task-dirs` reports a failure, and the human must not merge while it is red. It is not a required status check; making it one is out of scope for this ticket and becomes a follow-up (registered on #106).
 - **H13 (M5):** exempt a frozen, explicit list of the task ids locked before the gate (`PRE_GATE_TASKS`, D1.1) instead of a timestamp cut-off. The list is deterministic, works locally and in CI, and a new directory cannot get onto it by back-dating.
 - **H14 (M6):** P2 binds to the latest lock entry. A second or later lock entry (a re-binding) is valid only with `agent: "human"` and a `decisions.md` D-block whose `Covers:` names it. This is the recovery path for a wrong note or a rewritten plan commit. It is swept into the doc and skill statements (D7).
+  - *Clarification after plan review round 2, M7 (not a new human decision):* a re-binding is valid only for unchanged content, a wrong lock note or the same `plan.md` under a rewritten commit, and its D-block must attest to that (`plan.md unchanged since plan review round <R>`). When the old plan commit is still reachable, P2 compares the `plan.md` blob at that commit with the blob at the newly named commit, and fails if they differ. It never accepts post-lock content that was not plan-reviewed.
 
 The options as they were put to the human:
 
@@ -427,7 +446,7 @@ The options as they were put to the human:
 - **False positives and negatives.** The vocabulary is fixed and documented. A false positive is fixed by rewording, or by putting a literal in a code span. A false negative (an unknown tool) is left to the plan review.
 - **CI checkout and rewritten commits.** `task-dirs` checks out the PR merge commit, and `git log -1 -- <plan>` follows the side that holds `plan.md` (history simplification), which is the PR head. Some operations rewrite the plan commit: a squash merge, a rebase of the ticket branch after the lock, or a cherry-pick. After any of them, P2 fails for that directory on every later PR that touches it. The repository merges with merge commits (#145, #146).
   - The rule the coordinator follows: never rebase or cherry-pick a ticket branch after its lock; bring `development` in with a merge.
-  - If the commit is rewritten anyway, the human decides a re-binding (H14). The coordinator appends the `human` entry with the new commit and records the covering D-block.
+  - If the commit is rewritten anyway and the content is the same, the human decides a re-binding (H14). The coordinator appends the `human` entry with the new commit and records the covering, attesting D-block.
 - **QA classification.** QA treats `node …/index.js pipeline plan` as a plan-named, test-category command, as it did `pipeline check` in BASE-124-B. If QA classifies it as forbidden to run, AC3 and AC4 are "not verified", and the human decides.
 - **Follow-up (H12).** Until `task-dirs` is a required status check, P1 and P2 at merge rely on the human not merging over a red job.
 - **Cost.** Most of the work is the coordinator's CLI code, so the reviewer's round 1 is heavier. Tech debt from this ticket goes on #106, never on a new issue.
