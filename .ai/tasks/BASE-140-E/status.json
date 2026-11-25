@@ -1,18 +1,44 @@
 {
   "ticket_id": "BASE-140-E",
-  "state": "pending",
+  "state": "completed",
   "plan_locked": true,
-  "assignee": "planner",
+  "assignee": null,
   "created_at": "2026-11-25T16:32:52Z",
-  "updated_at": "2026-11-25T17:13:27Z",
+  "updated_at": "2026-11-25T17:14:35Z",
   "transitions": [
-    { "from": null, "to": "pending", "agent": "planner", "timestamp": "2026-11-25T16:32:52Z", "note": "task initialized" },
-    { "from": "pending", "to": "pending", "agent": "human", "timestamp": "2026-11-25T17:13:27Z", "note": "plan approved and locked by the human (\"adelante\", 2026-11-25); applied by the coordinator; plan review round 1 approved, plan.md at 385ab288c7a36cdcc58f21b9b80f491c60cbfc26" }
+    {
+      "from": null,
+      "to": "pending",
+      "agent": "planner",
+      "timestamp": "2026-11-25T16:32:52Z",
+      "note": "task initialized"
+    },
+    {
+      "from": "pending",
+      "to": "pending",
+      "agent": "human",
+      "timestamp": "2026-11-25T17:13:27Z",
+      "note": "plan approved and locked by the human (\"adelante\", 2026-11-25); applied by the coordinator; plan review round 1 approved, plan.md at 385ab288c7a36cdcc58f21b9b80f491c60cbfc26"
+    },
+    {
+      "from": "pending",
+      "to": "in_progress",
+      "agent": "implementer",
+      "timestamp": "2026-11-25T17:13:54Z",
+      "note": "implementer claimed task; plan_locked asserted true"
+    },
+    {
+      "from": "in_progress",
+      "to": "completed",
+      "agent": "implementer",
+      "timestamp": "2026-11-25T17:14:35Z",
+      "note": "all files in effective allow-list written; checklist populated; tests_pass (467 pass) and types_pass (tsc) true; lint_pass left false, no linter exists, deferred to QA"
+    }
   ],
   "checklist": {
-    "tests_pass": false,
+    "tests_pass": true,
     "lint_pass": false,
-    "types_pass": false,
+    "types_pass": true,
     "review_verdict": null,
     "qa_verdict": null
   },
