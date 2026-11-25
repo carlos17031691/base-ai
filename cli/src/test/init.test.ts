@@ -41,14 +41,46 @@ test("init carries the pipeline: role definitions, state-machine doc, task templ
   assert.ok(!existsSync(join(dir, "docs/contract-testing-gate.md")), "no repository docs");
   assert.equal(
     readFileSync(join(dir, ".gitignore"), "utf8"),
-    "src/*\n!src/.gitkeep\n.ai/context-index.json\n.ai/tasks/*\n!.ai/tasks/*/\n.ai/tasks/*/*\n!.ai/tasks/*/usage.jsonl\n.ai/usage/\n",
+    [
+      "src/*",
+      "!src/.gitkeep",
+      ".ai/context-index.json",
+      ".ai/tasks/*",
+      "!.ai/tasks/*/",
+      ".ai/tasks/*/*",
+      "!.ai/tasks/*/usage.jsonl",
+      "!.ai/tasks/*/status.json",
+      "!.ai/tasks/*/plan.md",
+      "!.ai/tasks/*/review-report.md",
+      "!.ai/tasks/*/qa-report.md",
+      "!.ai/tasks/*/decisions.md",
+      "!.ai/tasks/*/improvement-report.md",
+      "!.ai/tasks/*/plan-review.md",
+      ".ai/usage/",
+      "",
+    ].join("\n"),
   );
-  execFileSync("git", ["check-ignore", "-q", ".ai/tasks/X/status.json"], { cwd: dir });
-  // usage.jsonl is versioned (BASE-101-U2): check-ignore exits 1 for it.
-  assert.throws(() => execFileSync("git", ["check-ignore", "-q", ".ai/tasks/X/usage.jsonl"], { cwd: dir, stdio: "ignore" }));
+  // P3 D1: the task files are versioned (check-ignore exits 1); evidence/ stays ignored (exit 0).
+  for (const f of ["status.json", "plan.md", "decisions.md", "usage.jsonl"]) {
+    assert.throws(() => execFileSync("git", ["check-ignore", "-q", "--no-index", `.ai/tasks/X/${f}`], { cwd: dir, stdio: "ignore" }), f);
+  }
+  execFileSync("git", ["check-ignore", "-q", "--no-index", ".ai/tasks/X/evidence/a.log"], { cwd: dir });
   const svc = readFileSync(join(dir, "templates/service/.gitignore"), "utf8");
   assert.doesNotMatch(svc, /^\.ai\/tasks\/$/m);
-  assert.match(svc, /^!\.ai\/tasks\/\*\/usage\.jsonl$/m);
+  for (const f of ["usage.jsonl", "status.json", "plan.md", "review-report.md", "qa-report.md", "decisions.md", "improvement-report.md"]) {
+    assert.ok(svc.split("\n").includes(`!.ai/tasks/*/${f}`), `service template negates ${f}`);
+  }
+});
+
+test("R4 D6: plan-review.md is versioned in a new project and in the service template; evidence/ stays ignored", () => {
+  const dir = join(mkdtempSync(join(tmpdir(), "base-ai-init-")), "demo");
+  init(dir);
+  const lines = readFileSync(join(dir, ".gitignore"), "utf8").split("\n");
+  assert.equal(lines[lines.indexOf("!.ai/tasks/*/improvement-report.md") + 1], "!.ai/tasks/*/plan-review.md");
+  assert.throws(() => execFileSync("git", ["check-ignore", "-q", "--no-index", ".ai/tasks/X/plan-review.md"], { cwd: dir, stdio: "ignore" }));
+  execFileSync("git", ["check-ignore", "-q", "--no-index", ".ai/tasks/X/evidence/plan-review.md"], { cwd: dir });
+  const svc = readFileSync(join(dir, "templates/service/.gitignore"), "utf8").split("\n");
+  assert.ok(svc.includes("!.ai/tasks/*/plan-review.md"), "service template negates plan-review.md");
 });
 
 test("init supports --ci github and gitlab", () => {

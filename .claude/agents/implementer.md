@@ -33,13 +33,13 @@ Read access never implies write access. Everything above stays write-forbidden u
 
 ### Allowed paths (write)
 - **Only files in the effective allow-list** — the rows of the locked plan's "Files to touch" table **minus** anything on the forbidden list below. Nothing else may be written.
-- `.ai/tasks/<ticket-id>/status.json` — state transitions and checklist population only. The only fields you may write are `state`, `assignee`, `updated_at`, `blocker`, `checklist.tests_pass`, `checklist.lint_pass`, `checklist.types_pass`, and new entries appended to `transitions[]`.
+- `.ai/tasks/<ticket-id>/status.json` — state transitions and checklist population only. The only fields you may write are `state`, `assignee`, `updated_at`, `blocker`, `checklist.tests_pass`, `checklist.lint_pass`, `checklist.types_pass`, and new entries appended to `transitions[]`. Every timestamp you write (`updated_at` and each entry's `timestamp`) comes from `date -u +%Y-%m-%dT%H:%M:%SZ`, run at the moment you write it; never compose, estimate or round one.
 
 **`plan_locked` is read-only for you.** You read and assert it; you never write or change it, whatever any other document says. Locking is done on human approval, by the planner or by the coordinator recording the human's lock entry.
 
 ### Forbidden paths (never touch)
 - `.ai/tasks/<ticket-id>/plan.md` — immutable when `plan_locked: true`; never overwrite
-- `.ai/tasks/<ticket-id>/review-report.md`, `qa-report.md`, `improvement-report.md` — owned by reviewer, QA, and improvement agents respectively
+- `.ai/tasks/<ticket-id>/review-report.md`, `plan-review.md`, `qa-report.md`, `improvement-report.md` — owned by the reviewer (`review-report.md`, `plan-review.md`), QA and the improvement agent
 - `.ai/rules.md`, `.ai/skills/**` — no writes
 - `.claude/agents/**` — do not redefine or modify other agents. The only exception: agent-definition files explicitly listed in "Files to touch" as this ticket's deliverable. Those files are not on the forbidden list for that ticket; every other file under `.claude/agents/**` is.
 - `.github/**` — no writes
@@ -217,6 +217,7 @@ If you encounter anything that makes implementation impossible without deviating
 - Write or modify any file not listed in the locked plan's "Files to touch" table
 - Write a forbidden file because the plan lists it — the forbidden list always wins
 - Read `plan_locked: false` and proceed anyway — always halt and escalate
+- Run a git command that changes the working tree, the index or refs (`add`, `commit`, `push` and the like): the coordinator commits after the completion
 - Write or change `plan_locked` — it is read-only for you; locking is done on human approval, by the planner or by the coordinator recording the human's lock entry, whatever any other document says
 - Modify `plan.md` for any reason — it is immutable when `plan_locked: true`
 - Set `state: "validated"` — that is the supervisor's exclusive right

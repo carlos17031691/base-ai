@@ -14,9 +14,11 @@ import { runEvals, renderEvalReport } from "./eval.js";
 import { runWizard } from "./wizard.js";
 import { devUp, devStop, devStatus } from "./dev.js";
 import { checkTask, renderText } from "./pipeline-check.js";
-import { loadTask } from "./pipeline-files.js";
+import { CI_USAGE, ciExitCode, renderCi, runCi } from "./pipeline-ci.js";
+import { loadPlanTask, loadTask, readBounded } from "./pipeline-files.js";
 import { spawnRunner } from "./pipeline-gh.js";
-import { debtForTask, renderDebt } from "./pipeline-registration.js";
+import { PLAN_USAGE, checkPlan, planExitCode, renderPlan } from "./pipeline-plan.js";
+import { checkRegistration, debtForTask, renderDebt } from "./pipeline-registration.js";
 import { loadDashboardConfig, loadUsageConfig } from "./source.js";
 import { guardHookProcess, readUsageReport, runUsageRecord } from "./usage-files.js";
 import { renderUsageReport, stderrLine } from "./usage.js";
@@ -49,6 +51,13 @@ Commands:
                                                      naming each failed check. Offline.
   pipeline debt <task-dir> [--issues n,…] [--json]  Check each To register key against GitHub issues (opt-in network, gh);
                                                      exit 0 registered, 1 missing, 2 could not check
+  pipeline plan <task-dir> [--json]                 Check a plan: each acceptance criterion names a command of qa.md's Commands
+                                                     and none needing network, credentials or a merged state (P1), and the lock
+                                                     names the latest approved plan-review round of an unchanged plan.md (P2, git);
+                                                     exit 0 pass, 1 fail, 2 could not check. Offline, read-only
+  pipeline ci --base <ref> [--json]                 For each task directory changed since <ref>: append-only transitions (A1),
+                                                     pipeline check, pipeline plan (when status.json, plan.md, plan-review.md or
+                                                     decisions.md changed) and pipeline debt; exit 0 pass, 1 fail, 2 could not check
   dashboard [--port N]                              Serve the pipeline HUD and JSON API over .ai/tasks/ on 127.0.0.1 (default port 4747);
                                                      it reads only, except the opt-in CHECK REGISTRATION (gh)
   usage record                                      Record a Claude Code turn's tokens from a Stop/SubagentStop hook (stdin) into
@@ -348,6 +357,40 @@ function main(argv: string[]): number | Promise<number> {
       }
       console.log(flags.json === true ? JSON.stringify(r.report, null, 2) : renderDebt(r.report));
       return r.report.outcome === "registered" ? 0 : r.report.outcome === "missing" ? 1 : 2;
+    });
+  }
+
+  if (cmd === "pipeline" && sub === "ci") {
+    const runner = spawnRunner();
+    return runCi(str(flags.base), {
+      root,
+      run: runner,
+      read: (relPath) => readBounded(join(root, relPath)),
+      loadTask: (dir) => loadTask(root, dir),
+      checkTask,
+      debt: (report) => checkRegistration(report, [], runner),
+      // pipeline plan per changed directory (BASE-140-B D4), with the same runner.
+      plan: (dir) => checkPlan(loadPlanTask(root, dir), root, runner),
+    }).then((r) => {
+      if (r.kind === "usage") {
+        console.error(CI_USAGE);
+        return 1;
+      }
+      console.log(flags.json === true ? JSON.stringify(r.report, null, 2) : renderCi(r.report));
+      return ciExitCode(r.report);
+    });
+  }
+
+  // pipeline plan <task-dir> (BASE-140-B D3): P1 plan.criteria and P2 plan.lock; exit 0 pass, 1 fail, 2 halt.
+  if (cmd === "pipeline" && sub === "plan") {
+    const dir = rest[0];
+    if (!dir) {
+      console.error(PLAN_USAGE);
+      return 1;
+    }
+    return checkPlan(loadPlanTask(root, dir), root, spawnRunner()).then(({ report }) => {
+      console.log(flags.json === true ? JSON.stringify(report, null, 2) : renderPlan(report));
+      return planExitCode(report);
     });
   }
 

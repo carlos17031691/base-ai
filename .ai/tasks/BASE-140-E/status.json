@@ -1,0 +1,67 @@
+{
+  "ticket_id": "BASE-140-E",
+  "state": "validated",
+  "plan_locked": true,
+  "assignee": null,
+  "created_at": "2026-11-25T16:32:52Z",
+  "updated_at": "2026-11-25T17:23:27Z",
+  "transitions": [
+    {
+      "from": null,
+      "to": "pending",
+      "agent": "planner",
+      "timestamp": "2026-11-25T16:32:52Z",
+      "note": "task initialized"
+    },
+    {
+      "from": "pending",
+      "to": "pending",
+      "agent": "human",
+      "timestamp": "2026-11-25T17:13:27Z",
+      "note": "plan approved and locked by the human (\"adelante\", 2026-11-25); applied by the coordinator; plan review round 1 approved, plan.md at 385ab288c7a36cdcc58f21b9b80f491c60cbfc26"
+    },
+    {
+      "from": "pending",
+      "to": "in_progress",
+      "agent": "implementer",
+      "timestamp": "2026-11-25T17:13:54Z",
+      "note": "implementer claimed task; plan_locked asserted true"
+    },
+    {
+      "from": "in_progress",
+      "to": "completed",
+      "agent": "implementer",
+      "timestamp": "2026-11-25T17:14:35Z",
+      "note": "all files in effective allow-list written; checklist populated; tests_pass (467 pass) and types_pass (tsc) true; lint_pass left false, no linter exists, deferred to QA"
+    },
+    {
+      "from": "completed",
+      "to": "completed",
+      "agent": "reviewer",
+      "timestamp": "2026-11-25T17:17:51Z",
+      "note": "review round 1: approved; High 0, Medium 0, Low 1; reviewed implementer completion 2026-11-25T17:14:35Z"
+    },
+    {
+      "from": "completed",
+      "to": "completed",
+      "agent": "qa",
+      "timestamp": "2026-11-25T17:21:00Z",
+      "note": "qa round 1: pass; criteria: pass 9, pass with caveat 0, fail 0, not verified 0; checks: passed 2, failed 0, no applicable check 5, forbidden to run 0; verified implementer completion 2026-11-25T17:14:35Z"
+    },
+    {
+      "from": "completed",
+      "to": "validated",
+      "agent": "supervisor",
+      "timestamp": "2026-11-25T17:23:27Z",
+      "note": "validated: review round 1 approved (entry 2026-11-25T17:17:51Z); qa round 1 pass (entry 2026-11-25T17:21:00Z); verified implementer completion 2026-11-25T17:14:35Z; decisions: none; registered: 1 items in issues #106; HEAD at qa round a0e0bee662e95e4165ef734a88e257bf79e15056, now e3efa6e1a98d77d25a325ffd45278dfec9402637"
+    }
+  ],
+  "checklist": {
+    "tests_pass": true,
+    "lint_pass": false,
+    "types_pass": true,
+    "review_verdict": "approved",
+    "qa_verdict": "pass"
+  },
+  "blocker": null
+}

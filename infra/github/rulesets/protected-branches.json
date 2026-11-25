@@ -30,6 +30,7 @@
         "strict_required_status_checks_policy": false,
         "required_status_checks": [
           { "context": "cli", "integration_id": 15368 },
+          { "context": "task-dirs", "integration_id": 15368 },
           { "context": "SonarCloud Code Analysis", "integration_id": 12526 }
         ]
       }

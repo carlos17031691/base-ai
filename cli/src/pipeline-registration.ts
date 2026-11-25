@@ -1,6 +1,6 @@
 /**
  * Registration cross-check of a task's To register keys against GitHub issues (BASE-071-P2, issue #71):
- * supervisor.md C16 "Repository" and supervisor/registration-match.md "Match".
+ * supervisor.md C16 "Repository" and supervisor/registration-match.md "Match", as of e2c6781 (removed by BASE-071-P4).
  *
  * Pure: every process call goes through the injected `Runner` (pipeline-gh.ts is the real one), so the
  * matching logic is tested with a fake runner and no network.
@@ -134,7 +134,7 @@ export async function checkRegistration(report: CheckReport, issues: number[], r
       const search = `"${k.key}" in:body,comments`;
       const found = parseList(await gh("T6", ["issue", "list", "--repo", out.repo, "--state", "all", "--search", search, "--json", "number,state,title", "--limit", "20"]));
       if (!found) throw new Halt("T6", "json");
-      // Every candidate not yet viewed is viewed once (registration-match.md step 2), so the call count matches the supervisor's.
+      // Every candidate not yet viewed is viewed once (supervisor/registration-match.md step 2 at e2c6781), so the call count matches the supervisor's.
       for (const n of found) await view(n);
       // view() mutates k.status, so re-read it through a function call.
       if (!isRegistered(k)) k.status = "missing";

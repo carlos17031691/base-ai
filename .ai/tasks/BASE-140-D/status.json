@@ -1,0 +1,81 @@
+{
+  "ticket_id": "BASE-140-D",
+  "state": "validated",
+  "plan_locked": true,
+  "assignee": null,
+  "created_at": "2026-11-25T02:14:49Z",
+  "updated_at": "2026-11-25T15:13:53Z",
+  "transitions": [
+    {
+      "from": null,
+      "to": "pending",
+      "agent": "planner",
+      "timestamp": "2026-11-25T02:14:49Z",
+      "note": "task initialized"
+    },
+    {
+      "from": "pending",
+      "to": "pending",
+      "agent": "human",
+      "timestamp": "2026-11-25T14:25:45Z",
+      "note": "plan approved and locked by the human (\"Lock now, accept L8\", 2026-11-25); applied by the coordinator; plan review round 3 approved, plan.md at 9762cbac63d89b06c192eb3bf361119833343739"
+    },
+    {
+      "from": "pending",
+      "to": "in_progress",
+      "agent": "implementer",
+      "timestamp": "2026-11-25T14:26:08Z",
+      "note": "implementer claimed task; plan_locked asserted true"
+    },
+    {
+      "from": "in_progress",
+      "to": "completed",
+      "agent": "implementer",
+      "timestamp": "2026-11-25T14:28:09Z",
+      "note": "all files in effective allow-list written (D1-D4); checklist populated: tests_pass via npm --prefix cli run test (467 pass), types_pass via npx tsc --noEmit in cli (exit 0); lint_pass left false, not applicable (cli has no lint script; deliverables are docs/JSON), deferred to QA; D5 and E1-E3 left to the coordinator"
+    },
+    {
+      "from": "completed",
+      "to": "in_progress",
+      "agent": "implementer",
+      "timestamp": "2026-11-25T15:00:19Z",
+      "note": "human-instructed send-back (human decision D1, relayed by coordinator): check:package fails on the D2 runbook inline path docs/operations/runbooks/branch-rulesets.md in docs/task-state-machine.md; reword to plain words"
+    },
+    {
+      "from": "in_progress",
+      "to": "completed",
+      "agent": "implementer",
+      "timestamp": "2026-11-25T15:01:33Z",
+      "note": "D2 sentence reworded per human decision D1 (docs/task-state-machine.md only); check:package passes; tests_pass (467 pass) and types_pass (tsc exit 0) re-run; lint_pass left false, not applicable (no lint script), deferred to QA"
+    },
+    {
+      "from": "completed",
+      "to": "completed",
+      "agent": "reviewer",
+      "timestamp": "2026-11-25T15:08:39Z",
+      "note": "review round 1: approved; High 0, Medium 0, Low 0; reviewed implementer completion 2026-11-25T15:01:33Z"
+    },
+    {
+      "from": "completed",
+      "to": "completed",
+      "agent": "qa",
+      "timestamp": "2026-11-25T15:12:10Z",
+      "note": "qa round 1: pass; criteria: pass 11, pass with caveat 0, fail 0, not verified 0; checks: passed 2, failed 0, no applicable check 4, forbidden to run 0; verified implementer completion 2026-11-25T15:01:33Z"
+    },
+    {
+      "from": "completed",
+      "to": "validated",
+      "agent": "supervisor",
+      "timestamp": "2026-11-25T15:13:53Z",
+      "note": "validated: review round 1 approved (entry 2026-11-25T15:08:39Z); qa round 1 pass (entry 2026-11-25T15:12:10Z); verified implementer completion 2026-11-25T15:01:33Z; decisions: D1; registered: none; HEAD at qa round 29e5ad97b60bcaec90d02157ee0b0d7621e1ff75, now 62bdcc1b8698dcf21020ee06f9bd4f9365b61999"
+    }
+  ],
+  "checklist": {
+    "tests_pass": true,
+    "lint_pass": false,
+    "types_pass": true,
+    "review_verdict": "approved",
+    "qa_verdict": "pass"
+  },
+  "blocker": null
+}

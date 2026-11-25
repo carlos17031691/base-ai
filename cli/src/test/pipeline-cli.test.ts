@@ -44,6 +44,27 @@ const files = {
 
 const run = (args: string[]) => spawnSync(process.execPath, [CLI, ...args], { encoding: "utf8" });
 
+const gitIn = (root: string) => (...args: string[]) => {
+  const r = spawnSync("git", ["-C", root, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", ...args], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  return r.stdout.trim();
+};
+// A plan that passes P1 (BASE-140-B): steps for K3, and one criterion with a command QA may run.
+const PLAN = "# Plan\n## Steps\n1. **human** — ok\n\n## Acceptance criteria\n\n- [ ] **AC1** `npm --prefix <r>/cli run test` exits 0.\n";
+const planReview = (commit: string) => `# Plan review\n\n## Plan review round 1\n\n- Plan commit: ${commit}\n\n### Verdict: approved\n`;
+const lockNote = (commit: string) => `approved; plan review round 1 approved, plan.md at ${commit}`;
+
+/** Commits plan.md, then binds the lock to that commit: plan-review.md and a lock note naming it (P2). */
+function commitBoundPlan(root: string, id: string, statusWith: (lock: string) => string): string {
+  const git = gitIn(root);
+  writeTask(root, id, { "plan.md": PLAN });
+  git("add", "-A");
+  git("commit", "-q", "-m", "plan");
+  const commit = git("rev-parse", "HEAD");
+  writeTask(root, id, { "plan-review.md": planReview(commit), "status.json": statusWith(lockNote(commit)) });
+  return commit;
+}
+
 test("pipeline check exits 0 on a consistent task, resolving the directory against --root", () => {
   const root = mkdtempSync(join(tmpdir(), "pc-"));
   try {
@@ -162,6 +183,132 @@ test("pipeline check --json carries facts.nextActor with schema 1", () => {
     assert.equal(j.schema, 1);
     assert.deepEqual(Object.keys(j.facts.nextActor).sort(), ["reason", "role"]);
     assert.equal(j.facts.nextActor.role, "supervisor");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("P3 pipeline ci on a real git repository: an appended transition exits 0; an edited entry 0 exits 1 naming A1", () => {
+  const root = mkdtempSync(join(tmpdir(), "pc-ci-"));
+  const git = gitIn(root);
+  const all = JSON.parse(status) as { transitions: { note: string }[] };
+  let lock = "approved";
+  const withTransitions = (n: number, edit = false) =>
+    JSON.stringify({
+      ...all,
+      ticket_id: "X-1",
+      transitions: all.transitions.slice(0, n).map((t, i) => (edit && i === 0 ? { ...t, note: "rewritten" } : i === 1 ? { ...t, note: lock } : t)),
+    });
+  try {
+    git("init", "-q", "-b", "main");
+    // The plan check runs on a status.json change (BASE-140-B D4), so the plan and its lock are bound.
+    commitBoundPlan(root, "X-1", (note) => {
+      lock = note;
+      return withTransitions(5);
+    });
+    writeTask(root, "X-1", { ...files, "plan.md": PLAN, "review-report.md": `Round: 1\n${C}\n## Verdict: approved\n${SEC}`, "status.json": withTransitions(5) });
+    git("add", "-A");
+    git("commit", "-q", "-m", "base");
+    const base = git("rev-parse", "HEAD");
+
+    writeTask(root, "X-1", { "status.json": withTransitions(6) });
+    git("commit", "-q", "-am", "append");
+    const pass = run(["pipeline", "ci", "--base", base, "--root", root]);
+    assert.equal(pass.status, 0, pass.stdout + pass.stderr);
+    assert.equal(pass.stdout, `pipeline ci ${base.slice(0, 7)}: PASS (1 task dir(s))\nX-1: A1 pass; check ok; plan ok; debt skip\n`);
+
+    writeTask(root, "X-1", { "status.json": withTransitions(6, true) });
+    git("commit", "-q", "-am", "edit");
+    const fail = run(["pipeline", "ci", "--base", base, "--root", root, "--json"]);
+    assert.equal(fail.status, 1, fail.stdout + fail.stderr);
+    const j = JSON.parse(fail.stdout);
+    assert.deepEqual([j.outcome, j.dirs[0].id, j.dirs[0].append_only], ["fail", "X-1", { status: "fail", detail: "transitions[0] differs from the base" }]);
+    assert.match(run(["pipeline", "ci", "--base", base, "--root", root]).stdout, /X-1: A1 fail — transitions\[0\] differs from the base/);
+
+    const usage = run(["pipeline", "ci", "--root", root]);
+    assert.equal(usage.status, 1);
+    assert.match(usage.stderr, /usage: base-ai pipeline ci --base <ref>/);
+    const unknown = run(["pipeline", "ci", "--base", "no-such-ref", "--root", root]);
+    assert.equal(unknown.status, 2);
+    assert.match(unknown.stdout, /halt: G1 non-zero exit/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("R2 pipeline plan on a real git repository: a bound lock exits 0; plan.md changed and committed exits 1; no directory is a usage error", () => {
+  const root = mkdtempSync(join(tmpdir(), "pc-plan-"));
+  const git = gitIn(root);
+  const locked = (note: string) =>
+    JSON.stringify({
+      ticket_id: "TK-3",
+      state: "pending",
+      plan_locked: true,
+      assignee: null,
+      blocker: null,
+      transitions: [
+        { from: null, to: "pending", agent: "planner", timestamp: "2026-11-25T00:00:00Z", note: "task initialized" },
+        { from: "pending", to: "pending", agent: "human", timestamp: "2026-11-25T00:01:00Z", note },
+      ],
+      checklist: { tests_pass: false, lint_pass: false, types_pass: false, review_verdict: null, qa_verdict: null },
+    });
+  try {
+    git("init", "-q", "-b", "main");
+    commitBoundPlan(root, "TK-3", locked);
+    git("add", "-A");
+    git("commit", "-q", "-m", "lock");
+    const pass = run(["pipeline", "plan", ".ai/tasks/TK-3", "--root", root]);
+    assert.equal(pass.status, 0, pass.stdout + pass.stderr);
+    assert.equal(pass.stdout, "pipeline plan TK-3: PASS\n  ✔ P1 plan.criteria\n  ✔ P2 plan.lock\n");
+    const json = run(["pipeline", "plan", ".ai/tasks/TK-3", "--json", "--root", root]);
+    assert.equal(json.status, 0);
+    assert.deepEqual(Object.keys(JSON.parse(json.stdout)), ["schema", "ticket", "taskDir", "exempt", "outcome", "ok", "checks", "criteria"]);
+
+    writeTask(root, "TK-3", { "plan.md": `${PLAN}- [ ] **AC2** \`gh issue view 1\` shows the issue.\n` });
+    const dirty = run(["pipeline", "plan", ".ai/tasks/TK-3", "--root", root]);
+    assert.equal(dirty.status, 1, dirty.stdout + dirty.stderr);
+    assert.match(dirty.stdout, /✖ P2 plan\.lock — plan\.md has uncommitted changes/);
+    git("commit", "-q", "-am", "edit after the lock");
+    const changed = run(["pipeline", "plan", ".ai/tasks/TK-3", "--root", root]);
+    assert.equal(changed.status, 1, changed.stdout + changed.stderr);
+    assert.equal(
+      changed.stdout,
+      "pipeline plan TK-3: FAIL\n  ✖ P1 plan.criteria — 1 of 2 criteria fail\n  ✖ P2 plan.lock — plan.md changed after the reviewed commit\n" +
+        "  criterion 2 (plan.md:8): needs credentials or the environment\n  criterion 2 (plan.md:8): no command QA can run\n",
+    );
+    assert.doesNotMatch(changed.stdout, /gh issue|shows the issue/, "no plan text in the output");
+
+    const usage = run(["pipeline", "plan", "--root", root]);
+    assert.equal(usage.status, 1);
+    assert.match(usage.stderr, /usage: base-ai pipeline plan <task-dir>/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("R2 pipeline plan outside a git repository halts (exit 2) on a locked, bound plan", () => {
+  const root = mkdtempSync(join(tmpdir(), "pc-plan-"));
+  try {
+    const commit = "b".repeat(40);
+    writeTask(root, "TK-4", {
+      "plan.md": PLAN,
+      "plan-review.md": planReview(commit),
+      "status.json": JSON.stringify({
+        ticket_id: "TK-4",
+        state: "pending",
+        plan_locked: true,
+        assignee: null,
+        blocker: null,
+        transitions: [
+          { from: null, to: "pending", agent: "planner", timestamp: "2026-11-25T00:00:00Z", note: "init" },
+          { from: "pending", to: "pending", agent: "human", timestamp: "2026-11-25T00:01:00Z", note: lockNote(commit) },
+        ],
+        checklist: { tests_pass: false, lint_pass: false, types_pass: false, review_verdict: null, qa_verdict: null },
+      }),
+    });
+    const r = run(["pipeline", "plan", ".ai/tasks/TK-4", "--root", root]);
+    assert.equal(r.status, 2, r.stdout + r.stderr);
+    assert.match(r.stdout, /^pipeline plan TK-4: HALT\n {2}✔ P1 plan\.criteria\n {2}✖ P2 plan\.lock — halt: git non-zero exit\n$/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
