@@ -108,3 +108,62 @@ No unstated weakening and no new path to merge for unreviewed or unvalidated wor
 High 0, Medium 0, Low 6. Lows are advice to the planner and are not registered.
 
 ### Verdict: approved
+
+## Plan review round 2
+
+- Reviewed: 2026-11-25T21:30:23Z
+- Plan commit: 243b4b8577fc7273472f3f64b3b5bc066b7141f4
+- Code read at: feat/BASE-140-F-qa-ignore-implementer-commit @ 243b4b8577fc7273472f3f64b3b5bc066b7141f4
+- Changed since round 1: `git diff f5ae9f1 243b4b8 -- .ai/tasks/BASE-140-F/plan.md`, 16 insertions and 15 deletions in six places: Baseline "Characters versus bytes" (`plan.md:20`); Q1 lists for P1 and P2 (`plan.md:76-81`); Steps 4 and 10-14, renumbered (`plan.md:100`, `:106-110`); Post-merge verification (`plan.md:157`, `:161-162`); O1 recorded as decided (`plan.md:167`); R2 (`plan.md:169`); the Plan check note (`plan.md:172`). Scope (`plan.md:25-36`), Design D1/D2 (`plan.md:38-70`), "Files to touch" (`plan.md:112-133`), AC1-AC7 (`plan.md:135-147`) and E1 (`plan.md:149-151`) are unchanged in the diff, apart from line numbers shifting by one after step 10. The same commit also adds round 1 of this file unchanged and four `usage.jsonl` lines.
+- Reason: not applicable (new plan commit)
+
+Round 1's Q1, Q2 and plan-check results are carried over from round 1. The changes touch none of the rules, guards, criteria or code facts they rest on, and the budget figures are unchanged. O1's registration on #106 (`plan.md:167`) and the human decision to register it, which the coordinator relays, are claims I could not check (no network command in this role): not verified. They do not affect any criterion.
+
+### Earlier blocking findings
+
+| Id | Round | Fixed / Not fixed | `plan.md:line` |
+|---|---|---|---|
+| none | 1 | round 1 had no High or Medium | — |
+
+Round 1 Lows (advice; status for the planner's information): L1 fixed (`plan.md:169`: neutral, "The human judges an AC3 count taken under such a locale"); L2 fixed (`plan.md:106`: registration is step 10, before the supervisor at step 11); L3 fixed (`plan.md:81`); L4 fixed (`plan.md:20`, "After D1 … 58168 bytes (58124 today)", which matches `wc -c` 58124 at HEAD); L5 fixed in its three parts (`plan.md:161`: P2 not triggered and the planner-timestamp item removed; `plan.md:162`: records named), with a new point on the lower bound in L7; L6 fixed (`plan.md:157`: an acceptable result is stated), with a wording point in L8.
+
+### Q1 — Where else each changed rule is stated
+
+| Changed rule | Other statements | Edit planned / kept with reason / missing |
+|---|---|---|
+| P1, P2, skill re-check | Carried over from round 1; the rules and the Design text are unchanged | Carried over from round 1. The P2 list now names `docs/task-state-machine.md:52` (`plan.md:81`), and O1 is decided: register, keep the text (`plan.md:76-77`, `:167`) |
+
+### Q2 — Guards and bypasses the change touches
+
+| Guard or bypass | How the change touches it | Addressed at `plan.md:line` / missing |
+|---|---|---|
+| All guards in round 1 | Unchanged by the revision. The budget figures and AC3 (`plan.md:141`) are identical. The new step 10 keeps registration before the supervisor, "with the human's approval", which matches `skill.md:104` | Carried over from round 1 |
+
+### Plan checks
+
+| Check | Result | Basis |
+|---|---|---|
+| Every acceptance criterion is verifiable by QA with one inline command, no file written for QA, no network, credentials or merged state, and holds after a send-back | Pass | AC1-AC7 are textually unchanged (`plan.md:139-145`). The basis is carried over from round 1. AC1 still cites line `263` and AC2 lines `219`/`220`, which still hold, because `qa.md` and `implementer.md` are unchanged at HEAD |
+| "Files to touch" lists `usage.jsonl`, plus the `check:package` step and `package-check.ts` when needed | Pass | Unchanged (`plan.md:129`, `:131`, E1 `plan.md:151`) |
+| The facts the plan states about the code hold at HEAD | Pass | New facts checked: 58124 bytes today (`plan.md:20`); `docs/task-state-machine.md:52` wording (`plan.md:81`); usage `ts` is the write time, truncated to whole seconds (`cli/src/usage.ts:238`), and one record per model and effort (`usage.ts:245`), which is relevant to L7 |
+
+### The L5 lower bound (asked by the invocation)
+
+"No earlier than the `ts` of the last `usage.jsonl` record before the implementer's run (the coordinator's record that precedes the first `agent: "implementer"` record)" (`plan.md:162`):
+
+- **Sound, on one condition.** `ts` is set from the clock when the hook writes the record (`usage.ts:238`) and is truncated to whole seconds, like the `date -u` timestamps in `status.json`. So truncation keeps the order: if the record was written before the claim, its `ts` is ≤ the claim's timestamp. The upper bound (the implementer's own `SubagentStop` record) is sound the same way. Several records per run (one per model and effort, `usage.ts:245`) share one `ts`, so "the implementer's own record" is unambiguous for one run.
+- **Not well defined in two cases:**
+  1. The bound assumes that no record is appended while the implementer runs. A coordinator `Stop` record is written whenever the coordinator's turn ends, and this task's own `usage.jsonl` shows a turn ending while a subagent was still running: line 4 (coordinator, 21:27:46Z) comes before line 5 (planner, 21:28:45Z), whose `first_message_id` is earlier than line 4's `last_message_id`. If that happens during the implementer's run, "the last record before the first implementer record" is written after the claim, and a correct claim timestamp fails the bound. The parenthetical "the coordinator's record" is also not guaranteed: in the same turn the preceding record can be another subagent's.
+  2. On a send-back there are several implementer runs. "The first `agent: "implementer"` record" bounds only the first run, and "the implementer's own record" no longer names one record.
+- Neither case blocks: this is coordinator evidence after the merge, not a criterion or a gate (L7).
+
+### Findings
+
+| Id | Severity | Where | Why it matters | Required plan change |
+|---|---|---|---|---|
+| L7 | Low | `plan.md:162` | The lower bound holds only if no record is appended between the implementer's claim and its `SubagentStop`. A coordinator turn that ends during the run (as `usage.jsonl:4-5` of this task shows for the planner) would put a later record in front and make a correct timestamp look wrong. The bound is also undefined for a second implementer run after a send-back, and "the coordinator's record" can be another agent's | State the condition: the coordinator holds its turn while the implementer runs, so no record is appended in between; otherwise the lower bound is the last record appended before the implementer was invoked. Bound each implementer run separately: its claim or re-entry and its completion lie between the record before that run and that run's own record. Drop "the coordinator's record", or write "usually the coordinator's" |
+| L8 | Low | `plan.md:157` | The acceptable-result text is about "that ticket" (the first ticket after the merge) but says "step 7 comes before any later commit", which is this plan's step numbering. The field list (`state`, `assignee`, `updated_at`, `checklist.review_verdict`) is wider than what changes after the step 6 commit in this plan's order (only `updated_at`, `checklist.review_verdict` and the reviewer's entry). That is harmless, but it is not the exact expected result | Say "the entries and fields written after the last commit (in this plan's order, the reviewer's round entry, `updated_at` and `checklist.review_verdict`)" without citing a step number of this plan |
+
+High 0, Medium 0, Low 2. Lows are advice to the planner and are not registered.
+
+### Verdict: approved
