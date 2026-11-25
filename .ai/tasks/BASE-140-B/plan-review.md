@@ -125,3 +125,67 @@ Pre-flight: `state` `pending`, `plan_locked` `false`; branch `feat/BASE-140-B-ac
 | L6 | Low | D7 `plan.md:176` | P2 also detects a committed post-lock edit of `plan.md` for post-cut-off directories (the last commit no longer equals `<c>`). The skill's "By instruction only: … plan immutability" (`skill.md:121`) stays true, because nothing stops the write, but it does not mention the new after-the-fact check | Optionally add "plan immutability (P2 detects a committed change after the lock)" to the **Mechanical** line |
 
 ### Verdict: changes_requested
+
+## Plan review round 2
+
+- Reviewed: 2026-11-25T00:56:18Z
+- Plan commit: e9f4f8761d47f65729a79524e9b62bbc9da4ecbc
+- Code read at: feat/BASE-140-B-ac-lint @ e9f4f8761d47f65729a79524e9b62bbc9da4ecbc
+- Changed since round 1: `git diff 3e4b688 e9f4f87 -- .ai/tasks/BASE-140-B/plan.md` (155 insertions, 85 deletions). The revision rewrites the Baseline (`:16-31`, `:37`) and D1.1 and D1.3–D1.7 (the `PRE_GATE_TASKS` exemption, head-first classification, stricter `date` and git flags). It also rewrites D2.1–D2.4 (binding and re-binding entries), D4 (the `decisions.md` trigger, a per-directory plan halt, the git-call statement), D5 (the fallback when the command cannot run), D6 (new tests) and D7 (re-binding rows and wording that `task-dirs` is not required). The rest changes too: Q1/Q2, Files to touch (`.ai/tasks/BASE-140-C/usage.jsonl`), AC4–AC12, H12–H14 and Risks. Everything else is carried over from round 1 unless noted below
+- Reason: not applicable (new plan commit)
+
+Pre-flight: `state` `pending`, `plan_locked` `false`; branch contains the ticket id; `plan.md` clean and last committed at `e9f4f87`, which differs from round 1's plan commit. `development` and `origin/development` are both at `7720031`. No `status.json` field and no `transitions[]` entry is written by this mode.
+
+### Earlier blocking findings
+
+| Id | Round | Fixed / Not fixed | `plan.md:line` |
+|---|---|---|---|
+| M1 | 1 | Fixed — the Baseline names `7720031` as `development` and the merge base, and names `8c80edf` as a branch commit; `.ai/tasks/BASE-140-C/usage.jsonl` is in "Files to touch"; `<base>` is `7720031` | `plan.md:18-22`, `:341`, `:347` |
+| M2 | 1 | Fixed — the plan now says `task-dirs` is not a required status check and the human must not merge over a red run, in the Goal, Baseline, Scope, D7 (doc **Plan check** and **Plan review**, skill **Mechanical**), Q2, H2, H12, Risks and Post-merge. The follow-up is registered on #106 | `plan.md:14`, `:28`, `:64`, `:194-195`, `:204`, `:220`, `:253`, `:256`, `:381`, `:389`, `:402`, `:432` |
+| M3 | 1 | Fixed — "four fixed git calls" (doc `:125`), "G1 … G4" (README `:189`) and the `pipeline ci` USAGE line (`index.ts:53-54`) are planned edits. D4 makes a plan halt per directory, with `CiReport.halt` and `CiTemplate` unchanged | `plan.md:158-160`, `:197`, `:210`, `:212`, `:221-226` |
+| M4 | 1 | Fixed — the head is read first and leniently. Lexical, prefix and D1.7 rules apply only to commands. The round-1 literal examples and a lone `$GITHUB_TOKEN` are literals with tests, and the D6 example became `grep $GITHUB_TOKEN x` | `plan.md:80-93`, `:112`, `:171`, `:177` |
+| M5 | 1 | Fixed — the timestamp cut-off is replaced by the frozen `PRE_GATE_TASKS` list (31 ids, which matches the 31 locked directories on disk; every `ticket_id` equals its directory name). A test pins it, and a back-dated new directory is still checked | `plan.md:72-74`, `:181`, `:257-261`, `:390`, `:403` |
+| M6 | 1 | Fixed as a recovery path — a later human, state-preserving, `decisions.md`-covered re-binding entry, with Risks naming rebase and cherry-pick and the coordinator's no-rebase rule. Its scope opens a new gap, M7 | `plan.md:126-131`, `:186`, `:196`, `:200-202`, `:428-430` |
+
+Round-1 Lows (advice, not blocking): L1 fixed (`plan.md:37`, `:94`, `:97`, `:103`, `:176`, `:182`, AC11–AC12 `:370-371`); L2 fixed (`:369`); L3 fixed (`:360`, `:366`); L4 fixed (`:166`); L5 fixed (`:31`, `:194`, `:266`); L6 adopted (`:205`), but see M7.
+
+### Q1 — Where else each changed rule is stated
+
+Carried over from round 1 for the rules that did not change. New or changed rules in this revision:
+
+| Changed rule | Other statements | Edit planned / kept with reason / missing |
+|---|---|---|
+| A new human act: the lock re-binding (`from` = `to`, plan-review clause, covered by `decisions.md`) | Doc transition rules `docs/task-state-machine.md:18-29`; skill state-machine table (`skill.md:34-46`) and coordinator item 4 (`skill.md:100`); `supervisor.md` lock-entry and human-entry rules (K18/C15); `improvement.md:154` (the lock-entry definition matches any `pending → pending` human entry with "approved" in the note) | Edit planned for the doc and skill (`plan.md:196`, `:200-202`, `:229-232`). Kept for K6/K18 and the supervisor, with a reason that holds (`plan.md:242-247`). `improvement.md:154` is not named, but it only tests that *a* lock entry exists before the first claim (`improvement.md:179`), so a re-binding does not contradict it |
+| The plan-review gate binds to the latest binding entry, not to the first lock entry | Baseline `plan.md:24` (still "the lock entry is the first …", which is correct for K6); doc **Plan review** `:33`; skill lock row `:37` | Edited at `:33` (`plan.md:195`). Kept for the skill lock row (`plan.md:248`) |
+| Plan immutability after the lock ("P2 detects a committed change") | `skill.md:83` "Locked plans" ("the plan stays locked and unedited"), `skill.md:121`; `planner.md:137`; doc invariants | **Contradicted by the revision** — a re-binding accepts any commit of `plan.md` as `<c>` and does not compare round R's plan commit (`plan.md:137`). The planned L6 text "P2 detects a committed change to `plan.md` after the lock" (`plan.md:205`) and Goal item P2 "an unchanged `plan.md`" (`plan.md:12`) therefore do not hold after a re-binding — M7 |
+| `pipeline ci` triggers now include `decisions.md` | Doc `:125`, README `:189`, `pipeline-ci.ts` header, `ci.yml:77-78` | Edit planned (`plan.md:155`, `:197`, `:210`, `:222-226`) |
+| P1's `date` and git-flag forms | `qa.md:106-112` | Kept: P1 mirrors and the test reads `qa.md` (`plan.md:182`, `:241`) |
+
+### Q2 — Guards and bypasses the change touches
+
+Carried over from round 1 except for these rows:
+
+| Guard or bypass | How the change touches it | Addressed at `plan.md:line` / missing |
+|---|---|---|
+| Exemption (`PRE_GATE_TASKS`) | Replaces the cut-off. A new directory is always checked. An exempt, versioned directory (`BASE-071-P3`, `BASE-140-A`, `BASE-140-C`) can still be edited in a PR, with A1 pinning its existing entries | `plan.md:72-74`, `:257-261` — closed and stated |
+| P2 binding and the re-binding entry | New recovery path. When P2 is bound to a re-binding, round R's plan commit is not compared, and the git check only requires that `plan.md`'s last commit equals the commit in the re-binding note. A re-binding therefore makes P2 pass on a `plan.md` whose content changed after the lock and was never plan-reviewed, which the Locked-plans rule (`skill.md:83`) forbids. The plan states that the D-block "stands in for that equality", but limits re-binding to nothing: not to a wrong note, and not to a rewritten commit with unchanged content. It also says "neither the planner nor an agent can re-bind" (`plan.md:264`), yet `agent: "human"` is a field the coordinator session writes for every human act (skill item 4), and the D-block is coordinator-written too. Only human review of the PR stops a laundered edit | Partly (`plan.md:131`, `:137`, `:265`) — M7 |
+| K18 / supervisor C15 | A re-binding is a post-lock `human` entry, so K18 already requires the D-block; P2 reads `Covers:` with the K17 grammar, pinned to K18 by a test | `plan.md:130`, `:188`, `:243`, `:247` — kept, stated |
+| `pipeline ci` per-directory plan halt | A halt is per directory, like a debt halt; the run-level `G1`–`G4` halts are unchanged | `plan.md:158`, `:271` — stated |
+| Output of timestamps | P2 now may print entry timestamps; they are printed only after matching the K5 format | `plan.md:143`, `:276` — stated |
+
+### Plan checks
+
+| Check | Result | Basis |
+|---|---|---|
+| Every acceptance criterion is verifiable by QA with one inline command, no file written for QA, no network, credentials or merged state, and holds after a send-back | pass | AC1–AC12 (`plan.md:349-371`) use `npm --prefix … run test`/`test:coverage`, `grep`, `wc`, `git -C … diff --no-ext-diff --no-textconv`/`ls-files` and `node <r>/cli/dist/index.js pipeline plan`, all in `qa.md` "Commands" (BASE-124-B precedent for the CLI). Traced against the revised D1: each criterion has an allowed command; every non-command span (`✔ P1 plan.criteria`, `- P1 plan.criteria — skipped: exempt (locked before the plan gate)`, `R2`, `USAGE`, `Plan check`, `CI check`, `.ai/tasks/<ticket-id>/plan-review.md`) has a head outside the vocabulary and is a literal; every command's `|`, `(` and `\"` sits inside double quotes; no D1.8 word appears outside code spans (`CI check`, `pipeline-ci.test.ts` and "not a required status check" are inside spans). The plan should pass its own P1. AC4 holds: `BASE-140-C` is in `PRE_GATE_TASKS` and its `ticket_id` matches. No criterion depends on transitions a send-back adds |
+| "Files to touch" lists `usage.jsonl`, plus the `check:package` step and `package-check.ts` when needed | pass, with L7 | `plan.md:339`, `:341`, `:305`; `git diff --name-status 7720031 HEAD` lists only listed paths. L7: the skill row's action is narrower than D7 |
+| The facts the plan states about the code hold at HEAD | pass | Baseline re-checked: refs `7720031`; `8c80edf` touches only `.ai/tasks/BASE-140-C/usage.jsonl`; ruleset `protected-branches.json:31-33`; A1 at `pipeline-ci.ts:179-182`; `ci.yml:97-103` builds from the PR tree; `loadTask` at `pipeline-files.ts:34`; `Runner` at `pipeline-registration.ts:13`; 31 pre-gate directories, every `ticket_id` equal to its name; `qa.md:106-112` flags and `date` form as quoted |
+
+### Findings
+
+| Id | Severity | Where | Why it matters | Required plan change |
+|---|---|---|---|---|
+| M7 | Medium | D2.2 `plan.md:128-131`, D2.4 `:137`, Q2 `:262-265`, D7 `:195`, `:205`, Goal `:12` | The re-binding path (H14) is not limited to its stated purpose. When P2 is bound to a re-binding entry, round R's plan commit is not compared. The git check only requires that the last commit of `plan.md` equals the commit in the re-binding note. So after any committed post-lock edit of `plan.md`, a re-binding naming the new commit makes P2 pass, although the edited content was never plan-reviewed. That contradicts the Locked-plans rule (`skill.md:83`: "the plan stays locked and unedited"), the planned L6 text "P2 detects a committed change to `plan.md` after the lock" (`plan.md:205`) and Goal P2's "unchanged `plan.md`" (`plan.md:12`). The plan says the D-block "stands in for that equality" but does not say what the human attests. It also says "neither the planner nor an agent can re-bind" (`plan.md:264`), while `agent: "human"` entries and their D-blocks are written by the coordinator session (skill item 4), so the check is on a self-declared field | State, in D2.2 and in the doc and skill text, that a re-binding may only re-bind content that is unchanged since round R: a wrong note, or the same `plan.md` under a rewritten commit. Require the covering D-block to say so, and keep "a change the human decides after the lock goes to `decisions.md`; `plan.md` stays unedited". Qualify the L6 wording ("… unless a human re-binding covers it") and Goal P2. Replace "neither the planner nor an agent can re-bind" with what is checked: the `agent` field, the state, and `decisions.md` coverage, all visible on the PR. Optional, mechanical: when round R's plan commit is reachable, compare the `plan.md` blob at that commit with the blob at `<c>` (fixed argv, 40-hex validated), and fail on a difference |
+| L7 | Low | Files to touch `plan.md:332`; D7 `:200-202`; step 2 `:294` | The skill row's action is "coordinator item 1, 'What is enforced'", but D7 and step 2 also edit the state-machine table and coordinator item 4. The code review compares the change with this row | Widen the row to "state-machine row, coordinator items 1 and 4, 'What is enforced'" |
+
+### Verdict: changes_requested
