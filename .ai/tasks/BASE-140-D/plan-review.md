@@ -131,3 +131,63 @@ The reading is consistent with the rest of the plan: the decision text (`plan.md
 | L6 | Low | `cli/src/pipeline-ci.ts:292`; `plan.md:21`, `:83` | The CI-rendered lag hint ("wait and rerun the job") is the statement CI users actually see; the plan cites only the `pipeline debt` hint. It agrees with H1, so nothing breaks | Add `cli/src/pipeline-ci.ts:292` to "Other statements" as kept, still true |
 
 ### Verdict: changes_requested
+
+## Plan review round 2
+
+- Reviewed: 2026-11-25T13:39:27Z
+- Plan commit: b83170527d8106baa7b6fb56bda9b58df22187f5
+- Code read at: feat/BASE-140-D-task-dirs-required @ b83170527d8106baa7b6fb56bda9b58df22187f5
+- Changed since round 1: `git diff 03d0f72 b831705 -- .ai/tasks/BASE-140-D/plan.md` (+26/-13): D3 new bullet reworded (H7), Bypass lines given as full replacement text (H6, H8), Release kept; "Other statements" gains runbook `:48-49`/`:46`/`:50`/`:60-62`, sdlc `:39-40`, pipeline skill `:122`, `pipeline-ci.ts:292`, `:157`; Guards lines for the admin bypass and the cap; Step 3 note; AC preamble (exit-1 note) and AC5 strings; H2 reworded, H6–H8 added, G1–G4 Risk reworded. `git diff --stat 03d0f72 HEAD` touches only `.ai/tasks/BASE-140-D/` (plan, plan-review, usage), so every code, doc and skill line verified in round 1 is unchanged at HEAD.
+- Reason: n/a (new plan commit)
+
+H1–H8 are treated as human decisions (`plan.md:195-202`); this round checks that the plan applies them consistently and that the text written for them is correct against the repository. Everything not listed as changed above is carried over from round 1.
+
+### Earlier blocking findings
+
+| Id | Round | Fixed / Not fixed | `plan.md:line` |
+|---|---|---|---|
+| M1 | 1 | Fixed — the cap bypass now names a source the admin can check (`git diff --name-only <merge-base>...HEAD -- .ai/tasks/`), the per-directory and no-earlier-bypass conditions, and requires the list and result in the bypass comment; the plan states the halted job lists no directory (`cli/src/pipeline-ci.ts:157` verified: `throw new Halt("G2", "cap")` before the `checkDir` loop) | `plan.md:61`, `:99`, `:101`, `:200`; AC5 `:163` |
+
+Round-1 Lows (advice, carried for the record): L1 addressed by H7 (`plan.md:57`, `:65`, `:84-85`, `:201`, AC5 `:163`); L2 addressed (full replacement text `plan.md:58-63`, one range `:48-49` at `:84`, `:132`); L3 addressed by H8 (`plan.md:62`, `:202-203`); L4 addressed (`plan.md:157`); L5 addressed (`plan.md:86`); L6 addressed (`plan.md:92`).
+
+### Q1 — Where else each changed rule is stated
+
+Searched again outside `.ai/tasks/` for the round-2 rules (`grep -n` for `G1|G2|G3|G4|runner|checkout` in `docs/task-state-machine.md`, `rerun|re-run|indexed` in the pipeline and sdlc skills and README, `release` in the sdlc skill).
+
+| Changed rule | Other statements | Edit planned / kept with reason / missing |
+|---|---|---|
+| Cap bypass with `git diff` evidence (H6) | `docs/operations/runbooks/branch-rulesets.md:46` (bypass past a failing or missing check), `:50` (always justify in a PR comment) | Kept, still true; `:50` agrees with "puts the list and the result in the bypass comment" (`plan.md:84`) |
+| same | `cli/src/pipeline-ci.ts:157`, `:295` (halt rendered as `halt: G2 more than 20 task directories changed`) | Kept (`plan.md:93`); the quoted halt string in D3 matches `HALT_TEXT.cap` with `MAX_TASK_DIRS = 20` |
+| Cap as an expectation (H7) | runbook **Release** `:60-62`; `.ai/skills/sdlc/skill.md:39-40` | Kept with reason (`plan.md:84-85`); both lines verified at HEAD, neither states a cadence |
+| Runner/checkout failure never a bypass reason (H8) | `docs/task-state-machine.md:130` ("2 anything halted (G1–G4 failure, the 20-directory cap, …)") | Kept, still true; note that this doc lists the cap separately from "G1–G4 failure", while the runbook text calls a runner failure "a G1–G4 git halt", see L7 |
+| same | `.ai/skills/review/skill.md:20` (never for High/Medium); `docs/operations/runbooks/dependency-audit.md:120` (emergency hotfix only) | Kept, consistent |
+| `pipeline skill :122` reading next to the new Mechanical line | `.ai/skills/pipeline/skill.md:122` and exports | Kept with reason (`plan.md:86`); text verified at HEAD |
+
+### Q2 — Guards and bypasses the change touches
+
+| Guard or bypass | How the change touches it | Addressed at `plan.md:line` / missing |
+|---|---|---|
+| Admin bypass, release-PR cap case | Now conditioned on evidence the admin can produce at a cap halt (file list from `git diff`, each directory's last PR passed `task-dirs`, no earlier `task-dirs` bypass into `development`), recorded in the bypass comment. The round-1 unverified path is closed; a directory merged red while `task-dirs` was not yet required also fails the "passed on the PR that last changed it" condition | `plan.md:61`, `:99`, `:200` |
+| Admin bypass, "Never for" | Widened (stronger): every other red `task-dirs` cause, debt lag and runner/checkout failures included; only the emergency hotfix stays | `plan.md:62`, `:99`, `:202` |
+| 20-directory cap on a PR to `development` | Not a release PR, so never a justified bypass; the runbook's only guidance for a G1–G4 halt is "re-run until it passes", which a cap halt never does | `plan.md:62` — wording, see L7 |
+| Everything else in round 1's Q2 table | Unchanged by the revision | Carried over from round 1 |
+
+### Plan checks
+
+| Check | Result | Basis |
+|---|---|---|
+| Every acceptance criterion is verifiable by QA with one inline command, no file written for QA, no network, credentials or merged state, and holds after a send-back | Pass | Only AC5 and the preamble changed. Each new AC5 string was checked against D3's text: "halts on the 20-directory cap" occurs once (the **Justified only for** line; the new bullet says "More than 20 halts the job"), `git diff --name-only <merge-base>...HEAD -- .ai/tasks/` once, "releases are expected well under the cap" once, "cut releases before" zero, "never a bypass reason, and only an emergency hotfix" once. `grep -c` counts lines, and each string sits on one line. The preamble now covers AC7's exit 1 (`plan.md:157`). AC1–AC4, AC6–AC11 carried over |
+| "Files to touch" lists `usage.jsonl`, plus the `check:package` step and `package-check.ts` when needed | Pass | Unchanged (`plan.md:148`, `:150`, `:75`, `:115`); carried over |
+| The facts the plan states about the code hold at HEAD | Pass | New facts verified: `pipeline-ci.ts:157` (cap throw before `checkDir`), `:292` (hint text, verbatim), `:295` with `HALT_TEXT.cap` (the quoted halt line); runbook `:46`, `:48`, `:49`, `:50`, `:60-62`; the kept first three **Justified only for** items and first three **Never for** items are verbatim from `:48-49`; sdlc `:39-40`; pipeline skill `:122`. The `gh`-based claims (`plan.md:16-17`, `:23`) remain not verified (network) |
+
+### On the flagged point: the **Never for** sentence
+
+The resulting line reads correctly. "skipping" still governs the original three items as before ("skipping a blocking High or Medium finding, failing tests, an unresolved discussion about such a finding"), and "such a finding" still refers back to "a blocking High or Medium finding", the only finding named before it, so moving the clause from last to third place changes neither its meaning nor its referent. The new fourth item is closed by the top-level "or", and its colon-introduced examples carry their own inner "or" ("…, or a runner or checkout failure"), which the colon keeps visibly subordinate. Strictly, "skipping … a red `task-dirs` run" is slightly looser than "merging past", but the original line already used "skipping … failing tests" the same way; no change is needed. The only wording issue in the line is the parenthetical, L7.
+
+### Findings
+
+| Id | Severity | Where | Why it matters | Required plan change |
+|---|---|---|---|---|
+| L7 | Low | `plan.md:62` (D3 **Never for**), `:203`; `cli/src/pipeline-ci.ts:154`, `:157`, `:295`; `docs/task-state-machine.md:130` | The runbook equates "a runner or checkout failure" with "a G1–G4 git halt" and says to re-run it until it passes. But the cap halt renders as `halt: G2 …` and the `sha` halt as `G1`, and neither is cured by a re-run; `docs/task-state-machine.md:130` lists "G1–G4 failure" and "the 20-directory cap" as separate halts. On a PR to `development` with more than 20 task directories, a reader of the runbook gets only "re-run until it passes", which never happens (the real fix is splitting the PR). No bypass is opened: the line still forbids one | Narrow the parenthetical, e.g. "(a G1–G4 git halt other than the cap)", or name the runner reasons (`command not found`, `non-zero exit`, `timed out`, `output over the cap`); optionally add that a cap halt on a PR to `development` is fixed by splitting the PR. If the AC5 phrase is kept, no criterion changes |
+
+### Verdict: approved
