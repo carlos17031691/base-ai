@@ -200,9 +200,15 @@ function dollarAt(s: string, i: number): { subst: true } | { name: string; end: 
  * Splits a command like a shell, with no expansion (D1.4): unquoted blanks separate words, single quotes are
  * literal, and inside double quotes `\` escapes `"`, `\`, `$` and the backtick. `<name>` stays literal. One pass.
  */
-export function tokenize(s: string): { words: Word[] } | { error: Reason } {
+export function tokenize(s: string): { words: Word[] } | { error: Reason; inPrefix: boolean; head?: string } {
   const words: Word[] = [];
   let cur: Word | null = null;
+  // inPrefix: the error falls inside the leading `NAME=value` words; head: the first word after them (review r2 L6).
+  const err = (error: Reason) => ({
+    error,
+    inPrefix: cur !== null && ASSIGNMENT.test(cur.text) && words.every((w) => ASSIGNMENT.test(w.text)),
+    head: [...words, cur].find((w): w is Word => w !== null && !ASSIGNMENT.test(w.text))?.text,
+  });
   const word = (): Word => (cur ??= { text: "", env: [] });
   let i = 0;
   while (i < s.length) {
@@ -213,14 +219,14 @@ export function tokenize(s: string): { words: Word[] } | { error: Reason } {
       i++;
     } else if (ch === "'") {
       const close = s.indexOf("'", i + 1);
-      if (close === -1) return { error: REASON.unparsable };
+      if (close === -1) return err(REASON.unparsable);
       word().text += s.slice(i + 1, close);
       i = close + 1;
     } else if (ch === '"') {
       const w = word();
       i++;
       for (;;) {
-        if (i >= s.length) return { error: REASON.unparsable };
+        if (i >= s.length) return err(REASON.unparsable);
         const c = s[i];
         if (c === '"') {
           i++;
@@ -232,30 +238,30 @@ export function tokenize(s: string): { words: Word[] } | { error: Reason } {
           continue;
         }
         // Still a substitution inside double quotes, so it is refused like the unquoted form.
-        if (c === "`") return { error: REASON.operator };
+        if (c === "`") return err(REASON.operator);
         if (c === "$") {
           const d = dollarAt(s, i);
-          if (d && "subst" in d) return { error: REASON.operator };
+          if (d && "subst" in d) return err(REASON.operator);
           if (d) w.env.push(d.name);
         }
         w.text += c;
         i++;
       }
     } else if (ch === "\\") {
-      if (i + 1 >= s.length) return { error: REASON.unparsable };
+      if (i + 1 >= s.length) return err(REASON.unparsable);
       word().text += s[i + 1];
       i += 2;
     } else if ("|&;>()`".includes(ch)) {
-      return { error: REASON.operator };
+      return err(REASON.operator);
     } else if (ch === "<") {
       const end = placeholderEnd(s, i);
-      if (end === -1) return { error: REASON.operator };
+      if (end === -1) return err(REASON.operator);
       word().text += s.slice(i, end);
       i = end;
     } else {
       if (ch === "$") {
         const d = dollarAt(s, i);
-        if (d && "subst" in d) return { error: REASON.operator };
+        if (d && "subst" in d) return err(REASON.operator);
         if (d) word().env.push(d.name);
       }
       word().text += ch;
@@ -342,9 +348,10 @@ export function judgeCandidate(candidate: string): Judgement {
   if (!known(head)) {
     // A prefix value with a quoted blank or a substitution splits wrongly on blanks and would hide a known
     // head (`TOKEN="a b" gh …`, `TOKEN=$(cat f) gh …`; review r1 L1). With a prefix, re-read the head from
-    // the tokenized words; a prefix that does not tokenize is a command with a substitution, not a literal.
+    // the tokenized words; a parse error fails inside the prefix (a substitution) or after a known head;
+    // otherwise it leaves the span a literal (review r2 L6).
     if (h === 0) return { kind: "literal" };
-    if ("error" in t) return { kind: "fail", reason: t.error };
+    if ("error" in t) return t.inPrefix || known(t.head) ? { kind: "fail", reason: t.error } : { kind: "literal" };
     if (!known(t.words.find((w) => !ASSIGNMENT.test(w.text))?.text)) return { kind: "literal" };
   }
   if ("error" in t) return { kind: "fail", reason: t.error };

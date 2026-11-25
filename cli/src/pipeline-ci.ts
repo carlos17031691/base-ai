@@ -2,7 +2,8 @@
  * `base-ai pipeline ci --base <ref>` (BASE-071-P3 D2, issue #71): the task directories a PR changes, each checked
  * for an append-only `transitions[]` (A1, invariant 5 of docs/task-state-machine.md), then `pipeline check`,
  * `pipeline plan` (BASE-140-B D4: P1 criteria and P2 lock, when status.json, plan.md, plan-review.md or
- * decisions.md changed; its two fixed git calls per directory) and `pipeline debt`.
+ * decisions.md changed; its two fixed git calls per directory, and up to three `rev-parse` calls more for a lock
+ * re-binding that names a rewritten commit) and `pipeline debt`.
  *
  * Pure: git goes through the injected `Runner` (pipeline-gh.ts is the real one), the working tree through the
  * injected reader, and the check, plan and debt through injected functions, so every case is tested with fakes.
