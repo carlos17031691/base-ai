@@ -260,7 +260,7 @@ Record in the report:
 - the base choice: either the sentence from the base check ("`development` (`<sha>`) and `origin/development` (`<sha>`) differed; the invocation chose `<ref>` (`<sha>`)"), or "none needed" when the two refs pointed to the same commit or no local `origin/development` exists;
 - that the base is a local ref and was not checked against the remote;
 - any movement of `development` or `origin/development` since the first implementer claim (the first `transitions[]` entry with `agent: "implementer"` and `to: "in_progress"`), as shown by `git log -g` on those two refs — or that none is shown, or that no reflog is available. This is an observation; it does not change the verdict;
-- that `.ai/tasks/` is git-ignored (#56), so the integrity of `plan.md` and `status.json` cannot be checked against a committed baseline.
+- whether this ticket's `plan.md` and `status.json` are git-ignored (`git check-ignore -v`; #56): their integrity can be checked against a committed baseline only when they are not.
 
 ### Step 3 — Discover and classify checks
 
