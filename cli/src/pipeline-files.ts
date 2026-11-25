@@ -1,6 +1,7 @@
 import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { basename, join, relative, resolve, sep } from "node:path";
 import { MAX_FILE_BYTES, type FileRead, type TaskInput } from "./pipeline-check.js";
+import type { PlanTaskInput } from "./pipeline-plan.js";
 
 /**
  * Reads a regular task file of at most `max` bytes. Never throws: a missing, oversized, non-regular or unreadable
@@ -41,6 +42,25 @@ export function loadTask(root: string, taskDir: string): TaskInput {
     plan: read("plan.md"),
     review: read("review-report.md"),
     qa: read("qa-report.md"),
+    decisions: read("decisions.md"),
+  };
+}
+
+/**
+ * Loads the files `pipeline plan` reads (BASE-140-B D3): `status.json`, `plan.md`, `plan-review.md` and
+ * `decisions.md`, plus the root-relative path of `plan.md` for git. `loadTask` stays the five files of the checks.
+ */
+export function loadPlanTask(root: string, taskDir: string): PlanTaskInput {
+  const absRoot = resolve(root);
+  const absPath = resolve(absRoot, taskDir);
+  const read = (name: string) => readBounded(join(absPath, name));
+  return {
+    dirName: basename(absPath),
+    absPath,
+    planRel: relative(absRoot, join(absPath, "plan.md")).split(sep).join("/"),
+    status: read("status.json"),
+    plan: read("plan.md"),
+    planReview: read("plan-review.md"),
     decisions: read("decisions.md"),
   };
 }

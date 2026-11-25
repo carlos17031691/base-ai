@@ -45,7 +45,7 @@
 
 ## Acceptance criteria
 
-<!-- Copied from the ticket. Must be verifiable by the QA agent. -->
+<!-- Copied from the ticket. Must be verifiable by the QA agent: `pipeline plan` (P1) checks that each `- [ ]` item names a command of qa.md's Commands, and none needing network, credentials or a merged state. -->
 
 - [ ] 
 - [ ] 
