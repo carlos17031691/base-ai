@@ -1,10 +1,10 @@
 {
   "ticket_id": "BASE-140-D",
-  "state": "pending",
+  "state": "completed",
   "plan_locked": true,
-  "assignee": "planner",
+  "assignee": null,
   "created_at": "2026-11-25T02:14:49Z",
-  "updated_at": "2026-11-25T14:25:45Z",
+  "updated_at": "2026-11-25T15:20:00Z",
   "transitions": [
     {
       "from": null,
@@ -19,12 +19,26 @@
       "agent": "human",
       "timestamp": "2026-11-25T14:25:45Z",
       "note": "plan approved and locked by the human (\"Lock now, accept L8\", 2026-11-25); applied by the coordinator; plan review round 3 approved, plan.md at 9762cbac63d89b06c192eb3bf361119833343739"
+    },
+    {
+      "from": "pending",
+      "to": "in_progress",
+      "agent": "implementer",
+      "timestamp": "2026-11-25T15:00:00Z",
+      "note": "implementer claimed task; plan_locked asserted true"
+    },
+    {
+      "from": "in_progress",
+      "to": "completed",
+      "agent": "implementer",
+      "timestamp": "2026-11-25T15:20:00Z",
+      "note": "all files in effective allow-list written (D1-D4); checklist populated: tests_pass via npm --prefix cli run test (467 pass), types_pass via npx tsc --noEmit in cli (exit 0); lint_pass left false, not applicable (cli has no lint script; deliverables are docs/JSON), deferred to QA; D5 and E1-E3 left to the coordinator"
     }
   ],
   "checklist": {
-    "tests_pass": false,
+    "tests_pass": true,
     "lint_pass": false,
-    "types_pass": false,
+    "types_pass": true,
     "review_verdict": null,
     "qa_verdict": null
   },
